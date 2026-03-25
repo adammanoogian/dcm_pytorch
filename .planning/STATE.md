@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 1 — Neural & Hemodynamic Forward Model + Task-DCM Simulator
+**Current focus:** Phase 1 COMPLETE -- Moving to Phase 2 (Spectral DCM Forward Model)
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
-**Phase:** 1 of 8 (Neural & Hemodynamic Forward Model)
-**Plan:** 2 of 3 in phase (01-01 and 01-02 complete)
-**Status:** In progress
-**Last activity:** 2026-03-25 — Completed 01-02-PLAN.md
+**Phase:** 1 of 8 (Neural & Hemodynamic Forward Model) -- COMPLETE
+**Plan:** 3 of 3 in phase (01-01, 01-02, 01-03 all complete)
+**Status:** Phase complete
+**Last activity:** 2026-03-25 -- Completed 01-03-PLAN.md (final plan of Phase 1)
 
-Progress: [██░░░░░░░░░░░░░░░░░░] ~10% (2/~20 plans)
+Progress: [███░░░░░░░░░░░░░░░░░] ~15% (3/~20 plans)
 
 ## Decisions
 
@@ -34,6 +34,8 @@ Progress: [██░░░░░░░░░░░░░░░░░░] ~10% (2
 | Log-space clamping | lnf >= -14, f >= 1e-6 before oxygen extraction to prevent NaN | 2026-03-25 |
 | A/C as register_buffer | Pyro handles parameterization in Phase 4, not nn.Parameter | 2026-03-25 |
 | torchdiffeq jump_t for discontinuities | v0.2.5 renamed grid_points to jump_t; our API preserves grid_points name | 2026-03-25 |
+| Per-region SNR noise scaling | noise_std = signal_std / SNR per region for accurate SNR control | 2026-03-25 |
+| Simulator accepts parameterized A (not A_free) | Direct control over connectivity values in simulations | 2026-03-25 |
 
 ## Blockers
 
@@ -41,7 +43,7 @@ None currently.
 
 ## Key Risks
 
-- ODE stiffness in Balloon model may need implicit solvers — monitor for NaN gradients (Phase 1)
+- ODE stiffness in Balloon model may need implicit solvers -- monitor for NaN gradients (Phase 1: no issues observed in 500s simulations)
 - CSD normalization must exactly match SPM conventions or Phase 6 validation fails (Phase 2)
 - Amortized guide may struggle with multi-modal posteriors in weakly identifiable configs (Phase 7)
 
@@ -53,11 +55,18 @@ Three swappable module interfaces:
 2. **ObservationModel**: `BalloonBOLD` (task) | `SpectralCSD` (spDCM) | `FreqDomainLinear` (rDCM)
 3. **InferenceGuide**: `MeanFieldGaussian` (baseline) | `NormalizingFlowGuide` (amortized)
 
+## Phase 1 Deliverables (Complete)
+
+- **Plan 01:** NeuralStateEquation, BalloonWindkessel, bold_signal (21 tests)
+- **Plan 02:** CoupledDCMSystem, PiecewiseConstantInput, integrate_ode (16 tests)
+- **Plan 03:** simulate_task_dcm, make_block_stimulus, make_random_stable_A (18 tests)
+- **Total:** 55 tests, all passing
+
 ## Session Continuity
 
-Last session: 2026-03-25T21:47:33Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-03-25T21:58:18Z
+Stopped at: Completed 01-03-PLAN.md (Phase 1 complete)
 Resume file: None
 
 ---
-*Last updated: 2026-03-25 after completing 01-02-PLAN.md*
+*Last updated: 2026-03-25 after completing 01-03-PLAN.md*
