@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Milestone:** v0.1.0-foundation
 **Phase:** 1 of 8 (Neural & Hemodynamic Forward Model)
-**Plan:** 1 of 3 in phase
+**Plan:** 2 of 3 in phase (01-01 and 01-02 complete)
 **Status:** In progress
-**Last activity:** 2026-03-25 — Completed 01-01-PLAN.md
+**Last activity:** 2026-03-25 — Completed 01-02-PLAN.md
 
-Progress: [█░░░░░░░░░░░░░░░░░░░] ~5% (1/~20 plans)
+Progress: [██░░░░░░░░░░░░░░░░░░] ~10% (2/~20 plans)
 
 ## Decisions
 
@@ -32,6 +32,8 @@ Progress: [█░░░░░░░░░░░░░░░░░░░] ~5% (1/
 | SPM12 code hemo defaults | kappa=0.64, gamma=0.32, tau=2.0, alpha=0.32, E0=0.40 (not paper values) | 2026-03-25 |
 | Simplified Buxton BOLD form | k1=7*E0, k2=2, k3=2*E0-0.2, V0=0.02 with E0=0.40 | 2026-03-25 |
 | Log-space clamping | lnf >= -14, f >= 1e-6 before oxygen extraction to prevent NaN | 2026-03-25 |
+| A/C as register_buffer | Pyro handles parameterization in Phase 4, not nn.Parameter | 2026-03-25 |
+| torchdiffeq jump_t for discontinuities | v0.2.5 renamed grid_points to jump_t; our API preserves grid_points name | 2026-03-25 |
 
 ## Blockers
 
@@ -53,9 +55,9 @@ Three swappable module interfaces:
 
 ## Session Continuity
 
-Last session: 2026-03-25T21:31:12Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-03-25T21:47:33Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
 
 ---
-*Last updated: 2026-03-25 after completing 01-01-PLAN.md*
+*Last updated: 2026-03-25 after completing 01-02-PLAN.md*
