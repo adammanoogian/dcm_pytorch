@@ -10,8 +10,12 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
-**Phase:** 1 (not started)
-**Status:** Ready to plan Phase 1
+**Phase:** 1 of 8 (Neural & Hemodynamic Forward Model)
+**Plan:** 1 of 3 in phase
+**Status:** In progress
+**Last activity:** 2026-03-25 — Completed 01-01-PLAN.md
+
+Progress: [█░░░░░░░░░░░░░░░░░░░] ~5% (1/~20 plans)
 
 ## Decisions
 
@@ -25,6 +29,9 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 | Bilinear model first | Nozari 2024: linear suffices; Neural ODE deferred to v0.2 | 2026-03-25 |
 | Static A first | Clean first paper; non-stationary A(t) is second contribution | 2026-03-25 |
 | NumPyro for NUTS only | JAX speed for validation sampling, not primary inference | 2026-03-25 |
+| SPM12 code hemo defaults | kappa=0.64, gamma=0.32, tau=2.0, alpha=0.32, E0=0.40 (not paper values) | 2026-03-25 |
+| Simplified Buxton BOLD form | k1=7*E0, k2=2, k3=2*E0-0.2, V0=0.02 with E0=0.40 | 2026-03-25 |
+| Log-space clamping | lnf >= -14, f >= 1e-6 before oxygen extraction to prevent NaN | 2026-03-25 |
 
 ## Blockers
 
@@ -44,5 +51,11 @@ Three swappable module interfaces:
 2. **ObservationModel**: `BalloonBOLD` (task) | `SpectralCSD` (spDCM) | `FreqDomainLinear` (rDCM)
 3. **InferenceGuide**: `MeanFieldGaussian` (baseline) | `NormalizingFlowGuide` (amortized)
 
+## Session Continuity
+
+Last session: 2026-03-25T21:31:12Z
+Stopped at: Completed 01-01-PLAN.md
+Resume file: None
+
 ---
-*Last updated: 2026-03-25 after initialization*
+*Last updated: 2026-03-25 after completing 01-01-PLAN.md*
