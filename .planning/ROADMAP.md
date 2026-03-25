@@ -6,15 +6,16 @@
 **Total requirements:** 29
 
 ## Phase 1: Neural & Hemodynamic Forward Model + Task-DCM Simulator
-**Status:** planned
+**Status:** complete (2026-03-25)
 **Requirements:** FWD-01, FWD-02, FWD-03, FWD-04, SIM-01
-**Plans:** 3 plans
+**Plans:** 3 plans (all complete)
 **Goal:** Build the complete task-based DCM forward model pipeline — from neural state equation through hemodynamics to BOLD signal — plus a simulator that generates realistic synthetic data.
+**Verification:** 10/10 must-haves passed, 55 tests green
 
 Plans:
-- [ ] 01-01-PLAN.md — Project scaffolding + forward model modules (neural_state, balloon_model, bold_signal) + unit tests
-- [ ] 01-02-PLAN.md — Coupled ODE system + ODE integrator wrapper + integration tests
-- [ ] 01-03-PLAN.md — Task-DCM data simulator + validation tests
+- [x] 01-01-PLAN.md — Project scaffolding + forward model modules (neural_state, balloon_model, bold_signal) + unit tests
+- [x] 01-02-PLAN.md — Coupled ODE system + ODE integrator wrapper + integration tests
+- [x] 01-03-PLAN.md — Task-DCM data simulator + validation tests
 
 **Success criteria:**
 1. Balloon-Windkessel ODE integrates without numerical instability for 500s simulations
