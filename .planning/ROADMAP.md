@@ -76,9 +76,11 @@ Plans:
 ---
 
 ## Phase 3: Regression DCM Forward Model + rDCM Simulator
-**Status:** pending
+**Status:** complete (2026-03-26)
 **Requirements:** FWD-07, SIM-03
+**Plans:** 3 plans (all complete)
 **Goal:** Build the regression DCM frequency-domain likelihood and simulator, including the analytic posterior and ARD sparsity priors.
+**Verification:** 4/4 must-haves passed, 194 tests green (74 new + 120 Phase 1-2)
 
 **Success criteria:**
 1. Frequency-domain likelihood computes correctly for known parameters
