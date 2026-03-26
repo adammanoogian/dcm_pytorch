@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 1 COMPLETE -- Moving to Phase 2 (Spectral DCM Forward Model)
+**Current focus:** Phase 2 (Spectral DCM Forward Model) -- In progress
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
-**Phase:** 1 of 8 (Neural & Hemodynamic Forward Model) -- COMPLETE
-**Plan:** 3 of 3 in phase (01-01, 01-02, 01-03 all complete)
-**Status:** Phase complete
-**Last activity:** 2026-03-25 -- Completed 01-03-PLAN.md (final plan of Phase 1)
+**Phase:** 2 of 8 (Spectral DCM Forward Model) -- In progress
+**Plan:** 02-02 complete (parallel with 02-01)
+**Status:** In progress
+**Last activity:** 2026-03-26 -- Completed 02-02-PLAN.md (empirical CSD computation)
 
-Progress: [███░░░░░░░░░░░░░░░░░] ~15% (3/~20 plans)
+Progress: [████░░░░░░░░░░░░░░░░] ~20% (4/~20 plans)
 
 ## Decisions
 
@@ -36,6 +36,9 @@ Progress: [███░░░░░░░░░░░░░░░░░] ~15% (3
 | torchdiffeq jump_t for discontinuities | v0.2.5 renamed grid_points to jump_t; our API preserves grid_points name | 2026-03-25 |
 | Per-region SNR noise scaling | noise_std = signal_std / SNR per region for accurate SNR control | 2026-03-25 |
 | Simulator accepts parameterized A (not A_free) | Direct control over connectivity values in simulations | 2026-03-25 |
+| Welch CSD (not MAR) for empirical CSD | Standard signal processing; SPM matching via predicted CSD model | 2026-03-26 |
+| np.interp for frequency grid interpolation | Linear interp on real/imag separately; simple, effective for smooth CSD | 2026-03-26 |
+| numpy/scipy for CSD data prep, torch at boundary | CSD computation is data prep, not differentiable model | 2026-03-26 |
 
 ## Blockers
 
@@ -62,11 +65,15 @@ Three swappable module interfaces:
 - **Plan 03:** simulate_task_dcm, make_block_stimulus, make_random_stable_A (18 tests)
 - **Total:** 55 tests, all passing
 
+## Phase 2 Deliverables (In Progress)
+
+- **Plan 02:** compute_empirical_csd, bold_to_csd_torch, default_welch_params (12 tests)
+
 ## Session Continuity
 
-Last session: 2026-03-25T21:58:18Z
-Stopped at: Completed 01-03-PLAN.md (Phase 1 complete)
+Last session: 2026-03-26T07:16:42Z
+Stopped at: Completed 02-02-PLAN.md (empirical CSD computation)
 Resume file: None
 
 ---
-*Last updated: 2026-03-25 after completing 01-03-PLAN.md*
+*Last updated: 2026-03-26 after completing 02-02-PLAN.md*
