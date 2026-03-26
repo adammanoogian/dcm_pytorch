@@ -9,7 +9,9 @@ This module provides:
   ``get_priors_sparse``)
 - Standalone log-likelihood computation (``compute_rdcm_likelihood``)
 - Free energy with 5 components for rigid (``compute_free_energy_rigid``)
+- Free energy with 7 components for sparse (``compute_free_energy_sparse``)
 - Region-wise VB inversion for rigid rDCM (``rigid_inversion``)
+- Region-wise VB inversion for sparse rDCM (``sparse_inversion``)
 
 All operations use ``torch.float64`` for numerical precision.
 
@@ -535,4 +537,458 @@ def rigid_inversion(
         "F_per_region": F_per_region,
         "F_total": F_total,
         "iterations_per_region": iter_per_region,
+    }
+
+
+def compute_free_energy_sparse(
+    N_eff: int,
+    a_r: float | torch.Tensor,
+    beta_r: float | torch.Tensor,
+    QF: float | torch.Tensor,
+    tau_r: float | torch.Tensor,
+    l0_r: torch.Tensor,
+    mu_r: torch.Tensor,
+    mu0_r: torch.Tensor,
+    Sigma_r: torch.Tensor,
+    a0: float,
+    beta0: float,
+    D_r: int,
+    z_r: torch.Tensor,
+    z_idx: torch.Tensor,
+    p0: torch.Tensor,
+) -> torch.Tensor:
+    """Compute negative free energy for one region (sparse rDCM).
+
+    Seven additive components: 5 from rigid + 2 for z indicators.
+
+    Additional components beyond rigid:
+        ``log_p_z``: prior on binary indicators.
+        ``log_q_z``: entropy of z (Bernoulli posterior).
+
+    Parameters
+    ----------
+    N_eff : int
+        Effective number of data points.
+    a_r : float or Tensor
+        Posterior Gamma shape.
+    beta_r : float or Tensor
+        Posterior Gamma rate.
+    QF : float or Tensor
+        Quadratic form.
+    tau_r : float or Tensor
+        Posterior noise precision.
+    l0_r : torch.Tensor
+        Prior precision matrix, shape ``(D_r, D_r)``.
+    mu_r : torch.Tensor
+        Posterior mean, shape ``(D_r,)``.
+    mu0_r : torch.Tensor
+        Prior mean, shape ``(D_r,)``.
+    Sigma_r : torch.Tensor
+        Posterior covariance, shape ``(D_r, D_r)``.
+    a0 : float
+        Prior Gamma shape.
+    beta0 : float
+        Prior Gamma rate.
+    D_r : int
+        Dimensionality of parameter vector.
+    z_r : torch.Tensor
+        Binary indicator probabilities, shape ``(D_r,)``.
+    z_idx : torch.Tensor
+        Boolean mask of indices where ``tol^2 < z < 1``.
+    p0 : torch.Tensor
+        Bernoulli prior probabilities, shape ``(D_r,)``.
+
+    Returns
+    -------
+    torch.Tensor
+        Scalar negative free energy F_r.
+
+    References
+    ----------
+    Julia ``sparse_inversion.jl`` ``compute_F_sparse()``.
+    Frassle et al. (2018) [REF-021].
+    """
+    # Rigid components (5)
+    F_rigid = compute_free_energy_rigid(
+        N_eff, a_r, beta_r, QF, tau_r, l0_r, mu_r, mu0_r,
+        Sigma_r, a0, beta0, D_r,
+    )
+
+    eps = 1e-16
+
+    # Component 6: log p(z) -- prior on binary indicators
+    if z_idx.any():
+        p0_sel = p0[z_idx]
+        z_sel = z_r[z_idx]
+        log_p_z = torch.sum(
+            torch.log(1.0 - p0_sel + eps)
+            + z_sel * torch.log(p0_sel / (1.0 - p0_sel + eps) + eps)
+        )
+    else:
+        log_p_z = torch.tensor(0.0, dtype=mu_r.dtype)
+
+    # Component 7: -log q(z) -- entropy of Bernoulli posterior
+    if z_idx.any():
+        z_sel = z_r[z_idx]
+        log_q_z = torch.sum(
+            -(1.0 - z_sel) * torch.log(1.0 - z_sel + eps)
+            - z_sel * torch.log(z_sel + eps)
+        )
+    else:
+        log_q_z = torch.tensor(0.0, dtype=mu_r.dtype)
+
+    return F_rigid + log_p_z + log_q_z
+
+
+def _sparse_inversion_single_run(
+    X: torch.Tensor,
+    Y: torch.Tensor,
+    nr: int,
+    nu: int,
+    nc: int,
+    priors: dict,
+    max_iter: int,
+    tol: float,
+    p0_val: float,
+    restrict_inputs: bool,
+) -> tuple[
+    list[torch.Tensor],
+    list[torch.Tensor],
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    list[torch.Tensor],
+]:
+    """Single run of sparse VB inversion (internal helper).
+
+    Parameters
+    ----------
+    X : torch.Tensor
+        Full design matrix.
+    Y : torch.Tensor
+        Data matrix.
+    nr, nu, nc : int
+        Number of regions, inputs, confounds.
+    priors : dict
+        From ``get_priors_sparse``.
+    max_iter : int
+        Maximum iterations.
+    tol : float
+        Convergence tolerance.
+    p0_val : float
+        Bernoulli prior probability.
+    restrict_inputs : bool
+        If True, keep z=1 for C indices.
+
+    Returns
+    -------
+    tuple
+        ``(mu_list, Sigma_list, a_arr, beta_arr, F_arr, iter_arr,
+        z_list)``.
+    """
+    dtype = torch.float64
+    m0 = priors["m0"]
+    l0 = priors["l0"]
+    a0 = priors["a0"]
+    b0 = priors["b0"]
+
+    mu_list: list[torch.Tensor] = []
+    Sigma_list: list[torch.Tensor] = []
+    a_arr = torch.zeros(nr, dtype=dtype)
+    beta_arr = torch.zeros(nr, dtype=dtype)
+    F_arr = torch.zeros(nr, dtype=dtype)
+    iter_arr = torch.zeros(nr, dtype=torch.int64)
+    z_list: list[torch.Tensor] = []
+
+    for r in range(nr):
+        # Sparse uses all A connections + all C + confounds
+        # All connections are included (full connectivity)
+        idx_a = torch.ones(nr, dtype=dtype)
+        idx_c = torch.ones(nu, dtype=dtype)
+        idx_conf = torch.ones(nc, dtype=dtype)
+        idx_r = torch.cat([idx_a, idx_c, idx_conf])
+        col_select = idx_r.bool()
+
+        X_full = X[:, col_select]
+
+        # Filter NaN rows
+        valid = ~torch.isnan(Y[:, r])
+        X_r = X_full[valid]
+        Y_r = Y[valid, r]
+
+        N_eff_r = X_r.shape[0]
+        D_r = X_r.shape[1]
+
+        # Per-region priors
+        m0_full = torch.cat([m0[r, :], torch.zeros(nc, dtype=dtype)])
+        l0_full = torch.cat([l0[r, :], torch.ones(nc, dtype=dtype)])
+        mu0_r = m0_full[col_select]
+        l0_diag_r = l0_full[col_select]
+        l0_diag_r = torch.clamp(l0_diag_r, max=1e16)
+        l0_r = torch.diag(l0_diag_r)
+
+        # Precompute
+        W = X_r.T @ X_r
+        V = X_r.T @ Y_r
+
+        # Initialize z indicators
+        z_r = 0.5 * torch.ones(D_r, dtype=dtype)
+        # C indices start at nr, end at nr+nu
+        c_start = nr
+        c_end = nr + nu
+        if restrict_inputs:
+            z_r[c_start:c_end] = 1.0
+        # Confound indices always z=1
+        z_r[nr + nu :] = 1.0
+
+        # Bernoulli prior for all parameters
+        p0_r = p0_val * torch.ones(D_r, dtype=dtype)
+
+        # Initialize
+        tau_r_val = a0 / b0
+        a_r = a0 + N_eff_r * 0.5
+        F_old = torch.tensor(float("-inf"), dtype=dtype)
+        pr = tol
+
+        mu_r = torch.zeros(D_r, dtype=dtype)
+        Sigma_r = torch.zeros(D_r, D_r, dtype=dtype)
+        F_r = torch.tensor(float("-inf"), dtype=dtype)
+        n_iter = 0
+        beta_r_val = torch.tensor(b0, dtype=dtype)
+
+        for iteration in range(max_iter):
+            # --- z update with random sweep ---
+            # A_mat = W * (mu_r outer mu_r) + W * Sigma_r
+            mu_outer = mu_r.unsqueeze(1) * mu_r.unsqueeze(0)
+            A_mat = W * mu_outer + W * Sigma_r
+
+            perm = torch.randperm(D_r)
+            for i_idx in range(D_r):
+                i = perm[i_idx].item()
+                # Skip confound and (optionally) C indices
+                if i >= nr + nu:
+                    continue
+                if restrict_inputs and c_start <= i < c_end:
+                    continue
+
+                g_i = (
+                    math.log(p0_r[i] / (1.0 - p0_r[i]))
+                    + tau_r_val * mu_r[i] * V[i]
+                    + tau_r_val * A_mat[i, i] / 2.0
+                )
+                z_r[i] = 1.0  # temporarily set to 1
+                g_i = g_i - tau_r_val * (z_r @ A_mat[:, i])
+                z_r[i] = torch.sigmoid(
+                    torch.tensor(g_i, dtype=dtype)
+                ).item()
+
+            # --- Z matrix and G matrix ---
+            Z_diag = torch.diag(z_r)
+            G = Z_diag @ W @ Z_diag
+            # Correct diagonal: G[i,i] = z_r[i] * W[i,i]
+            G_diag = z_r * W.diag()
+            G.fill_diagonal_(0)
+            G += torch.diag(G_diag)
+
+            # Posterior covariance
+            Sigma_r = torch.linalg.inv(tau_r_val * G + l0_r)
+            Sigma_r = 0.5 * (Sigma_r + Sigma_r.T)
+
+            # Posterior mean
+            mu_r = Sigma_r @ (
+                tau_r_val * Z_diag @ V + l0_r @ mu0_r
+            )
+
+            # QF (sparse version)
+            YtY = Y_r @ Y_r
+            QF = 0.5 * (
+                YtY
+                - 2.0 * mu_r @ Z_diag @ V
+                + mu_r @ G @ mu_r
+                + torch.trace(G @ Sigma_r)
+            )
+
+            # Posterior Gamma rate
+            beta_r_val = b0 + QF
+            tau_r_val = a_r / beta_r_val
+
+            # Hard thresholding
+            small = mu_r.abs() < 1e-5
+            mu_r = mu_r.clone()
+            mu_r[small] = 0.0
+            z_r_new = z_r.clone()
+            z_r_new[small] = 0.0
+            # Restore confound z
+            z_r_new[nr + nu :] = 1.0
+            if restrict_inputs:
+                z_r_new[c_start:c_end] = 1.0
+            z_r = z_r_new
+
+            # Free energy (sparse)
+            tol_sq = tol**2
+            z_idx = (z_r > tol_sq) & (z_r < 1.0)
+            F_r = compute_free_energy_sparse(
+                N_eff_r,
+                a_r,
+                beta_r_val,
+                QF,
+                tau_r_val,
+                l0_r,
+                mu_r,
+                mu0_r,
+                Sigma_r,
+                a0,
+                b0,
+                D_r,
+                z_r,
+                z_idx,
+                p0_r,
+            )
+
+            # Convergence
+            n_iter = iteration + 1
+            if (F_old - F_r) ** 2 < pr**2:
+                break
+            F_old = F_r
+
+        mu_list.append(mu_r)
+        Sigma_list.append(Sigma_r)
+        a_arr[r] = a_r
+        beta_arr[r] = beta_r_val
+        F_arr[r] = F_r
+        iter_arr[r] = n_iter
+        z_list.append(z_r)
+
+    return mu_list, Sigma_list, a_arr, beta_arr, F_arr, iter_arr, z_list
+
+
+def sparse_inversion(
+    X: torch.Tensor,
+    Y: torch.Tensor,
+    a_mask: torch.Tensor,
+    c_mask: torch.Tensor,
+    confound_cols: int = 1,
+    max_iter: int = 500,
+    tol: float = 1e-5,
+    n_reruns: int = 100,
+    p0: float = 0.5,
+    restrict_inputs: bool = True,
+) -> dict[str, object]:
+    """Sparse VB inversion with binary indicators.
+
+    Matching Julia ``sparse_inversion.jl``.
+
+    Key differences from rigid:
+    1. Uses ``get_priors_sparse`` (all connections possible).
+    2. Initializes z_r = 0.5 for A connections, z_r = 1.0 for C
+       (if ``restrict_inputs=True``).
+    3. VB loop includes z update with random sweep ordering.
+    4. Runs ``n_reruns`` times and selects best free energy.
+
+    Parameters
+    ----------
+    X : torch.Tensor
+        Design matrix, shape ``(N_eff, nr+nu+nc)``, float64.
+    Y : torch.Tensor
+        Data matrix, shape ``(N_eff, nr)``, float64.
+    a_mask : torch.Tensor
+        Binary architecture mask for A, shape ``(nr, nr)``, float64.
+    c_mask : torch.Tensor
+        Binary mask for C, shape ``(nr, nu)``, float64.
+    confound_cols : int, optional
+        Number of confound columns. Default 1.
+    max_iter : int, optional
+        Maximum VB iterations. Default 500.
+    tol : float, optional
+        Convergence tolerance. Default 1e-5.
+    n_reruns : int, optional
+        Number of random restarts. Default 100.
+    p0 : float, optional
+        Bernoulli prior probability. Default 0.5.
+    restrict_inputs : bool, optional
+        If True, keep z=1 for C columns. Default True.
+
+    Returns
+    -------
+    dict
+        Same keys as ``rigid_inversion`` plus ``'z_per_region'`` list.
+
+    References
+    ----------
+    Julia ``sparse_inversion.jl``. Frassle et al. (2018) [REF-021].
+    """
+    nr = a_mask.shape[0]
+    nu = c_mask.shape[1]
+    nc = confound_cols
+    dtype = torch.float64
+
+    priors = get_priors_sparse(a_mask, c_mask)
+
+    best_F_total = torch.tensor(float("-inf"), dtype=dtype)
+    best_result = None
+
+    for run in range(n_reruns):
+        (
+            mu_list,
+            Sigma_list,
+            a_arr,
+            beta_arr,
+            F_arr,
+            iter_arr,
+            z_list,
+        ) = _sparse_inversion_single_run(
+            X, Y, nr, nu, nc, priors, max_iter, tol, p0,
+            restrict_inputs,
+        )
+
+        F_total = F_arr.sum()
+        if F_total > best_F_total:
+            best_F_total = F_total
+            best_result = (
+                mu_list,
+                Sigma_list,
+                a_arr,
+                beta_arr,
+                F_arr,
+                iter_arr,
+                z_list,
+            )
+
+    # Unpack best result
+    (
+        mu_list,
+        Sigma_list,
+        a_arr,
+        beta_arr,
+        F_arr,
+        iter_arr,
+        z_list,
+    ) = best_result
+
+    # Assemble A_mu and C_mu
+    A_mu = torch.zeros(nr, nr, dtype=dtype)
+    C_mu = torch.zeros(nr, nu, dtype=dtype)
+
+    for r in range(nr):
+        mu_r = mu_list[r]
+        z_r = z_list[r]
+        # A connections: indices 0..nr-1
+        for j in range(nr):
+            A_mu[r, j] = mu_r[j] * z_r[j]
+        # C connections: indices nr..nr+nu-1
+        for j in range(nu):
+            C_mu[r, j] = mu_r[nr + j] * z_r[nr + j]
+
+    return {
+        "A_mu": A_mu,
+        "C_mu": C_mu,
+        "mu_per_region": mu_list,
+        "Sigma_per_region": Sigma_list,
+        "a_per_region": a_arr,
+        "beta_per_region": beta_arr,
+        "F_per_region": F_arr,
+        "F_total": best_F_total,
+        "iterations_per_region": iter_arr,
+        "z_per_region": z_list,
     }
