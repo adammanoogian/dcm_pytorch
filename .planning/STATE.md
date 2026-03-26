@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Milestone:** v0.1.0-foundation
 **Phase:** 3 of 8 (Regression DCM Forward Model) -- In progress
-**Plan:** 1 of 3 complete (03-01)
+**Plan:** 2 of 3 complete (03-01, 03-02)
 **Status:** In progress
-**Last activity:** 2026-03-26 -- Completed 03-01-PLAN.md (rDCM forward pipeline)
+**Last activity:** 2026-03-26 -- Completed 03-02-PLAN.md (rDCM analytic posterior)
 
-Progress: [███████░░░░░░░░░░░░░] ~35% (7/~20 plans)
+Progress: [████████░░░░░░░░░░░░] ~40% (8/~20 plans)
 
 ## Decisions
 
@@ -48,6 +48,8 @@ Progress: [███████░░░░░░░░░░░░░] ~35% (7
 | rDCM hemo rho=0.32 (not E0=0.40) | Julia dcm_euler_integration.jl uses H[5]=0.32 for rho | 2026-03-26 |
 | rDCM BOLD constants (Julia convention) | relaxationRateSlope=25, frequencyOffset=40.3, echoTime=0.04, V0=4.0 | 2026-03-26 |
 | 3x zero-padding for rDCM FFT convolution | Avoids circular convolution artifacts; matches Julia | 2026-03-26 |
+| Confound prior precision = 1.0 | Weak prior on confound regressors; auxiliary, not connectivity params | 2026-03-26 |
+| l0 clamped at 1e16 max | Prevents numerical issues from inf precision in absent connections | 2026-03-26 |
 
 ## Blockers
 
@@ -84,13 +86,14 @@ Three swappable module interfaces:
 ## Phase 3 Deliverables (In Progress)
 
 - **Plan 01:** rdcm_forward.py -- HRF, BOLD generation, design matrix construction (27 tests)
-- **Total so far:** 27 tests, all passing (147 total with Phases 1-2)
+- **Plan 02:** rdcm_posterior.py -- Rigid/sparse VB inversion, free energy, priors, likelihood (33 tests)
+- **Total so far:** 60 tests, all passing (180 total with Phases 1-2)
 
 ## Session Continuity
 
-Last session: 2026-03-26T09:43:00Z
-Stopped at: Completed 03-01-PLAN.md (rDCM forward pipeline)
+Last session: 2026-03-26T09:58:59Z
+Stopped at: Completed 03-02-PLAN.md (rDCM analytic posterior)
 Resume file: None
 
 ---
-*Last updated: 2026-03-26 after completing 03-01-PLAN.md*
+*Last updated: 2026-03-26 after completing 03-02-PLAN.md*
