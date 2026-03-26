@@ -41,9 +41,15 @@ Plans:
 ---
 
 ## Phase 2: Spectral DCM Forward Model + CSD Computation + spDCM Simulator
-**Status:** pending
+**Status:** in-progress
 **Requirements:** FWD-05, FWD-06, SIM-02
-**Goal:** Build the spectral DCM observation pipeline — cross-spectral density computation from time series, transfer function mapping, and a simulator for synthetic CSD data.
+**Plans:** 3 plans (2 waves)
+**Goal:** Build the spectral DCM observation pipeline — cross-spectral density computation from time series, eigendecomposition-based transfer function mapping with SPM12-matching noise models (4N+2 params), and a simulator for synthetic CSD data.
+
+Plans:
+- [ ] 02-01-PLAN.md — Transfer function (eigendecomposition) + noise spectral models + predicted CSD + tests
+- [ ] 02-02-PLAN.md — Empirical CSD computation from BOLD time series (Welch) + tests
+- [ ] 02-03-PLAN.md — Spectral DCM simulator + package exports + integration tests
 
 **Success criteria:**
 1. CSD computation from time series matches scipy.signal.csd output within numerical tolerance
@@ -54,15 +60,17 @@ Plans:
 **Mathematical scope:**
 - Cross-spectral density via multi-taper/Welch — standard signal processing
 - Spectral transfer function: g(w) = (iwI - A)^-1 — [REF-010] Eq. 3
-- Predicted CSD: S(w) = |H(w)|^2 Sigma_neuronal(w) + Sigma_observation(w) — [REF-010] Eq. 4
+- Predicted CSD: S(w) = H(w) @ Gu(w) @ H(w)^H + Gn(w) — [REF-010] Eq. 4
 - Neuronal fluctuation spectrum: 1/f^alpha — [REF-010] Eq. 5-6
-- Observation noise spectrum — [REF-010] Eq. 7
+- Observation noise spectrum (global + regional) — [REF-010] Eq. 7
+- Noise params: P.a (2xN neuronal), P.b (2x1 global obs), P.c (2xN regional obs) = 4N+2 total
 
 **Key files:**
-- `src/pyro_dcm/forward_models/csd_computation.py`
 - `src/pyro_dcm/forward_models/spectral_transfer.py`
+- `src/pyro_dcm/forward_models/spectral_noise.py`
+- `src/pyro_dcm/forward_models/csd_computation.py`
 - `src/pyro_dcm/simulators/spectral_simulator.py`
-- `tests/test_spectral.py`
+- `tests/test_spectral_transfer.py`, `tests/test_spectral_noise.py`, `tests/test_csd_computation.py`, `tests/test_spectral_simulator.py`
 
 ---
 
