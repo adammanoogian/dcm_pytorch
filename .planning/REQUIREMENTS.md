@@ -86,9 +86,9 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | FWD-03 | Phase 1 | Complete |
 | FWD-04 | Phase 1 | Complete |
 | SIM-01 | Phase 1 | Complete |
-| FWD-05 | Phase 2 | Pending |
-| FWD-06 | Phase 2 | Pending |
-| SIM-02 | Phase 2 | Pending |
+| FWD-05 | Phase 2 | Complete |
+| FWD-06 | Phase 2 | Complete |
+| SIM-02 | Phase 2 | Complete |
 | FWD-07 | Phase 3 | Pending |
 | SIM-03 | Phase 3 | Pending |
 | PROB-01 | Phase 4 | Pending |
@@ -118,4 +118,4 @@ Deferred to future milestone. Tracked but not in current roadmap.
 
 ---
 *Requirements defined: 2026-03-25*
-*Last updated: 2026-03-25 after Phase 1 completion*
+*Last updated: 2026-03-26 after Phase 2 completion*

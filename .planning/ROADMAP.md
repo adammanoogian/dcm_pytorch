@@ -41,15 +41,16 @@ Plans:
 ---
 
 ## Phase 2: Spectral DCM Forward Model + CSD Computation + spDCM Simulator
-**Status:** in-progress
+**Status:** complete (2026-03-26)
 **Requirements:** FWD-05, FWD-06, SIM-02
-**Plans:** 3 plans (2 waves)
+**Plans:** 3 plans (all complete)
 **Goal:** Build the spectral DCM observation pipeline — cross-spectral density computation from time series, eigendecomposition-based transfer function mapping with SPM12-matching noise models (4N+2 params), and a simulator for synthetic CSD data.
+**Verification:** 4/4 must-haves passed, 120 tests green (65 new + 55 Phase 1)
 
 Plans:
-- [ ] 02-01-PLAN.md — Transfer function (eigendecomposition) + noise spectral models + predicted CSD + tests
-- [ ] 02-02-PLAN.md — Empirical CSD computation from BOLD time series (Welch) + tests
-- [ ] 02-03-PLAN.md — Spectral DCM simulator + package exports + integration tests
+- [x] 02-01-PLAN.md — Transfer function (eigendecomposition) + noise spectral models + predicted CSD + tests
+- [x] 02-02-PLAN.md — Empirical CSD computation from BOLD time series (Welch) + tests
+- [x] 02-03-PLAN.md — Spectral DCM simulator + package exports + integration tests
 
 **Success criteria:**
 1. CSD computation from time series matches scipy.signal.csd output within numerical tolerance
