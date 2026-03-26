@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 2 (Spectral DCM Forward Model) -- Wave 1 complete (02-01, 02-02), ready for 02-03 integration
+**Current focus:** Phase 2 complete. Ready for Phase 3 (Regression DCM Forward Model).
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
-**Phase:** 2 of 8 (Spectral DCM Forward Model) -- In progress
-**Plan:** 02-01 and 02-02 complete (wave 1), 02-03 integration pending
-**Status:** In progress
-**Last activity:** 2026-03-26 -- Completed 02-01-PLAN.md (spectral transfer + noise models)
+**Phase:** 2 of 8 (Spectral DCM Forward Model) -- Complete
+**Plan:** All 3 plans complete (02-01, 02-02, 02-03)
+**Status:** Phase complete
+**Last activity:** 2026-03-26 -- Completed 02-03-PLAN.md (spectral simulator + integration tests)
 
-Progress: [█████░░░░░░░░░░░░░░░] ~25% (5/~20 plans)
+Progress: [██████░░░░░░░░░░░░░░] ~30% (6/~20 plans)
 
 ## Decisions
 
@@ -42,6 +42,8 @@ Progress: [█████░░░░░░░░░░░░░░░] ~25% (5
 | Eigenvalue stabilization at -1/32 | SPM convention for fMRI frequencies; prevents transfer function blow-up | 2026-03-26 |
 | Identity C_in/C_out for standard spDCM | Hemodynamic Jacobian deferred; standard spDCM uses identity projection | 2026-03-26 |
 | SPM noise scaling C=1/256 | Matches spm_csd_fmri_mtf.m exactly; obs exponent /2, global obs /8.0 | 2026-03-26 |
+| Transfer function peak test uses diagonal H[i,i] | Frobenius norm masks resonance; diagonal isolates eigenfrequency | 2026-03-26 |
+| Manual Pearson correlation over np.corrcoef | Avoids process abort on Windows numpy; more robust | 2026-03-26 |
 
 ## Blockers
 
@@ -50,7 +52,7 @@ None currently.
 ## Key Risks
 
 - ODE stiffness in Balloon model may need implicit solvers -- monitor for NaN gradients (Phase 1: no issues observed in 500s simulations)
-- CSD normalization must exactly match SPM conventions or Phase 6 validation fails (Phase 2)
+- CSD normalization must exactly match SPM conventions or Phase 6 validation fails (Phase 2: predicted CSD matches SPM formula exactly)
 - Amortized guide may struggle with multi-modal posteriors in weakly identifiable configs (Phase 7)
 
 ## Architecture Notes
@@ -68,16 +70,18 @@ Three swappable module interfaces:
 - **Plan 03:** simulate_task_dcm, make_block_stimulus, make_random_stable_A (18 tests)
 - **Total:** 55 tests, all passing
 
-## Phase 2 Deliverables (In Progress)
+## Phase 2 Deliverables (Complete)
 
 - **Plan 01:** compute_transfer_function, predicted_csd, neuronal_noise_csd, observation_noise_csd, spectral_dcm_forward (27 tests)
 - **Plan 02:** compute_empirical_csd, bold_to_csd_torch, default_welch_params (12 tests)
+- **Plan 03:** simulate_spectral_dcm, make_stable_A_spectral, package exports, integration tests (26 tests)
+- **Total:** 65 tests, all passing (120 total with Phase 1)
 
 ## Session Continuity
 
-Last session: 2026-03-26T07:18:55Z
-Stopped at: Completed 02-01-PLAN.md (spectral transfer + noise models)
+Last session: 2026-03-26T07:36:38Z
+Stopped at: Completed 02-03-PLAN.md (spectral simulator + integration tests)
 Resume file: None
 
 ---
-*Last updated: 2026-03-26 after completing 02-01-PLAN.md*
+*Last updated: 2026-03-26 after completing 02-03-PLAN.md*
