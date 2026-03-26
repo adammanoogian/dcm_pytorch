@@ -84,7 +84,7 @@ Plans:
 1. Frequency-domain likelihood computes correctly for known parameters
 2. Region-wise factorization p(y_j | A_j, C_j) matches analytic formula from [REF-020]
 3. Simulator produces synthetic frequency-domain data for given (A, C, noise)
-4. Sparse A recovery: L1-penalized MAP on simulated data recovers zero-pattern with F1 > 0.85
+4. Sparse A recovery: VB with Bernoulli ARD on simulated data recovers zero-pattern with F1 > 0.85 (note: the Julia reference implementation uses VB/ARD, not L1-MAP)
 
 **Mathematical scope:**
 - DFT of convolution model — [REF-020] Eq. 4-8
@@ -93,9 +93,10 @@ Plans:
 - ARD sparsity priors — [REF-020] Eq. 9-10
 
 **Key files:**
-- `src/pyro_dcm/forward_models/rdcm_likelihood.py`
+- `src/pyro_dcm/forward_models/rdcm_forward.py`
+- `src/pyro_dcm/forward_models/rdcm_posterior.py`
 - `src/pyro_dcm/simulators/rdcm_simulator.py`
-- `tests/test_rdcm.py`
+- `tests/test_rdcm_forward.py`, `tests/test_rdcm_posterior.py`, `tests/test_rdcm_simulator.py`
 
 ---
 
@@ -252,4 +253,4 @@ Phase 1 (Task forward model)
 
 ---
 *Roadmap created: 2026-03-25*
-*Last updated: 2026-03-25 after initialization*
+*Last updated: 2026-03-26 — Phase 3 success criterion 4 corrected (VB/ARD, not L1-MAP), key files updated*
