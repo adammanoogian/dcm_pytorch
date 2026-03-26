@@ -780,7 +780,7 @@ def _sparse_inversion_single_run(
                 z_r[i] = 1.0  # temporarily set to 1
                 g_i = g_i - tau_r_val * (z_r @ A_mat[:, i])
                 z_r[i] = torch.sigmoid(
-                    torch.tensor(g_i, dtype=dtype)
+                    torch.as_tensor(g_i, dtype=dtype)
                 ).item()
 
             # --- Z matrix and G matrix ---
