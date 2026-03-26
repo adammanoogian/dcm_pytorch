@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 2 complete. Ready for Phase 3 (Regression DCM Forward Model).
+**Current focus:** Phase 3 in progress (Regression DCM Forward Model).
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
-**Phase:** 2 of 8 (Spectral DCM Forward Model) -- Complete
-**Plan:** All 3 plans complete (02-01, 02-02, 02-03)
-**Status:** Phase complete
-**Last activity:** 2026-03-26 -- Completed 02-03-PLAN.md (spectral simulator + integration tests)
+**Phase:** 3 of 8 (Regression DCM Forward Model) -- In progress
+**Plan:** 1 of 3 complete (03-01)
+**Status:** In progress
+**Last activity:** 2026-03-26 -- Completed 03-01-PLAN.md (rDCM forward pipeline)
 
-Progress: [██████░░░░░░░░░░░░░░] ~30% (6/~20 plans)
+Progress: [███████░░░░░░░░░░░░░] ~35% (7/~20 plans)
 
 ## Decisions
 
@@ -44,6 +44,10 @@ Progress: [██████░░░░░░░░░░░░░░] ~30% (6
 | SPM noise scaling C=1/256 | Matches spm_csd_fmri_mtf.m exactly; obs exponent /2, global obs /8.0 | 2026-03-26 |
 | Transfer function peak test uses diagonal H[i,i] | Frobenius norm masks resonance; diagonal isolates eigenfrequency | 2026-03-26 |
 | Manual Pearson correlation over np.corrcoef | Avoids process abort on Windows numpy; more robust | 2026-03-26 |
+| rDCM Euler HRF (not double-gamma) | Matches Julia RegressionDynamicCausalModeling.jl exactly | 2026-03-26 |
+| rDCM hemo rho=0.32 (not E0=0.40) | Julia dcm_euler_integration.jl uses H[5]=0.32 for rho | 2026-03-26 |
+| rDCM BOLD constants (Julia convention) | relaxationRateSlope=25, frequencyOffset=40.3, echoTime=0.04, V0=4.0 | 2026-03-26 |
+| 3x zero-padding for rDCM FFT convolution | Avoids circular convolution artifacts; matches Julia | 2026-03-26 |
 
 ## Blockers
 
@@ -77,11 +81,16 @@ Three swappable module interfaces:
 - **Plan 03:** simulate_spectral_dcm, make_stable_A_spectral, package exports, integration tests (26 tests)
 - **Total:** 65 tests, all passing (120 total with Phase 1)
 
+## Phase 3 Deliverables (In Progress)
+
+- **Plan 01:** rdcm_forward.py -- HRF, BOLD generation, design matrix construction (27 tests)
+- **Total so far:** 27 tests, all passing (147 total with Phases 1-2)
+
 ## Session Continuity
 
-Last session: 2026-03-26T07:36:38Z
-Stopped at: Completed 02-03-PLAN.md (spectral simulator + integration tests)
+Last session: 2026-03-26T09:43:00Z
+Stopped at: Completed 03-01-PLAN.md (rDCM forward pipeline)
 Resume file: None
 
 ---
-*Last updated: 2026-03-26 after completing 02-03-PLAN.md*
+*Last updated: 2026-03-26 after completing 03-01-PLAN.md*
