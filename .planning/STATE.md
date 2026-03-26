@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 2 (Spectral DCM Forward Model) -- In progress
+**Current focus:** Phase 2 (Spectral DCM Forward Model) -- Wave 1 complete (02-01, 02-02), ready for 02-03 integration
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
 **Phase:** 2 of 8 (Spectral DCM Forward Model) -- In progress
-**Plan:** 02-02 complete (parallel with 02-01)
+**Plan:** 02-01 and 02-02 complete (wave 1), 02-03 integration pending
 **Status:** In progress
-**Last activity:** 2026-03-26 -- Completed 02-02-PLAN.md (empirical CSD computation)
+**Last activity:** 2026-03-26 -- Completed 02-01-PLAN.md (spectral transfer + noise models)
 
-Progress: [████░░░░░░░░░░░░░░░░] ~20% (4/~20 plans)
+Progress: [█████░░░░░░░░░░░░░░░] ~25% (5/~20 plans)
 
 ## Decisions
 
@@ -39,6 +39,9 @@ Progress: [████░░░░░░░░░░░░░░░░] ~20% (4
 | Welch CSD (not MAR) for empirical CSD | Standard signal processing; SPM matching via predicted CSD model | 2026-03-26 |
 | np.interp for frequency grid interpolation | Linear interp on real/imag separately; simple, effective for smooth CSD | 2026-03-26 |
 | numpy/scipy for CSD data prep, torch at boundary | CSD computation is data prep, not differentiable model | 2026-03-26 |
+| Eigenvalue stabilization at -1/32 | SPM convention for fMRI frequencies; prevents transfer function blow-up | 2026-03-26 |
+| Identity C_in/C_out for standard spDCM | Hemodynamic Jacobian deferred; standard spDCM uses identity projection | 2026-03-26 |
+| SPM noise scaling C=1/256 | Matches spm_csd_fmri_mtf.m exactly; obs exponent /2, global obs /8.0 | 2026-03-26 |
 
 ## Blockers
 
@@ -67,13 +70,14 @@ Three swappable module interfaces:
 
 ## Phase 2 Deliverables (In Progress)
 
+- **Plan 01:** compute_transfer_function, predicted_csd, neuronal_noise_csd, observation_noise_csd, spectral_dcm_forward (27 tests)
 - **Plan 02:** compute_empirical_csd, bold_to_csd_torch, default_welch_params (12 tests)
 
 ## Session Continuity
 
-Last session: 2026-03-26T07:16:42Z
-Stopped at: Completed 02-02-PLAN.md (empirical CSD computation)
+Last session: 2026-03-26T07:18:55Z
+Stopped at: Completed 02-01-PLAN.md (spectral transfer + noise models)
 Resume file: None
 
 ---
-*Last updated: 2026-03-26 after completing 02-02-PLAN.md*
+*Last updated: 2026-03-26 after completing 02-01-PLAN.md*
