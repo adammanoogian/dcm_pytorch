@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from pyro_dcm.simulators.rdcm_simulator import (
+    make_block_stimulus_rdcm,
+    make_stable_A_rdcm,
+    simulate_rdcm,
+)
 from pyro_dcm.simulators.spectral_simulator import (
     make_stable_A_spectral,
     simulate_spectral_dcm,
@@ -18,4 +23,8 @@ __all__ = [
     # Phase 2: Spectral DCM simulator
     "make_stable_A_spectral",
     "simulate_spectral_dcm",
+    # Phase 3: rDCM simulator
+    "make_block_stimulus_rdcm",
+    "make_stable_A_rdcm",
+    "simulate_rdcm",
 ]

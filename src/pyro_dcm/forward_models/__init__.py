@@ -17,6 +17,23 @@ from pyro_dcm.forward_models.spectral_noise import (
     neuronal_noise_csd,
     observation_noise_csd,
 )
+from pyro_dcm.forward_models.rdcm_forward import (
+    compute_derivative_coefficients,
+    create_regressors,
+    euler_integrate_dcm,
+    generate_bold,
+    get_hrf,
+    split_real_imag,
+)
+from pyro_dcm.forward_models.rdcm_posterior import (
+    compute_free_energy_rigid,
+    compute_free_energy_sparse,
+    compute_rdcm_likelihood,
+    get_priors_rigid,
+    get_priors_sparse,
+    rigid_inversion,
+    sparse_inversion,
+)
 from pyro_dcm.forward_models.spectral_transfer import (
     compute_transfer_function,
     default_frequency_grid,
@@ -44,4 +61,19 @@ __all__ = [
     "bold_to_csd_torch",
     "compute_empirical_csd",
     "default_welch_params",
+    # Phase 3: Regression DCM forward pipeline
+    "compute_derivative_coefficients",
+    "create_regressors",
+    "euler_integrate_dcm",
+    "generate_bold",
+    "get_hrf",
+    "split_real_imag",
+    # Phase 3: Regression DCM analytic posterior
+    "compute_free_energy_rigid",
+    "compute_free_energy_sparse",
+    "compute_rdcm_likelihood",
+    "get_priors_rigid",
+    "get_priors_sparse",
+    "rigid_inversion",
+    "sparse_inversion",
 ]
