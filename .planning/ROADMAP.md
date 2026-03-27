@@ -103,15 +103,16 @@ Plans:
 ---
 
 ## Phase 4: Pyro Generative Models + Baseline Guides
-**Status:** planned
+**Status:** complete (2026-03-27)
 **Requirements:** PROB-01, PROB-02, PROB-03, PROB-04
-**Plans:** 3 plans (2 waves)
+**Plans:** 3 plans (all complete)
 **Goal:** Wire the forward models into Pyro generative models with proper plate structure and priors, plus implement baseline mean-field Gaussian guides for each variant.
+**Verification:** 7/7 must-haves passed, 232 tests green (38 new + 194 Phase 1-3)
 
 Plans:
-- [ ] 04-01-PLAN.md — Task DCM Pyro generative model (PROB-01) + unit tests
-- [ ] 04-02-PLAN.md — Spectral DCM Pyro generative model (PROB-02) + unit tests
-- [ ] 04-03-PLAN.md — rDCM Pyro model (PROB-03) + guide factory + SVI runner (PROB-04) + integration tests
+- [x] 04-01-PLAN.md — Task DCM Pyro generative model (PROB-01) + unit tests
+- [x] 04-02-PLAN.md — Spectral DCM Pyro generative model (PROB-02) + unit tests
+- [x] 04-03-PLAN.md — rDCM Pyro model (PROB-03) + guide factory + SVI runner (PROB-04) + integration tests
 
 **Success criteria:**
 1. Each DCM variant registered as Pyro model with correct plate structure
