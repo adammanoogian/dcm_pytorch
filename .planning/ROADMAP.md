@@ -103,9 +103,15 @@ Plans:
 ---
 
 ## Phase 4: Pyro Generative Models + Baseline Guides
-**Status:** pending
+**Status:** planned
 **Requirements:** PROB-01, PROB-02, PROB-03, PROB-04
+**Plans:** 3 plans (2 waves)
 **Goal:** Wire the forward models into Pyro generative models with proper plate structure and priors, plus implement baseline mean-field Gaussian guides for each variant.
+
+Plans:
+- [ ] 04-01-PLAN.md — Task DCM Pyro generative model (PROB-01) + unit tests
+- [ ] 04-02-PLAN.md — Spectral DCM Pyro generative model (PROB-02) + unit tests
+- [ ] 04-03-PLAN.md — rDCM Pyro model (PROB-03) + guide factory + SVI runner (PROB-04) + integration tests
 
 **Success criteria:**
 1. Each DCM variant registered as Pyro model with correct plate structure
@@ -120,12 +126,11 @@ Plans:
 - Mean-field Gaussian: q(theta) = prod_i N(mu_i, sigma_i^2)
 
 **Key files:**
-- `src/pyro_dcm/generative_models/task_dcm.py`
-- `src/pyro_dcm/generative_models/spectral_dcm.py`
-- `src/pyro_dcm/generative_models/regression_dcm.py`
-- `src/pyro_dcm/guides/meanfield.py`
-- `src/pyro_dcm/inference/svi_runner.py`
-- `tests/test_pyro_models.py`
+- `src/pyro_dcm/models/task_dcm_model.py`
+- `src/pyro_dcm/models/spectral_dcm_model.py`
+- `src/pyro_dcm/models/rdcm_model.py`
+- `src/pyro_dcm/models/guides.py`
+- `tests/test_task_dcm_model.py`, `tests/test_spectral_dcm_model.py`, `tests/test_rdcm_model.py`, `tests/test_svi_integration.py`
 
 ---
 
@@ -255,4 +260,4 @@ Phase 1 (Task forward model)
 
 ---
 *Roadmap created: 2026-03-25*
-*Last updated: 2026-03-26 — Phase 3 success criterion 4 corrected (VB/ARD, not L1-MAP), key files updated*
+*Last updated: 2026-03-27 — Phase 4 plans created (3 plans, 2 waves)*
