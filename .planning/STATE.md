@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 3 complete (Regression DCM Forward Model). Ready for Phase 4.
+**Current focus:** Phase 4 complete (Pyro Generative Models). Ready for Phase 5.
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
-**Phase:** 3 of 8 (Regression DCM Forward Model) -- Complete
-**Plan:** 3 of 3 complete (03-01, 03-02, 03-03)
+**Phase:** 4 of 8 (Pyro Generative Models) -- Complete
+**Plan:** 3 of 3 complete (04-01, 04-02, 04-03)
 **Status:** Phase complete
-**Last activity:** 2026-03-26 -- Completed 03-03-PLAN.md (rDCM simulator and integration tests)
+**Last activity:** 2026-03-27 -- Completed 04-03-PLAN.md (rDCM Pyro model, guide factory, SVI runner, integration tests)
 
-Progress: [█████████░░░░░░░░░░░] ~45% (9/~20 plans)
+Progress: [████████████░░░░░░░░] ~60% (12/~20 plans)
 
 ## Decisions
 
@@ -52,6 +52,12 @@ Progress: [█████████░░░░░░░░░░░] ~45% (9
 | l0 clamped at 1e16 max | Prevents numerical issues from inf precision in absent connections | 2026-03-26 |
 | 3-region sparse test (not 5-region) | 5-region with 2 inputs has insufficient drive; 3-region achieves F1 > 0.85 robustly | 2026-03-26 |
 | Cross-mode threshold 0.8 (not 0.9) | Sparse ARD naturally shrinks coefficients differently from rigid VB | 2026-03-26 |
+| Conditioned trace tests for ODE models | Random prior samples cause ODE instability with coarse dt; use poutine.condition | 2026-03-27 |
+| rk4 fixed-step for SVI | Predictable runtime during optimization; adaptive dopri5 causes variable compute graphs | 2026-03-27 |
+| Complex CSD decomposed to real/imag | Pyro distributions don't support complex128; stack real/imag into float64 vector | 2026-03-27 |
+| Per-region Python loop for rDCM Pyro | Each region has different D_r (active connections); cannot vectorize with plate | 2026-03-27 |
+| N(0,1) prior on rDCM theta | Broader than analytic VB priors; Pyro model for ELBO comparison, not primary inference | 2026-03-27 |
+| AutoNormal init_scale=0.01 default | Prevents ODE blow-up from extreme initial A_free samples during SVI | 2026-03-27 |
 
 ## Blockers
 
@@ -92,11 +98,18 @@ Three swappable module interfaces:
 - **Plan 03:** rdcm_simulator.py -- End-to-end simulator, package exports, integration tests (14 tests)
 - **Total:** 74 tests, all passing (194 total with Phases 1-2)
 
+## Phase 4 Deliverables (Complete)
+
+- **Plan 01:** task_dcm_model Pyro generative model (10 tests)
+- **Plan 02:** spectral_dcm_model Pyro generative model (13 tests)
+- **Plan 03:** rdcm_model Pyro model, create_guide, run_svi, extract_posterior_params, integration tests (15 tests)
+- **Total:** 38 tests, all passing (232 total with Phases 1-3)
+
 ## Session Continuity
 
-Last session: 2026-03-26T12:27:47Z
-Stopped at: Completed 03-03-PLAN.md (rDCM simulator and integration tests)
+Last session: 2026-03-27T09:14:40Z
+Stopped at: Completed 04-03-PLAN.md (rDCM Pyro model, guide factory, SVI runner, integration tests)
 Resume file: None
 
 ---
-*Last updated: 2026-03-26 after completing 03-03-PLAN.md*
+*Last updated: 2026-03-27 after completing 04-03-PLAN.md*
