@@ -136,9 +136,15 @@ Plans:
 ---
 
 ## Phase 5: Parameter Recovery Tests (All Three Variants)
-**Status:** pending
+**Status:** planned
 **Requirements:** REC-01, REC-02, REC-03, REC-04
+**Plans:** 3 plans (2 waves)
 **Goal:** Rigorous parameter recovery validation — simulate with known ground truth, infer, and verify accuracy and calibration for all three DCM variants.
+
+Plans:
+- [ ] 05-01-PLAN.md — Task DCM + Spectral DCM parameter recovery (SVI-based, REC-01, REC-02)
+- [ ] 05-02-PLAN.md — rDCM parameter recovery via analytic VB rigid + sparse (REC-03)
+- [ ] 05-03-PLAN.md — ELBO convergence + model comparison for all three variants (REC-04)
 
 **Success criteria:**
 1. Task-DCM: RMSE(A) < 0.05, 95% CI coverage in [0.90, 0.99]
@@ -157,7 +163,7 @@ Plans:
 - `tests/test_task_dcm_recovery.py`
 - `tests/test_spectral_dcm_recovery.py`
 - `tests/test_rdcm_recovery.py`
-- `validation/recovery_results/`
+- `tests/test_elbo_model_comparison.py`
 
 ---
 
@@ -261,4 +267,4 @@ Phase 1 (Task forward model)
 
 ---
 *Roadmap created: 2026-03-25*
-*Last updated: 2026-03-27 — Phase 4 plans created (3 plans, 2 waves)*
+*Last updated: 2026-03-27 — Phase 5 plans created (3 plans, 2 waves)*
