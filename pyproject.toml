@@ -57,4 +57,5 @@ testpaths = ["tests"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "spm: marks tests requiring MATLAB + SPM12 (deselect with '-m \"not spm\"')",
+    "tapas: marks tests requiring tapas rDCM MATLAB toolbox",
 ]
