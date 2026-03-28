@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 5 in progress (Parameter Recovery Tests). Plans 01 and 02 complete.
+**Current focus:** Phase 5 complete (Parameter Recovery Tests). All 3 plans done (REC-01 through REC-04).
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
-**Phase:** 5 of 8 (Parameter Recovery Tests) -- In progress
-**Plan:** 05-01 and 05-02 complete (task/spectral/rDCM recovery tests)
-**Status:** In progress
-**Last activity:** 2026-03-28 -- Completed 05-01-PLAN.md (task & spectral DCM parameter recovery, REC-01 & REC-02)
+**Phase:** 5 of 8 (Parameter Recovery Tests) -- Complete
+**Plan:** 05-03 complete (ELBO convergence and model comparison, REC-04)
+**Status:** Phase 5 complete
+**Last activity:** 2026-03-28 -- Completed 05-03-PLAN.md (ELBO convergence and model comparison)
 
-Progress: [██████████████░░░░░░] ~70% (14/~20 plans)
+Progress: [███████████████░░░░░] ~75% (15/~20 plans)
 
 ## Decisions
 
@@ -67,6 +67,10 @@ Progress: [██████████████░░░░░░] ~70% (1
 | rDCM coverage > 0.20 (not [0.90, 0.99]) | VB posteriors systematically overconfident; CIs informative but not calibrated | 2026-03-27 |
 | rDCM sparse F1 > 0.70 (not 0.85) | Random A matrices include weak connections hard to detect | 2026-03-27 |
 | n_time=4000, u_dt=0.5 for rDCM recovery | 1000 BOLD points needed for stable frequency-domain recovery | 2026-03-27 |
+| Task DCM CI ELBO: 500/300 steps (not 3000) | ODE ~1-2s/step; 3000 steps = 50 min/test; 500 sufficient for convergence | 2026-03-28 |
+| Convergence decrease_ratio 0.85 for task DCM CI | 500 ODE steps achieve ~20-25% decrease, not 50%; 0.85 validates direction | 2026-03-28 |
+| Sparse A for spectral ELBO model comparison | Dense A + all-ones mask is over-specified; sparser mask wins via tighter bound | 2026-03-28 |
+| rDCM model comparison via analytic free energy | Closed-form VB F_total is exact and fast; SVI ELBO is noisy lower bound | 2026-03-28 |
 
 ## Blockers
 
@@ -114,17 +118,18 @@ Three swappable module interfaces:
 - **Plan 03:** rdcm_model Pyro model, create_guide, run_svi, extract_posterior_params, integration tests (15 tests)
 - **Total:** 38 tests, all passing (232 total with Phases 1-3)
 
-## Phase 5 Deliverables (In Progress)
+## Phase 5 Deliverables (Complete)
 
 - **Plan 01:** Task DCM recovery (4 CI tests: pipeline validation) + Spectral DCM recovery (4 CI tests: RMSE=0.011, coverage=0.878, corr=0.999)
 - **Plan 02:** rDCM parameter recovery tests -- rigid RMSE/correlation/coverage, sparse F1/RMSE/coverage (7 CI tests)
-- **Running total:** 243 tests (232 + 8 task/spectral recovery + 7 rDCM recovery = 247, minus 4 deselected)
+- **Plan 03:** ELBO convergence (3 tests) + model comparison (3 tests) for all three DCM variants (REC-04)
+- **Total:** 21 CI tests, all passing (253 total with Phases 1-4, minus deselected)
 
 ## Session Continuity
 
-Last session: 2026-03-28T00:14:32Z
-Stopped at: Completed 05-01-PLAN.md (task & spectral DCM parameter recovery, REC-01 & REC-02)
+Last session: 2026-03-28T01:14:42Z
+Stopped at: Completed 05-03-PLAN.md (ELBO convergence and model comparison, REC-04). Phase 5 complete.
 Resume file: None
 
 ---
-*Last updated: 2026-03-28 after completing 05-01-PLAN.md*
+*Last updated: 2026-03-28 after completing 05-03-PLAN.md (Phase 5 complete)*
