@@ -213,7 +213,14 @@ Plans:
 ## Phase 7: Amortized Neural Inference Guides
 **Status:** pending
 **Requirements:** AMR-01, AMR-02, AMR-03, AMR-04
-**Goal:** Implement normalizing flow guides that amortize inference across subjects — train once on simulated data, then do single-pass inference on new subjects.
+**Plans:** 3 plans
+
+**Goal:** Implement normalizing flow guides that amortize inference across subjects -- train once on simulated data, then do single-pass inference on new subjects.
+
+Plans:
+- [ ] 07-01-PLAN.md — Infrastructure: summary networks, parameter packing, training data generation
+- [ ] 07-02-PLAN.md — Task DCM amortized flow guide (AMR-01): wrapper model, AmortizedFlowGuide, training script, tests
+- [ ] 07-03-PLAN.md — Spectral DCM amortized guide (AMR-02) + cross-variant benchmark (AMR-04)
 
 **Success criteria:**
 1. Normalizing flow guide trained on 10,000+ simulated datasets per variant
@@ -223,16 +230,22 @@ Plans:
 5. Calibration maintained (coverage still in [0.85, 0.99])
 
 **Architecture:**
-- Summary network: 1D-CNN or Set Transformer over BOLD/CSD input
-- Flow: MAF or Neural Spline Flow via Zuko
-- Training: amortized SVI with ELBO objective over dataset of (data, params) pairs
-- For rDCM: amortized guide may be optional given closed-form posterior
+- Summary network: 1D-CNN (BOLD) / MLP (CSD) compressing observations to fixed-dim embedding
+- Flow: Neural Spline Flow (Zuko NSF) in coupling mode (passes=2) for fast bidirectional computation
+- Integration: ZukoToPyro wrapper for Pyro compatibility, wrapper model with single packed latent site
+- Parameter standardization to zero-mean unit-variance for NSF spline domain [-5, 5]
+- rDCM: amortized guide explicitly skipped (analytic VB posterior is exact for conjugate model)
 
 **Key files:**
 - `src/pyro_dcm/guides/amortized_flow.py`
 - `src/pyro_dcm/guides/summary_networks.py`
+- `src/pyro_dcm/guides/parameter_packing.py`
+- `src/pyro_dcm/models/amortized_wrappers.py`
+- `scripts/generate_training_data.py`
 - `scripts/train_amortized_guide.py`
-- `tests/test_amortized.py`
+- `tests/test_summary_networks.py`, `tests/test_parameter_packing.py`
+- `tests/test_amortized_task_dcm.py`, `tests/test_amortized_spectral_dcm.py`
+- `tests/test_amortized_benchmark.py`
 
 ---
 
@@ -284,4 +297,4 @@ Phase 1 (Task forward model)
 
 ---
 *Roadmap created: 2026-03-25*
-*Last updated: 2026-03-28 — Phase 6 plans created (3 plans, 2 waves)*
+*Last updated: 2026-03-28 -- Phase 7 plans created (3 plans, 3 waves)*
