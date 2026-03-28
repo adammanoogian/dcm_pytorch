@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 6 in progress (Validation Against SPM). Plan 06-01 complete (validation infrastructure).
+**Current focus:** Phase 6 in progress (Validation Against SPM). Plans 06-01 and 06-02 complete.
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
 **Phase:** 6 of 6 (Validation Against SPM)
-**Plan:** 06-01 complete (validation infrastructure: export, comparison, MATLAB scripts)
+**Plan:** 06-02 complete (task DCM + spectral DCM cross-validation vs SPM12)
 **Status:** In progress
-**Last activity:** 2026-03-28 -- Completed 06-01-PLAN.md (validation infrastructure)
+**Last activity:** 2026-03-28 -- Completed 06-02-PLAN.md (SPM12 cross-validation)
 
-Progress: [████████████████░░░░] ~89% (16/18 plans)
+Progress: [█████████████████░░░] ~94% (17/18 plans)
 
 ## Decisions
 
@@ -72,6 +72,10 @@ Progress: [████████████████░░░░] ~89% (1
 | Sparse A for spectral ELBO model comparison | Dense A + all-ones mask is over-specified; sparser mask wins via tighter bound | 2026-03-28 |
 | rDCM model comparison via analytic free energy | Closed-form VB F_total is exact and fast; SVI ELBO is noisy lower bound | 2026-03-28 |
 | Safe division in hybrid error metric | np.where evaluates both branches; use safe_ref=1.0 for zero positions | 2026-03-28 |
+| Task DCM 10%/15% tolerance vs SPM12 | VL vs SVI different optimization; 10% mean, 15% max element error | 2026-03-28 |
+| Spectral DCM 15% tolerance vs SPM12 | Additional 5-10% from MAR vs Welch CSD estimation difference | 2026-03-28 |
+| Sign agreement 85%/80% for A elements | Directional accuracy robust; spectral relaxed for CSD method diff | 2026-03-28 |
+| VAR(1) BOLD for spectral DCM validation | Spectral simulator outputs CSD; need BOLD for apples-to-apples SPM comparison | 2026-03-28 |
 
 ## Blockers
 
@@ -129,14 +133,14 @@ Three swappable module interfaces:
 ## Phase 6 Deliverables (In Progress)
 
 - **Plan 01:** Validation infrastructure -- .mat export (3 variants), MATLAB batch scripts (3), comparison utilities (5 functions), round-trip tests (14 tests)
-- **Plan 02:** (pending)
+- **Plan 02:** SPM12 cross-validation -- validation orchestrator, task DCM (VAL-01) + spectral DCM (VAL-02) tests, 6 auto-skipping tests
 - **Plan 03:** (pending)
 
 ## Session Continuity
 
-Last session: 2026-03-28T09:22:01Z
-Stopped at: Completed 06-01-PLAN.md (validation infrastructure). Phase 6 plan 1 of 3 done.
+Last session: 2026-03-28T09:41:28Z
+Stopped at: Completed 06-02-PLAN.md (SPM12 cross-validation). Phase 6 plan 2 of 3 done.
 Resume file: None
 
 ---
-*Last updated: 2026-03-28 after completing 06-01-PLAN.md (Phase 6 plan 1 of 3)*
+*Last updated: 2026-03-28 after completing 06-02-PLAN.md (Phase 6 plan 2 of 3)*
