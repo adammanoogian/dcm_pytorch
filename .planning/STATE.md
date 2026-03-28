@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 6 in progress (Validation Against SPM). Plans 06-01 and 06-02 complete.
+**Current focus:** Phase 6 complete (Validation Against SPM). All 18 plans across 6 phases complete.
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
 **Phase:** 6 of 6 (Validation Against SPM)
-**Plan:** 06-02 complete (task DCM + spectral DCM cross-validation vs SPM12)
-**Status:** In progress
-**Last activity:** 2026-03-28 -- Completed 06-02-PLAN.md (SPM12 cross-validation)
+**Plan:** 06-03 complete (rDCM cross-validation, model ranking, validation report)
+**Status:** COMPLETE
+**Last activity:** 2026-03-28 -- Completed 06-03-PLAN.md (rDCM validation + model ranking + report)
 
-Progress: [█████████████████░░░] ~94% (17/18 plans)
+Progress: [████████████████████] 100% (18/18 plans)
 
 ## Decisions
 
@@ -76,6 +76,9 @@ Progress: [█████████████████░░░] ~94% (1
 | Spectral DCM 15% tolerance vs SPM12 | Additional 5-10% from MAR vs Welch CSD estimation difference | 2026-03-28 |
 | Sign agreement 85%/80% for A elements | Directional accuracy robust; spectral relaxed for CSD method diff | 2026-03-28 |
 | VAR(1) BOLD for spectral DCM validation | Spectral simulator outputs CSD; need BOLD for apples-to-apples SPM comparison | 2026-03-28 |
+| tapas unavailable fallback | Internal rigid vs sparse consistency when tapas not installed | 2026-03-28 |
+| rDCM ranking seeds [42, 123, 789] | Seed 456 produces degenerate data; all masks converge to same diagonal solution | 2026-03-28 |
+| Separate rDCM validation orchestrator | run_rdcm_validation.py avoids merge conflict with parallel 06-02 run_validation.py | 2026-03-28 |
 
 ## Blockers
 
@@ -130,17 +133,17 @@ Three swappable module interfaces:
 - **Plan 03:** ELBO convergence (3 tests) + model comparison (3 tests) for all three DCM variants (REC-04)
 - **Total:** 21 CI tests, all passing (253 total with Phases 1-4, minus deselected)
 
-## Phase 6 Deliverables (In Progress)
+## Phase 6 Deliverables (Complete)
 
 - **Plan 01:** Validation infrastructure -- .mat export (3 variants), MATLAB batch scripts (3), comparison utilities (5 functions), round-trip tests (14 tests)
 - **Plan 02:** SPM12 cross-validation -- validation orchestrator, task DCM (VAL-01) + spectral DCM (VAL-02) tests, 6 auto-skipping tests
-- **Plan 03:** (pending)
+- **Plan 03:** rDCM cross-validation (VAL-03) + model ranking (VAL-04) -- internal consistency tests, analytic free energy ranking (100% agreement), validation report (5 passed, 5 skipped)
 
 ## Session Continuity
 
-Last session: 2026-03-28T09:41:28Z
-Stopped at: Completed 06-02-PLAN.md (SPM12 cross-validation). Phase 6 plan 2 of 3 done.
+Last session: 2026-03-28T10:01:00Z
+Stopped at: Completed 06-03-PLAN.md (rDCM validation + model ranking + report). ALL PLANS COMPLETE.
 Resume file: None
 
 ---
-*Last updated: 2026-03-28 after completing 06-02-PLAN.md (Phase 6 plan 2 of 3)*
+*Last updated: 2026-03-28 after completing 06-03-PLAN.md (Phase 6 plan 3 of 3 -- PROJECT COMPLETE)*
