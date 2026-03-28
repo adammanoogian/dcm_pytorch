@@ -171,26 +171,41 @@ Plans:
 ## Phase 6: Validation Against SPM / Reference Implementations
 **Status:** pending
 **Requirements:** VAL-01, VAL-02, VAL-03, VAL-04
+**Plans:** 3 plans (2 waves)
 **Goal:** Cross-validate all three DCM variants against established reference implementations (SPM12, tapas/rDCM) and verify ELBO-based model comparison.
+
+Plans:
+- [ ] 06-01-PLAN.md — Export infrastructure + MATLAB scripts + .mat round-trip tests
+- [ ] 06-02-PLAN.md — Task DCM + Spectral DCM cross-validation against SPM12 (VAL-01, VAL-02)
+- [ ] 06-03-PLAN.md — rDCM cross-validation against tapas (VAL-03) + model ranking validation (VAL-04) + validation report
 
 **Success criteria:**
 1. Task-DCM posterior means within 10% relative error of SPM12 on same simulated data
-2. Spectral DCM posterior means within 10% relative error of SPM12 spm_dcm_csd
-3. Regression DCM results match tapas/rDCM toolbox within published tolerances
-4. ELBO model ranking matches SPM free energy ranking on 3+ model comparison scenarios
+2. Spectral DCM posterior means within 15% relative error of SPM12 spm_dcm_csd (accounts for MAR vs Welch CSD)
+3. Regression DCM results match tapas/rDCM toolbox within published tolerances (or documented as blocked)
+4. ELBO model ranking matches SPM free energy ranking on 3+ model comparison scenarios (>= 80% agreement)
 5. Discrepancies documented with root-cause analysis
 
 **Validation protocol:**
 1. Export simulated datasets to .mat format for SPM12 processing
 2. Run SPM12 DCM estimation in MATLAB, extract Ep.A and F (free energy)
-3. Compare Pyro posterior vs SPM posterior element-wise
-4. For rDCM: compare against tapas toolbox or Frassle et al. published benchmarks
+3. Compare Pyro posterior vs SPM posterior element-wise (hybrid relative/absolute metric)
+4. For rDCM: compare against tapas toolbox (if available) with internal fallback
 5. For model comparison: compare ELBO ranking vs SPM free energy ranking
 
 **Key files:**
-- `validation/compare_spm.py`
-- `validation/spm_reference_data/`
+- `validation/export_to_mat.py`
+- `validation/compare_results.py`
+- `validation/run_validation.py`
+- `validation/matlab_scripts/run_spm_task_dcm.m`
+- `validation/matlab_scripts/run_spm_spectral_dcm.m`
+- `validation/matlab_scripts/run_tapas_rdcm.m`
 - `validation/VALIDATION_REPORT.md`
+- `tests/test_validation_export.py`
+- `tests/test_spm_task_dcm_validation.py`
+- `tests/test_spm_spectral_dcm_validation.py`
+- `tests/test_tapas_rdcm_validation.py`
+- `tests/test_model_ranking_validation.py`
 
 ---
 
@@ -268,4 +283,4 @@ Phase 1 (Task forward model)
 
 ---
 *Roadmap created: 2026-03-25*
-*Last updated: 2026-03-27 — Phase 5 plans created (3 plans, 2 waves)*
+*Last updated: 2026-03-28 — Phase 6 plans created (3 plans, 2 waves)*
