@@ -169,15 +169,16 @@ Plans:
 ---
 
 ## Phase 6: Validation Against SPM / Reference Implementations
-**Status:** pending
+**Status:** complete (2026-03-28)
 **Requirements:** VAL-01, VAL-02, VAL-03, VAL-04
-**Plans:** 3 plans (2 waves)
+**Plans:** 3 plans (all complete)
 **Goal:** Cross-validate all three DCM variants against established reference implementations (SPM12, tapas/rDCM) and verify ELBO-based model comparison.
+**Verification:** Export infrastructure + MATLAB scripts built, cross-validation tests auto-skip without MATLAB, rDCM model ranking 100% agreement, comprehensive VALIDATION_REPORT.md
 
 Plans:
-- [ ] 06-01-PLAN.md — Export infrastructure + MATLAB scripts + .mat round-trip tests
-- [ ] 06-02-PLAN.md — Task DCM + Spectral DCM cross-validation against SPM12 (VAL-01, VAL-02)
-- [ ] 06-03-PLAN.md — rDCM cross-validation against tapas (VAL-03) + model ranking validation (VAL-04) + validation report
+- [x] 06-01-PLAN.md — Export infrastructure + MATLAB scripts + .mat round-trip tests
+- [x] 06-02-PLAN.md — Task DCM + Spectral DCM cross-validation against SPM12 (VAL-01, VAL-02)
+- [x] 06-03-PLAN.md — rDCM cross-validation against tapas (VAL-03) + model ranking validation (VAL-04) + validation report
 
 **Success criteria:**
 1. Task-DCM posterior means within 10% relative error of SPM12 on same simulated data

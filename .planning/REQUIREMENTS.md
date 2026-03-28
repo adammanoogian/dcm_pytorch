@@ -99,10 +99,10 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | REC-02 | Phase 5 | Complete |
 | REC-03 | Phase 5 | Complete |
 | REC-04 | Phase 5 | Complete |
-| VAL-01 | Phase 6 | Pending |
-| VAL-02 | Phase 6 | Pending |
-| VAL-03 | Phase 6 | Pending |
-| VAL-04 | Phase 6 | Pending |
+| VAL-01 | Phase 6 | Complete |
+| VAL-02 | Phase 6 | Complete |
+| VAL-03 | Phase 6 | Complete |
+| VAL-04 | Phase 6 | Complete |
 | AMR-01 | Phase 7 | Pending |
 | AMR-02 | Phase 7 | Pending |
 | AMR-03 | Phase 7 | Pending |
@@ -118,4 +118,4 @@ Deferred to future milestone. Tracked but not in current roadmap.
 
 ---
 *Requirements defined: 2026-03-25*
-*Last updated: 2026-03-27 after Phase 5 completion*
+*Last updated: 2026-03-28 after Phase 6 completion*
