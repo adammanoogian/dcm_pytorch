@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 5 complete (Parameter Recovery Tests). All 3 plans done (REC-01 through REC-04).
+**Current focus:** Phase 6 in progress (Validation Against SPM). Plan 06-01 complete (validation infrastructure).
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
-**Phase:** 5 of 8 (Parameter Recovery Tests) -- Complete
-**Plan:** 05-03 complete (ELBO convergence and model comparison, REC-04)
-**Status:** Phase 5 complete
-**Last activity:** 2026-03-28 -- Completed 05-03-PLAN.md (ELBO convergence and model comparison)
+**Phase:** 6 of 6 (Validation Against SPM)
+**Plan:** 06-01 complete (validation infrastructure: export, comparison, MATLAB scripts)
+**Status:** In progress
+**Last activity:** 2026-03-28 -- Completed 06-01-PLAN.md (validation infrastructure)
 
-Progress: [███████████████░░░░░] ~75% (15/~20 plans)
+Progress: [████████████████░░░░] ~89% (16/18 plans)
 
 ## Decisions
 
@@ -71,6 +71,7 @@ Progress: [███████████████░░░░░] ~75% (1
 | Convergence decrease_ratio 0.85 for task DCM CI | 500 ODE steps achieve ~20-25% decrease, not 50%; 0.85 validates direction | 2026-03-28 |
 | Sparse A for spectral ELBO model comparison | Dense A + all-ones mask is over-specified; sparser mask wins via tighter bound | 2026-03-28 |
 | rDCM model comparison via analytic free energy | Closed-form VB F_total is exact and fast; SVI ELBO is noisy lower bound | 2026-03-28 |
+| Safe division in hybrid error metric | np.where evaluates both branches; use safe_ref=1.0 for zero positions | 2026-03-28 |
 
 ## Blockers
 
@@ -125,11 +126,17 @@ Three swappable module interfaces:
 - **Plan 03:** ELBO convergence (3 tests) + model comparison (3 tests) for all three DCM variants (REC-04)
 - **Total:** 21 CI tests, all passing (253 total with Phases 1-4, minus deselected)
 
+## Phase 6 Deliverables (In Progress)
+
+- **Plan 01:** Validation infrastructure -- .mat export (3 variants), MATLAB batch scripts (3), comparison utilities (5 functions), round-trip tests (14 tests)
+- **Plan 02:** (pending)
+- **Plan 03:** (pending)
+
 ## Session Continuity
 
-Last session: 2026-03-28T01:14:42Z
-Stopped at: Completed 05-03-PLAN.md (ELBO convergence and model comparison, REC-04). Phase 5 complete.
+Last session: 2026-03-28T09:22:01Z
+Stopped at: Completed 06-01-PLAN.md (validation infrastructure). Phase 6 plan 1 of 3 done.
 Resume file: None
 
 ---
-*Last updated: 2026-03-28 after completing 05-03-PLAN.md (Phase 5 complete)*
+*Last updated: 2026-03-28 after completing 06-01-PLAN.md (Phase 6 plan 1 of 3)*
