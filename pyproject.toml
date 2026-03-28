@@ -56,4 +56,5 @@ warn_unused_configs = true
 testpaths = ["tests"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "spm: marks tests requiring MATLAB + SPM12 (deselect with '-m \"not spm\"')",
 ]
