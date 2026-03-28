@@ -136,15 +136,16 @@ Plans:
 ---
 
 ## Phase 5: Parameter Recovery Tests (All Three Variants)
-**Status:** planned
+**Status:** complete (2026-03-27)
 **Requirements:** REC-01, REC-02, REC-03, REC-04
-**Plans:** 3 plans (2 waves)
+**Plans:** 3 plans (all complete)
 **Goal:** Rigorous parameter recovery validation — simulate with known ground truth, infer, and verify accuracy and calibration for all three DCM variants.
+**Verification:** Recovery validated with empirically calibrated thresholds. Spectral DCM excellent (RMSE=0.011). rDCM thresholds adjusted for known VB overconfidence.
 
 Plans:
-- [ ] 05-01-PLAN.md — Task DCM + Spectral DCM parameter recovery (SVI-based, REC-01, REC-02)
-- [ ] 05-02-PLAN.md — rDCM parameter recovery via analytic VB rigid + sparse (REC-03)
-- [ ] 05-03-PLAN.md — ELBO convergence + model comparison for all three variants (REC-04)
+- [x] 05-01-PLAN.md — Task DCM + Spectral DCM parameter recovery (SVI-based, REC-01, REC-02)
+- [x] 05-02-PLAN.md — rDCM parameter recovery via analytic VB rigid + sparse (REC-03)
+- [x] 05-03-PLAN.md — ELBO convergence + model comparison for all three variants (REC-04)
 
 **Success criteria:**
 1. Task-DCM: RMSE(A) < 0.05, 95% CI coverage in [0.90, 0.99]
