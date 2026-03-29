@@ -11,6 +11,13 @@ from pyro_dcm.models import (
     run_svi,
 )
 
+# Phase 7: Amortized inference
+from pyro_dcm.guides import AmortizedFlowGuide
+from pyro_dcm.models import (
+    amortized_task_dcm_model,
+    amortized_spectral_dcm_model,
+)
+
 __all__ = [
     "__version__",
     # Phase 4: Pyro generative models
@@ -19,4 +26,8 @@ __all__ = [
     "rdcm_model",
     "create_guide",
     "run_svi",
+    # Phase 7: Amortized inference
+    "AmortizedFlowGuide",
+    "amortized_task_dcm_model",
+    "amortized_spectral_dcm_model",
 ]
