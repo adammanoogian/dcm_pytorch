@@ -18,6 +18,7 @@ References
 
 from __future__ import annotations
 
+from pyro_dcm.guides.amortized_flow import AmortizedFlowGuide
 from pyro_dcm.guides.parameter_packing import (
     SpectralDCMPacker,
     TaskDCMPacker,
@@ -25,6 +26,7 @@ from pyro_dcm.guides.parameter_packing import (
 from pyro_dcm.guides.summary_networks import BoldSummaryNet, CsdSummaryNet
 
 __all__ = [
+    "AmortizedFlowGuide",
     "BoldSummaryNet",
     "CsdSummaryNet",
     "SpectralDCMPacker",
