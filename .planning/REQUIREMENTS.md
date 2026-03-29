@@ -103,10 +103,10 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | VAL-02 | Phase 6 | Complete |
 | VAL-03 | Phase 6 | Complete |
 | VAL-04 | Phase 6 | Complete |
-| AMR-01 | Phase 7 | Pending |
-| AMR-02 | Phase 7 | Pending |
-| AMR-03 | Phase 7 | Pending |
-| AMR-04 | Phase 7 | Pending |
+| AMR-01 | Phase 7 | Complete |
+| AMR-02 | Phase 7 | Complete |
+| AMR-03 | Phase 7 | Complete |
+| AMR-04 | Phase 7 | Complete |
 | BNC-01 | Phase 8 | Pending |
 | BNC-02 | Phase 8 | Pending |
 | BNC-03 | Phase 8 | Pending |

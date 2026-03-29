@@ -211,16 +211,16 @@ Plans:
 ---
 
 ## Phase 7: Amortized Neural Inference Guides
-**Status:** pending
+**Status:** complete (2026-03-29)
 **Requirements:** AMR-01, AMR-02, AMR-03, AMR-04
-**Plans:** 3 plans
-
+**Plans:** 3 plans (all complete)
 **Goal:** Implement normalizing flow guides that amortize inference across subjects -- train once on simulated data, then do single-pass inference on new subjects.
+**Verification:** 17/17 must-haves passed, 296 non-slow tests green (35 new + 261 Phase 1-6)
 
 Plans:
-- [ ] 07-01-PLAN.md — Infrastructure: summary networks, parameter packing, training data generation
-- [ ] 07-02-PLAN.md — Task DCM amortized flow guide (AMR-01): wrapper model, AmortizedFlowGuide, training script, tests
-- [ ] 07-03-PLAN.md — Spectral DCM amortized guide (AMR-02) + cross-variant benchmark (AMR-04)
+- [x] 07-01-PLAN.md — Infrastructure: summary networks, parameter packing, training data generation
+- [x] 07-02-PLAN.md — Task DCM amortized flow guide (AMR-01): wrapper model, AmortizedFlowGuide, training script, tests
+- [x] 07-03-PLAN.md — Spectral DCM amortized guide (AMR-02) + cross-variant benchmark (AMR-04)
 
 **Success criteria:**
 1. Normalizing flow guide trained on 10,000+ simulated datasets per variant
@@ -297,4 +297,4 @@ Phase 1 (Task forward model)
 
 ---
 *Roadmap created: 2026-03-25*
-*Last updated: 2026-03-28 -- Phase 7 plans created (3 plans, 3 waves)*
+*Last updated: 2026-03-29 -- Phase 7 complete (3 plans, 17/17 must-haves verified)*
