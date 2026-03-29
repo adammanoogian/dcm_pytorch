@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 7 in progress (Amortized Neural Inference Guides). Plan 01 of 3 complete.
+**Current focus:** Phase 7 in progress (Amortized Neural Inference Guides). Plan 02 of 3 complete.
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
 **Phase:** 7 of 8 (Amortized Neural Inference Guides)
-**Plan:** 07-01 complete (shared infrastructure: summary networks, packers, data gen)
+**Plan:** 07-02 complete (AmortizedFlowGuide, wrapper models, training script, tests)
 **Status:** In progress
-**Last activity:** 2026-03-29 -- Completed 07-01-PLAN.md (amortized inference shared infrastructure)
+**Last activity:** 2026-03-29 -- Completed 07-02-PLAN.md (amortized flow guide and task DCM inference)
 
-Progress: [███████████████████░] 90% (19/21 plans)
+Progress: [████████████████████] 95% (20/21 plans)
 
 ## Decisions
 
@@ -84,6 +84,11 @@ Progress: [███████████████████░] 90% (19
 | Standardize to [-5, 5] for NSF splines | NSF bins operate on [-5, 5]; values outside are identity-mapped | 2026-03-29 |
 | csd_noise_scale default 1.0 | Absent from spectral simulator; 1.0 is HalfCauchy(1.0) prior mode | 2026-03-29 |
 | A_free inversion: log(-2*A_ii) diagonal | Inverts parameterize_A transform; off-diagonal is identity | 2026-03-29 |
+| Wrapper model single _latent site | Both model and guide sample one packed vector; Pyro automatic ELBO works | 2026-03-29 |
+| NaN detach protection in ODE wrapper | Detach and zero-replace NaN BOLD; prevents gradient corruption from ODE divergence | 2026-03-29 |
+| Coarse dt=0.5 for amortized SVI | Metadata dt=0.01 is for simulation; SVI uses dt=0.5 for 50x speedup | 2026-03-29 |
+| Sequential particles (no vectorize) | parameterize_A boolean mask doesn't support batch dims from vectorized particles | 2026-03-29 |
+| Dict-to-PiecewiseConstantInput auto-convert | Wrapper model accepts dict stimulus from .pt metadata; auto-creates callable | 2026-03-29 |
 
 ## Blockers
 
@@ -147,12 +152,13 @@ Three swappable module interfaces:
 ## Phase 7 Deliverables (In Progress)
 
 - **Plan 01:** BoldSummaryNet, CsdSummaryNet, TaskDCMPacker, SpectralDCMPacker, generate_training_data.py (19 tests)
+- **Plan 02:** AmortizedFlowGuide, amortized_task/spectral_dcm_model wrappers, train_amortized_guide.py (6 tests)
 
 ## Session Continuity
 
-Last session: 2026-03-29T08:40:00Z
-Stopped at: Completed 07-01-PLAN.md (amortized inference shared infrastructure)
+Last session: 2026-03-29T09:25:00Z
+Stopped at: Completed 07-02-PLAN.md (amortized flow guide and task DCM inference)
 Resume file: None
 
 ---
-*Last updated: 2026-03-29 after completing 07-01-PLAN.md (Phase 7 plan 1 of 3)*
+*Last updated: 2026-03-29 after completing 07-02-PLAN.md (Phase 7 plan 2 of 3)*
