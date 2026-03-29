@@ -18,9 +18,15 @@ References
 
 from __future__ import annotations
 
+from pyro_dcm.guides.parameter_packing import (
+    SpectralDCMPacker,
+    TaskDCMPacker,
+)
 from pyro_dcm.guides.summary_networks import BoldSummaryNet, CsdSummaryNet
 
 __all__ = [
     "BoldSummaryNet",
     "CsdSummaryNet",
+    "SpectralDCMPacker",
+    "TaskDCMPacker",
 ]
