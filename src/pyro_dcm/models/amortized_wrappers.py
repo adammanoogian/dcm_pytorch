@@ -41,7 +41,11 @@ from pyro_dcm.guides.parameter_packing import (
     TaskDCMPacker,
 )
 from pyro_dcm.models.spectral_dcm_model import decompose_csd_for_likelihood
-from pyro_dcm.utils.ode_integrator import integrate_ode, make_initial_state
+from pyro_dcm.utils.ode_integrator import (
+    PiecewiseConstantInput,
+    integrate_ode,
+    make_initial_state,
+)
 
 
 def _sample_latent_and_unpack(
@@ -103,17 +107,23 @@ def _run_task_forward_model(
         Noise precision (positive scalar).
     observed_bold : torch.Tensor
         Observed BOLD, shape ``(T, N)``.
-    stimulus : PiecewiseConstantInput
-        Stimulus function.
+    stimulus : PiecewiseConstantInput or dict
+        Stimulus function or dict with ``times`` and ``values``.
     t_eval : torch.Tensor
         Fine time grid for ODE integration.
     TR : float
         Repetition time in seconds.
     dt : float
-        ODE integration step size.
+        ODE step size in seconds.
     """
     N = A.shape[0]
     T = observed_bold.shape[0]
+
+    # Convert dict stimulus to PiecewiseConstantInput if needed
+    if isinstance(stimulus, dict):
+        stimulus = PiecewiseConstantInput(
+            stimulus["times"], stimulus["values"],
+        )
 
     system = CoupledDCMSystem(A, C, stimulus)
     y0 = make_initial_state(N, dtype=torch.float64)
@@ -125,9 +135,16 @@ def _run_task_forward_model(
 
     step = round(TR / dt)
     predicted_bold = bold_fine[::step][:T]
+
+    # NaN protection: ODE can diverge for extreme parameter samples
+    # from the untrained flow. Detach and replace with zeros to
+    # produce a large finite penalty with zero gradient, preventing
+    # NaN gradients from corrupting the flow parameters.
+    if torch.isnan(predicted_bold).any():
+        predicted_bold = torch.zeros_like(predicted_bold).detach()
     pyro.deterministic("predicted_bold", predicted_bold)
 
-    noise_std = (1.0 / noise_prec).sqrt()
+    noise_std = (1.0 / noise_prec).sqrt().clamp(min=1e-6)
     pyro.sample(
         "obs",
         dist.Normal(predicted_bold, noise_std).to_event(2),
@@ -160,8 +177,9 @@ def amortized_task_dcm_model(
     ----------
     observed_bold : torch.Tensor
         Observed BOLD, shape ``(T, N)``, dtype float64.
-    stimulus : PiecewiseConstantInput
-        Piecewise-constant stimulus function.
+    stimulus : PiecewiseConstantInput or dict
+        Piecewise-constant stimulus function, or dict with
+        ``times`` and ``values`` keys (auto-converted).
     a_mask : torch.Tensor
         Binary mask for A, shape ``(N, N)``, dtype float64.
     c_mask : torch.Tensor
