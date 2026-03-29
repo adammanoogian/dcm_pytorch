@@ -15,6 +15,7 @@ dependencies = [
     "pyro-ppl>=1.9",
     "scipy",
     "numpy",
+    "zuko>=1.2",
 ]
 
 [project.optional-dependencies]
