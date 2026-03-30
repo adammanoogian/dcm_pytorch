@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 7 complete (Amortized Neural Inference Guides). All 21 plans delivered.
+**Current focus:** Phase 8 in progress (Metrics, Benchmarks, and Documentation). 22/26 plans delivered.
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
-**Phase:** 7 of 8 (Amortized Neural Inference Guides) -- COMPLETE
-**Plan:** 07-03 complete (Spectral DCM amortized inference, cross-variant benchmark, package exports)
-**Status:** Phase 7 complete. Phase 8 (Documentation and Release) next.
-**Last activity:** 2026-03-29 -- Completed 07-03-PLAN.md (spectral amortized + benchmark)
+**Phase:** 8 of 8 (Metrics, Benchmarks, and Documentation)
+**Plan:** 08-01 complete (Benchmark infrastructure: metrics, config, CLI, runner registry)
+**Status:** In progress. Plans 08-02 through 08-05 remaining.
+**Last activity:** 2026-03-30 -- Completed 08-01-PLAN.md (benchmark infrastructure)
 
-Progress: [█████████████████████] 100% (21/21 plans)
+Progress: [██████████████████████░░░░] 85% (22/26 plans)
 
 ## Decisions
 
@@ -92,6 +92,7 @@ Progress: [█████████████████████] 100%
 | CI coverage threshold 0.55 for amortized | 200 training examples produce tight posteriors; flows underestimate uncertainty at small scale | 2026-03-29 |
 | Epoch-based shuffled training | Sequential cycling biases gradients; shuffled epochs improve amortized convergence | 2026-03-29 |
 | 2-particle amortized SVI | Better gradient estimates than single particle; 2x cost acceptable for CI | 2026-03-29 |
+| sys.path.insert for benchmark CLI | benchmarks/ not installed as package; script needs project root on path | 2026-03-30 |
 
 ## Blockers
 
@@ -159,11 +160,16 @@ Three swappable module interfaces:
 - **Plan 03:** Spectral DCM amortized tests, cross-variant benchmark (AMR-04), package exports (10 tests)
 - **Total:** 35 tests, all passing (296 total non-slow with Phases 1-6)
 
+## Phase 8 Deliverables (In Progress)
+
+- **Plan 01:** Benchmark infrastructure -- metrics.py (5 functions), config.py (BenchmarkConfig), run_all_benchmarks.py CLI, runners registry (7 entries), 9 tests
+- **Plans 02-05:** Remaining
+
 ## Session Continuity
 
-Last session: 2026-03-29
-Stopped at: Phase 7 verified (17/17 must-haves). Phase 8 next.
+Last session: 2026-03-30
+Stopped at: Completed 08-01-PLAN.md (benchmark infrastructure)
 Resume file: None
 
 ---
-*Last updated: 2026-03-29 after Phase 7 verification passed (17/17 must-haves)*
+*Last updated: 2026-03-30 after 08-01 benchmark infrastructure complete*
