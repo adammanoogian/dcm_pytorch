@@ -2,9 +2,6 @@
 
 Maps ``(variant, method)`` tuples to runner functions. Each runner
 accepts a ``BenchmarkConfig`` and returns a results dictionary.
-
-Runners are registered in Plan 08-03. Initial entries raise
-``NotImplementedError`` as placeholders.
 """
 
 from __future__ import annotations
@@ -13,33 +10,22 @@ from collections.abc import Callable
 from typing import Any
 
 from benchmarks.config import BenchmarkConfig
-
-
-def _not_implemented(config: BenchmarkConfig) -> dict[str, Any]:
-    """Placeholder runner that raises NotImplementedError.
-
-    Parameters
-    ----------
-    config : BenchmarkConfig
-        Benchmark configuration (unused).
-
-    Raises
-    ------
-    NotImplementedError
-        Always raised with message indicating Plan 08-03.
-    """
-    raise NotImplementedError(
-        f"Runner ({config.variant}, {config.method}) "
-        f"will be implemented in Plan 08-03"
-    )
-
+from benchmarks.runners.rdcm_vb import (
+    run_rdcm_rigid_vb,
+    run_rdcm_sparse_vb,
+)
+from benchmarks.runners.spectral_amortized import run_spectral_amortized
+from benchmarks.runners.spectral_svi import run_spectral_svi
+from benchmarks.runners.spm_reference import run_spm_reference
+from benchmarks.runners.task_amortized import run_task_amortized
+from benchmarks.runners.task_svi import run_task_svi
 
 RUNNER_REGISTRY: dict[tuple[str, str], Callable[..., dict[str, Any]]] = {
-    ("task", "svi"): _not_implemented,
-    ("task", "amortized"): _not_implemented,
-    ("spectral", "svi"): _not_implemented,
-    ("spectral", "amortized"): _not_implemented,
-    ("rdcm_rigid", "vb"): _not_implemented,
-    ("rdcm_sparse", "vb"): _not_implemented,
-    ("spm", "reference"): _not_implemented,
+    ("task", "svi"): run_task_svi,
+    ("task", "amortized"): run_task_amortized,
+    ("spectral", "svi"): run_spectral_svi,
+    ("spectral", "amortized"): run_spectral_amortized,
+    ("rdcm_rigid", "vb"): run_rdcm_rigid_vb,
+    ("rdcm_sparse", "vb"): run_rdcm_sparse_vb,
+    ("spm", "reference"): run_spm_reference,
 }
