@@ -250,9 +250,17 @@ Plans:
 ---
 
 ## Phase 8: Metrics, Benchmarks, and Documentation
-**Status:** pending
+**Status:** in-progress
 **Requirements:** BNC-01, BNC-02, BNC-03
-**Goal:** Comprehensive benchmarking comparing all inference methods across all DCM variants, plus API documentation and reproducibility scripts.
+**Plans:** 5 plans
+**Goal:** Comprehensive benchmarking comparing all inference methods across all DCM variants, plus API documentation, quickstart tutorial, paper-ready methods section, and reproducibility scripts.
+
+Plans:
+- [ ] 08-01-PLAN.md — Benchmark infrastructure: metrics module, config, CLI skeleton, pyproject.toml extras
+- [ ] 08-02-PLAN.md — Documentation: quickstart tutorial, methods section (Markdown + LaTeX), equations reference
+- [ ] 08-03-PLAN.md — Benchmark runners: all 6 variant/method runners + RUNNER_REGISTRY
+- [ ] 08-04-PLAN.md — Plotting module + figure generation + benchmark report narrative
+- [ ] 08-05-PLAN.md — API docstring audit + expanded top-level exports
 
 **Success criteria:**
 1. Comprehensive benchmark table: RMSE, coverage, ELBO, wall time per variant x method
@@ -262,9 +270,21 @@ Plans:
 5. Draft methods section for paper
 
 **Deliverables:**
-- `benchmarks/` directory with all scripts and results
-- `docs/03_methods_reference/` with mathematical derivations matching code
+- `benchmarks/` directory with CLI runner, 6 variant/method runners, metrics, plotting
+- `docs/02_pipeline_guide/quickstart.md` -- end-to-end tutorial
+- `docs/03_methods_reference/` with methods.md, methods.tex, equations.md, references.bib
+- `docs/04_scientific_reports/benchmark_report.md` -- results narrative
+- `figures/` with publication-quality benchmark figures
 - Summary table comparing Pyro-DCM vs SPM12 vs tapas/rDCM
+
+**Key files:**
+- `benchmarks/metrics.py`, `benchmarks/config.py`, `benchmarks/run_all_benchmarks.py`
+- `benchmarks/runners/{task_svi,task_amortized,spectral_svi,spectral_amortized,rdcm_vb,spm_reference}.py`
+- `benchmarks/plotting.py`
+- `docs/02_pipeline_guide/quickstart.md`
+- `docs/03_methods_reference/{methods.md,methods.tex,equations.md,references.bib}`
+- `docs/04_scientific_reports/benchmark_report.md`
+- `tests/test_benchmark_metrics.py`
 
 ---
 
@@ -297,4 +317,4 @@ Phase 1 (Task forward model)
 
 ---
 *Roadmap created: 2026-03-25*
-*Last updated: 2026-03-29 -- Phase 7 complete (3 plans, 17/17 must-haves verified)*
+*Last updated: 2026-03-30 -- Phase 8 planned (5 plans in 3 waves)*
