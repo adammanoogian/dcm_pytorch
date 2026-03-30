@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 8 in progress (Metrics, Benchmarks, and Documentation). 22/26 plans delivered.
+**Current focus:** Phase 8 in progress (Metrics, Benchmarks, and Documentation). 23/26 plans delivered.
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
 **Phase:** 8 of 8 (Metrics, Benchmarks, and Documentation)
-**Plan:** 08-01 complete (Benchmark infrastructure: metrics, config, CLI, runner registry)
-**Status:** In progress. Plans 08-02 through 08-05 remaining.
-**Last activity:** 2026-03-30 -- Completed 08-01-PLAN.md (benchmark infrastructure)
+**Plan:** 08-02 complete (Documentation: quickstart, methods, equations, BibTeX)
+**Status:** In progress. Plans 08-03 through 08-05 remaining.
+**Last activity:** 2026-03-30 -- Completed 08-02-PLAN.md (documentation artifacts)
 
-Progress: [██████████████████████░░░░] 85% (22/26 plans)
+Progress: [██████████████████████░░░] 88% (23/26 plans)
 
 ## Decisions
 
@@ -93,6 +93,8 @@ Progress: [██████████████████████░
 | Epoch-based shuffled training | Sequential cycling biases gradients; shuffled epochs improve amortized convergence | 2026-03-29 |
 | 2-particle amortized SVI | Better gradient estimates than single particle; 2x cost acceptable for CI | 2026-03-29 |
 | sys.path.insert for benchmark CLI | benchmarks/ not installed as package; script needs project root on path | 2026-03-30 |
+| Module-level imports in quickstart | from pyro_dcm.simulators.task_simulator, not top-level; works without __init__.py | 2026-03-30 |
+| LaTeX methods.tex as includeable fragment | No documentclass/preamble; use \input{methods.tex} in paper template | 2026-03-30 |
 
 ## Blockers
 
@@ -163,13 +165,14 @@ Three swappable module interfaces:
 ## Phase 8 Deliverables (In Progress)
 
 - **Plan 01:** Benchmark infrastructure -- metrics.py (5 functions), config.py (BenchmarkConfig), run_all_benchmarks.py CLI, runners registry (7 entries), 9 tests
-- **Plans 02-05:** Remaining
+- **Plan 02:** Documentation -- quickstart.md, methods.md, methods.tex, equations.md, references.bib (5 files)
+- **Plans 03-05:** Remaining
 
 ## Session Continuity
 
 Last session: 2026-03-30
-Stopped at: Completed 08-01-PLAN.md (benchmark infrastructure)
+Stopped at: Completed 08-02-PLAN.md (documentation artifacts)
 Resume file: None
 
 ---
-*Last updated: 2026-03-30 after 08-01 benchmark infrastructure complete*
+*Last updated: 2026-03-30 after 08-02 documentation complete*
