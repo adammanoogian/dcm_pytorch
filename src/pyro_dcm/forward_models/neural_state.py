@@ -37,6 +37,13 @@ def parameterize_A(A_free: torch.Tensor) -> torch.Tensor:
     -----
     SPM12 source: ``spm_fx_fmri.m`` lines for self-inhibition.
     See also SPM/DCM_units wikibook for A matrix conventions.
+
+    Examples
+    --------
+    >>> import torch
+    >>> A_free = torch.zeros(2, 2, dtype=torch.float64)
+    >>> A = parameterize_A(A_free)
+    >>> A.diagonal()  # tensor([-0.5000, -0.5000])
     """
     N = A_free.shape[0]
     diag_mask = torch.eye(N, dtype=torch.bool, device=A_free.device)

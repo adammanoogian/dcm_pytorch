@@ -239,6 +239,12 @@ def get_hrf(
     References
     ----------
     Julia ``generate_BOLD.jl`` ``get_hrf()``.
+
+    Examples
+    --------
+    >>> hrf = get_hrf(N=1000, u_dt=0.5)
+    >>> hrf.shape  # (1000,)
+    >>> hrf.dtype   # torch.float64
     """
     A_hrf = torch.tensor([[-1.0]], dtype=torch.float64)
     C_hrf = torch.tensor([[16.0]], dtype=torch.float64)

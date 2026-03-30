@@ -50,6 +50,14 @@ def neuronal_noise_csd(
     torch.Tensor
         Neuronal noise CSD, shape ``(F, N, N)``, complex128.
         Diagonal matrix at each frequency.
+
+    Examples
+    --------
+    >>> import torch
+    >>> freqs = torch.linspace(1/128, 0.25, 32, dtype=torch.float64)
+    >>> a = torch.zeros(2, 3, dtype=torch.float64)
+    >>> Gu = neuronal_noise_csd(freqs, a)
+    >>> Gu.shape  # (32, 3, 3)
     """
     # Vectorized computation over regions
     # amp: (N,), exp_val: (N,)
@@ -108,6 +116,15 @@ def observation_noise_csd(
     -------
     torch.Tensor
         Observation noise CSD, shape ``(F, N, N)``, complex128.
+
+    Examples
+    --------
+    >>> import torch
+    >>> freqs = torch.linspace(1/128, 0.25, 32, dtype=torch.float64)
+    >>> b = torch.zeros(2, 1, dtype=torch.float64)
+    >>> c = torch.zeros(2, 3, dtype=torch.float64)
+    >>> Gn = observation_noise_csd(freqs, b, c, n_regions=3)
+    >>> Gn.shape  # (32, 3, 3)
     """
     F_len = freqs.shape[0]
     N = n_regions
@@ -169,6 +186,12 @@ def default_noise_priors(n_regions: int) -> dict[str, torch.Tensor]:
         - ``b_prior_var``: shape ``(2, 1)``, filled with 1/64 (float64)
         - ``c_prior_mean``: shape ``(2, N)``, zeros (float64)
         - ``c_prior_var``: shape ``(2, N)``, filled with 1/64 (float64)
+
+    Examples
+    --------
+    >>> priors = default_noise_priors(n_regions=3)
+    >>> priors['a_prior_mean'].shape  # (2, 3)
+    >>> priors['b_prior_var'].item()  # 0.015625 (1/64)
     """
     N = n_regions
     var_val = 1.0 / 64.0

@@ -44,6 +44,12 @@ def default_frequency_grid(
     -------
     torch.Tensor
         Frequency vector in Hz, shape ``(n_freqs,)``, dtype float64.
+
+    Examples
+    --------
+    >>> freqs = default_frequency_grid(TR=2.0, n_freqs=32)
+    >>> freqs.shape  # (32,)
+    >>> freqs[0]     # ~0.0078 Hz (1/128)
     """
     return torch.linspace(
         1.0 / 128.0,
@@ -87,6 +93,15 @@ def compute_transfer_function(
     -------
     torch.Tensor
         Transfer function H, shape ``(F, nn, nu)``, complex128.
+
+    Examples
+    --------
+    >>> import torch
+    >>> A = torch.diag(torch.tensor([-0.5, -0.5], dtype=torch.float64))
+    >>> C_in = C_out = torch.eye(2, dtype=torch.float64)
+    >>> freqs = default_frequency_grid(TR=2.0, n_freqs=16)
+    >>> H = compute_transfer_function(A, C_in, C_out, freqs)
+    >>> H.shape  # (16, 2, 2)
     """
     # Step 1: Eigendecompose A
     eigvals, eigvecs = torch.linalg.eig(A.to(torch.complex128))
@@ -189,6 +204,17 @@ def spectral_dcm_forward(
     -------
     torch.Tensor
         Predicted CSD, shape ``(F, N, N)``, complex128.
+
+    Examples
+    --------
+    >>> import torch
+    >>> A = torch.diag(torch.tensor([-0.5, -0.5], dtype=torch.float64))
+    >>> freqs = default_frequency_grid(TR=2.0, n_freqs=16)
+    >>> a = torch.zeros(2, 2, dtype=torch.float64)
+    >>> b = torch.zeros(2, 1, dtype=torch.float64)
+    >>> c = torch.zeros(2, 2, dtype=torch.float64)
+    >>> csd = spectral_dcm_forward(A, freqs, a, b, c)
+    >>> csd.shape  # (16, 2, 2)
     """
     N = A.shape[0]
 

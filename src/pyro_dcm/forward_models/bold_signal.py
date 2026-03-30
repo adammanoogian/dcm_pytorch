@@ -65,6 +65,13 @@ def bold_signal(
     ----------
     [REF-002] Stephan et al. (2007), Eq. 6.
     [REF-030] Buxton, Wong & Frank (1998) — original Balloon model.
+
+    Examples
+    --------
+    >>> import torch
+    >>> v = torch.ones(3, dtype=torch.float64)
+    >>> q = torch.ones(3, dtype=torch.float64)
+    >>> bold_signal(v, q)  # tensor([0., 0., 0.]) at steady state
     """
     k1 = 7.0 * E0
     k2 = 2.0

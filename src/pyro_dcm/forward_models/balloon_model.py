@@ -63,6 +63,15 @@ class BalloonWindkessel:
         Grubb's exponent (vessel stiffness).
     E0 : torch.Tensor or float
         Resting oxygen extraction fraction.
+
+    Examples
+    --------
+    >>> import torch
+    >>> bw = BalloonWindkessel()  # SPM12 defaults
+    >>> x = torch.tensor([0.5, 0.0])
+    >>> s = torch.zeros(2)
+    >>> lnf = lnv = lnq = torch.zeros(2)
+    >>> ds, dlnf, dlnv, dlnq = bw.derivatives(x, s, lnf, lnv, lnq)
     """
 
     def __init__(

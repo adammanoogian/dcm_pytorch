@@ -51,6 +51,13 @@ def default_welch_params(T: int, fs: float) -> dict[str, int | str]:
         - ``nperseg`` : int -- segment length for Welch method.
         - ``noverlap`` : int -- overlap between segments (50%).
         - ``window`` : str -- window function name.
+
+    Examples
+    --------
+    >>> params = default_welch_params(T=200, fs=0.5)
+    >>> params['nperseg']   # 200
+    >>> params['noverlap']  # 100
+    >>> params['window']    # 'hann'
     """
     nperseg = min(256, T)
     noverlap = nperseg // 2
@@ -104,6 +111,14 @@ def compute_empirical_csd(
     ----------
     [REF-010] Friston et al. (2014), Eq. 3-4 (empirical CSD input).
     [REF-011] Razi et al. (2015) — CSD estimation from BOLD.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> bold = np.random.randn(200, 3)
+    >>> freqs = np.linspace(1/128, 0.25, 32)
+    >>> csd = compute_empirical_csd(bold, fs=0.5, freqs=freqs)
+    >>> csd.shape  # (32, 3, 3)
     """
     T, N = bold.shape
 
