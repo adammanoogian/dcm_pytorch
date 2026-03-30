@@ -285,6 +285,16 @@ def simulate_rdcm(
     create_regressors : Frequency-domain design matrix.
     rigid_inversion : Fixed-architecture VB inversion.
     sparse_inversion : ARD-based sparse VB inversion.
+
+    Examples
+    --------
+    >>> import torch
+    >>> A, a_mask = make_stable_A_rdcm(3, seed=42)
+    >>> C = torch.eye(3, 2, dtype=torch.float64) * 0.5
+    >>> c_mask = (C.abs() > 0).to(torch.float64)
+    >>> u = make_block_stimulus_rdcm(4000, 2, u_dt=0.5, seed=42)
+    >>> result = simulate_rdcm(A, C, u, u_dt=0.5, y_dt=2.0, seed=42)
+    >>> result['A_mu'].shape  # (3, 3)
     """
     nr = A.shape[0]
     nu = C.shape[1]

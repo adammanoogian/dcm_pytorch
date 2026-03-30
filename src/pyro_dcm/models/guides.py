@@ -65,6 +65,11 @@ def create_guide(
     (task DCM, spectral DCM): starting with larger scales can produce
     A matrices with large positive eigenvalues, causing ODE blow-up
     during the first SVI steps.
+
+    Examples
+    --------
+    >>> from pyro_dcm.models import task_dcm_model, create_guide
+    >>> guide = create_guide(task_dcm_model, init_scale=0.01)
     """
     return AutoNormal(model, init_scale=init_scale)
 
@@ -128,6 +133,17 @@ def run_svi(
       applied per-step multiplicatively by ``ClippedAdam``.
     - Gradient clipping via ``clip_norm`` prevents exploding gradients
       from ODE-based models (see 04-RESEARCH.md Pitfall 1).
+
+    Examples
+    --------
+    >>> from pyro_dcm.models import task_dcm_model, create_guide, run_svi
+    >>> guide = create_guide(task_dcm_model, init_scale=0.01)
+    >>> result = run_svi(
+    ...     task_dcm_model, guide,
+    ...     model_args=(bold, stimulus, a_mask, c_mask, t_eval, TR, dt),
+    ...     num_steps=500, lr=0.005,
+    ... )
+    >>> print(f"Final loss: {result['final_loss']:.2f}")
     """
     pyro.clear_param_store()
 
@@ -194,6 +210,14 @@ def extract_posterior_params(
     approximate the posterior mode under the mean-field assumption.
     The params dict contains the raw ``AutoNormal_loc`` and
     ``AutoNormal_scale`` parameters for each latent variable.
+
+    Examples
+    --------
+    >>> from pyro_dcm.models import create_guide, run_svi, extract_posterior_params
+    >>> # After running SVI:
+    >>> posterior = extract_posterior_params(guide, model_args)
+    >>> A_median = posterior['median']['A']
+    >>> A_free_loc = posterior['params']['AutoNormal.locs.A_free']
     """
     # Get median values from guide
     median = guide.median(*model_args)

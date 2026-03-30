@@ -109,6 +109,17 @@ def spectral_dcm_model(
     - Only the decomposed real vector is used in the likelihood.
     - An additional CSD observation noise scale (HalfCauchy) accounts
       for model-data mismatch.
+
+    Examples
+    --------
+    >>> import torch
+    >>> from pyro_dcm.models import spectral_dcm_model, create_guide, run_svi
+    >>> csd = torch.randn(32, 3, 3, dtype=torch.complex128)
+    >>> freqs = torch.linspace(1/128, 0.25, 32, dtype=torch.float64)
+    >>> a_mask = torch.ones(3, 3, dtype=torch.float64)
+    >>> guide = create_guide(spectral_dcm_model, init_scale=0.01)
+    >>> # result = run_svi(spectral_dcm_model, guide,
+    >>> #     model_args=(csd, freqs, a_mask))
     """
     # --- Infer dimensions ---
     if N is None:

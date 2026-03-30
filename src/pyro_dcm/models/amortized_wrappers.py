@@ -162,7 +162,7 @@ def amortized_task_dcm_model(
     dt: float,
     packer: TaskDCMPacker,
 ) -> None:
-    """Wrapper model for amortized task DCM inference.
+    """Wrap task DCM for amortized inference via packed latent vector.
 
     Samples a single packed ``_latent`` vector from a standard normal
     prior (in standardized space), unstandardizes and unpacks into
@@ -225,7 +225,7 @@ def amortized_spectral_dcm_model(
     a_mask: torch.Tensor,
     packer: SpectralDCMPacker,
 ) -> None:
-    """Wrapper model for amortized spectral DCM inference.
+    """Wrap spectral DCM for amortized inference via packed latent vector.
 
     Samples a single packed ``_latent`` vector, unpacks into A_free,
     noise_a, noise_b, noise_c, csd_noise_scale, then runs the same

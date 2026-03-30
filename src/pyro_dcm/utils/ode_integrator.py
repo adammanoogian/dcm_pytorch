@@ -153,6 +153,13 @@ def integrate_ode(
     References
     ----------
     Chen et al. (2018). Neural Ordinary Differential Equations. NeurIPS.
+
+    Examples
+    --------
+    >>> import torch
+    >>> y0 = make_initial_state(2)  # (10,) for 2 regions
+    >>> t_eval = torch.arange(0, 100, 0.5, dtype=torch.float64)
+    >>> # solution = integrate_ode(system, y0, t_eval, method='rk4')
     """
     # Build solver options based on method type
     adaptive_methods = {"dopri5", "dopri8", "bosh3", "adaptive_heun"}
@@ -225,5 +232,10 @@ def make_initial_state(
     -------
     torch.Tensor
         Zero vector of shape ``(5 * n_regions,)``.
+
+    Examples
+    --------
+    >>> y0 = make_initial_state(3)
+    >>> y0.shape  # (15,) for 3 regions, 5 states each
     """
     return torch.zeros(5 * n_regions, dtype=dtype, device=device)

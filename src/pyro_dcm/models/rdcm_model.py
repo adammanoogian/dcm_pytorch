@@ -84,6 +84,15 @@ def rdcm_model(
     References
     ----------
     [REF-020] Frassle et al. (2017), Eq. 4-8.
+
+    Examples
+    --------
+    >>> import torch
+    >>> from pyro_dcm.models import rdcm_model, create_guide, run_svi
+    >>> # Y and X from create_regressors():
+    >>> guide = create_guide(rdcm_model)
+    >>> # result = run_svi(rdcm_model, guide,
+    >>> #     model_args=(Y, X, a_mask, c_mask))
     """
     nr = a_mask.shape[0]
     nu = c_mask.shape[1]

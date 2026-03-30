@@ -106,6 +106,15 @@ def task_dcm_model(
     [REF-001] Friston, Harrison & Penny (2003), Eq. 1.
     [REF-002] Stephan et al. (2007), Eq. 2-6.
     [REF-040] Friston et al. (2007) -- ELBO / free energy.
+
+    Examples
+    --------
+    >>> import torch
+    >>> from pyro_dcm.models import task_dcm_model, create_guide, run_svi
+    >>> bold = torch.randn(150, 2, dtype=torch.float64)
+    >>> guide = create_guide(task_dcm_model, init_scale=0.01)
+    >>> # result = run_svi(task_dcm_model, guide,
+    >>> #     model_args=(bold, stim, a_mask, c_mask, t_eval, 2.0, 0.5))
     """
     # --- Extract dimensions ---
     N = a_mask.shape[0]
