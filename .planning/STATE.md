@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 8 in progress (Metrics, Benchmarks, and Documentation). 23/26 plans delivered.
+**Current focus:** Phase 8 in progress (Metrics, Benchmarks, and Documentation). 24/26 plans delivered.
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
 **Phase:** 8 of 8 (Metrics, Benchmarks, and Documentation)
-**Plan:** 08-02 complete (Documentation: quickstart, methods, equations, BibTeX)
-**Status:** In progress. Plans 08-03 through 08-05 remaining.
-**Last activity:** 2026-03-30 -- Completed 08-02-PLAN.md (documentation artifacts)
+**Plan:** 08-03 complete (Benchmark runners: 7 runners wired into CLI)
+**Status:** In progress. Plans 08-04 through 08-05 remaining.
+**Last activity:** 2026-03-30 -- Completed 08-03-PLAN.md (benchmark runners)
 
-Progress: [██████████████████████░░░] 88% (23/26 plans)
+Progress: [████████████████████████░] 92% (24/26 plans)
 
 ## Decisions
 
@@ -95,6 +95,10 @@ Progress: [██████████████████████░
 | sys.path.insert for benchmark CLI | benchmarks/ not installed as package; script needs project root on path | 2026-03-30 |
 | Module-level imports in quickstart | from pyro_dcm.simulators.task_simulator, not top-level; works without __init__.py | 2026-03-30 |
 | LaTeX methods.tex as includeable fragment | No documentclass/preamble; use \input{methods.tex} in paper template | 2026-03-30 |
+| Separate rigid/sparse rdcm runners | Different algorithms with different output fields (F1 only in sparse) | 2026-03-30 |
+| Spectral SVI 500 steps in benchmark | Override config; spectral converges in 500 steps (calibrated Phase 5) | 2026-03-30 |
+| Amortized inline fallback training | CI-scale guide training when pretrained weights not found; quick mode functional | 2026-03-30 |
+| SPM reference parses VALIDATION_REPORT.md | Does not run MATLAB; provides cross-reference to Phase 6 results | 2026-03-30 |
 
 ## Blockers
 
@@ -166,13 +170,14 @@ Three swappable module interfaces:
 
 - **Plan 01:** Benchmark infrastructure -- metrics.py (5 functions), config.py (BenchmarkConfig), run_all_benchmarks.py CLI, runners registry (7 entries), 9 tests
 - **Plan 02:** Documentation -- quickstart.md, methods.md, methods.tex, equations.md, references.bib (5 files)
-- **Plans 03-05:** Remaining
+- **Plan 03:** Benchmark runners -- 7 runners (task_svi, spectral_svi, rdcm_rigid_vb, rdcm_sparse_vb, task_amortized, spectral_amortized, spm_reference), RUNNER_REGISTRY wired, CLI end-to-end
+- **Plans 04-05:** Remaining
 
 ## Session Continuity
 
 Last session: 2026-03-30
-Stopped at: Completed 08-02-PLAN.md (documentation artifacts)
+Stopped at: Completed 08-03-PLAN.md (benchmark runners)
 Resume file: None
 
 ---
-*Last updated: 2026-03-30 after 08-02 documentation complete*
+*Last updated: 2026-03-30 after 08-03 benchmark runners complete*
