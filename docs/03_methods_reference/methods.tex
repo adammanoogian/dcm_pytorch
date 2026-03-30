@@ -1,0 +1,222 @@
+% Methods section for Pyro-DCM paper submission.
+% This is a fragment -- include via \input{methods.tex} in your paper template.
+% Requires: amsmath, amssymb, booktabs packages.
+% Bibliography: references.bib (see companion file).
+
+\section{Methods}
+
+\subsection{Generative Model}
+
+\subsubsection{Neural State Equation}
+
+The neural dynamics of the DCM are described by the bilinear state
+equation \citep{friston2003}:
+\begin{equation}
+  \frac{dx}{dt} = Ax + Cu(t)
+  \label{eq:neural-state}
+\end{equation}
+where $x \in \mathbb{R}^N$ is the neural activity vector for $N$ brain
+regions, $A \in \mathbb{R}^{N \times N}$ is the effective connectivity
+matrix encoding directed causal influences between regions, $C \in
+\mathbb{R}^{N \times M}$ maps $M$ experimental inputs $u(t)$ to regions,
+and $t$ denotes time. The diagonal elements $a_{ii}$ represent
+self-inhibition, and off-diagonal elements $a_{ij}$ represent the
+influence of region $j$ on region $i$.
+
+The $A$ matrix is parameterized following SPM12 conventions to guarantee
+stability:
+\begin{equation}
+  a_{ii} = -\exp(A^\text{free}_{ii}) / 2, \qquad
+  a_{ij} = A^\text{free}_{ij} \quad (i \neq j)
+  \label{eq:a-param}
+\end{equation}
+ensuring negative self-connections (default $-0.5$~Hz when the free
+parameter is zero).
+
+\subsubsection{Hemodynamic Model}
+
+The Balloon-Windkessel model \citep{stephan2007} translates neural
+activity into hemodynamic responses through four coupled ordinary
+differential equations per region, implemented in log-space following
+SPM12 (\texttt{spm\_fx\_fmri.m}):
+\begin{align}
+  \frac{ds}{dt} &= x - \kappa s - \gamma (f - 1)
+    \label{eq:vasodilatory} \\
+  \frac{d \ln f}{dt} &= \frac{s}{f}
+    \label{eq:flow} \\
+  \frac{d \ln v}{dt} &= \frac{f - v^{1/\alpha}}{\tau v}
+    \label{eq:volume} \\
+  \frac{d \ln q}{dt} &= \frac{f\, E(f, E_0) / E_0 - v^{1/\alpha} q / v}{\tau q}
+    \label{eq:deoxyhemoglobin}
+\end{align}
+where $E(f, E_0) = 1 - (1 - E_0)^{1/f}$ is the oxygen extraction
+fraction.
+
+\begin{table}[h]
+  \centering
+  \caption{Hemodynamic parameter defaults (SPM12 code).}
+  \label{tab:hemo-params}
+  \begin{tabular}{llccl}
+    \toprule
+    Parameter & Symbol & Default & Unit & Description \\
+    \midrule
+    Signal decay       & $\kappa$ & 0.64 & s$^{-1}$ & Rate of vasodilatory signal decay \\
+    Autoregulation     & $\gamma$ & 0.32 & s$^{-1}$ & Flow-dependent elimination \\
+    Transit time       & $\tau$   & 2.00 & s        & Hemodynamic transit time \\
+    Grubb's exponent   & $\alpha$ & 0.32 & --       & Vessel stiffness \\
+    O$_2$ extraction   & $E_0$    & 0.40 & --       & Resting oxygen extraction fraction \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsubsection{BOLD Signal}
+
+The BOLD percent signal change is computed from hemodynamic states via
+the simplified Buxton observation equation \citep{stephan2007}:
+\begin{equation}
+  y = V_0 \left[ k_1 (1 - q) + k_2 \left(1 - \frac{q}{v}\right) + k_3 (1 - v) \right]
+  \label{eq:bold}
+\end{equation}
+where $k_1 = 7 E_0$, $k_2 = 2$, $k_3 = 2 E_0 - 0.2$, and
+$V_0 = 0.02$ is the resting venous blood volume fraction.
+
+\subsubsection{Spectral DCM}
+
+For resting-state fMRI, spectral DCM operates in the frequency domain
+using cross-spectral density (CSD) as the data representation
+\citep{friston2014}.
+
+The transfer function is computed via eigendecomposition:
+\begin{equation}
+  H(\omega) = C_\text{out} (i\omega I - A)^{-1} C_\text{in}
+    = \sum_k \frac{\mathbf{g}_k \mathbf{u}_k^T}{i 2\pi\omega - \lambda_k}
+  \label{eq:transfer}
+\end{equation}
+where $\lambda_k$ are the eigenvalues of $A$ (stabilized by clamping
+$\text{Re}(\lambda_k) \leq -1/32$) and $C_\text{in} = C_\text{out} = I_N$
+in the standard spDCM convention.
+
+The predicted CSD is:
+\begin{equation}
+  S(\omega) = H(\omega)\, G_u(\omega)\, H(\omega)^\dagger + G_n(\omega)
+  \label{eq:predicted-csd}
+\end{equation}
+where the neuronal noise follows a $1/f^\alpha$ power law:
+\begin{equation}
+  G_{u,i}(\omega) = C \cdot \exp(a_{0,i}) \cdot \omega^{-\exp(a_{1,i})} \cdot 4
+  \label{eq:neuronal-noise}
+\end{equation}
+with $C = 1/256$ (SPM scaling constant), and the observation noise
+combines global and regional components:
+\begin{equation}
+  G_n(\omega) = G_\text{global}(\omega) \cdot \mathbf{1}\mathbf{1}^T
+    + \text{diag}(G_\text{regional}(\omega))
+  \label{eq:obs-noise}
+\end{equation}
+
+\subsubsection{Regression DCM}
+
+Regression DCM \citep{frassle2017} reformulates DCM as a per-region
+linear regression in the frequency domain:
+\begin{equation}
+  y_j = X_j \theta_j + \varepsilon_j
+  \label{eq:rdcm-regression}
+\end{equation}
+where $y_j$ is the DFT of region $j$'s BOLD signal (real and imaginary
+parts stacked), $X_j$ is the frequency-domain design matrix containing
+HRF-convolved regressors from other regions and external inputs, and
+$\theta_j$ contains the connectivity and input parameters for region $j$.
+
+\subsection{Inference}
+
+\subsubsection{Stochastic Variational Inference}
+
+We replace the Variational Laplace algorithm used in SPM12
+\citep{friston2007vfe} with stochastic variational inference (SVI;
+\citealp{blei2017}) implemented in Pyro \citep{bingham2019}. The ELBO
+objective is:
+\begin{equation}
+  \mathcal{L}(\phi)
+    = \mathbb{E}_{q_\phi(\theta)}
+      \left[ \log p(y, \theta \mid m) \right]
+    - \mathbb{E}_{q_\phi(\theta)}
+      \left[ \log q_\phi(\theta) \right]
+  \label{eq:elbo}
+\end{equation}
+where the variational family is a mean-field Gaussian:
+\begin{equation}
+  q_\phi(\theta) = \prod_i \mathcal{N}(\theta_i;\, \mu_i, \sigma_i^2)
+  \label{eq:mean-field}
+\end{equation}
+Optimization uses ClippedAdam with initial learning rate 0.01, gradient
+clipping norm 10.0, and exponential learning rate decay to 1\% over the
+training run. ODE-based models use fixed-step rk4 integration with
+$\Delta t = 0.5$~s during SVI.
+
+Priors: $A_\text{free} \sim \mathcal{N}(0, 1/64)$ (SPM12 convention),
+$C \sim \mathcal{N}(0, 1)$.
+
+\subsubsection{Amortized Inference}
+
+For rapid posterior estimation across subjects, we provide amortized
+inference using Neural Spline Flows \citep{papamakarios2021} conditioned
+on summary statistics \citep{cranmer2020}:
+\begin{equation}
+  q_\phi(\theta \mid \mathbf{x})
+    = f_\phi\!\left(\mathbf{z};\, \text{summary}(\mathbf{x})\right)
+  \label{eq:amortized}
+\end{equation}
+Summary networks compress BOLD time series (1D-CNN) or CSD matrices
+(MLP) into fixed-dimensional embeddings. Parameters are packed into a
+standardized vector on $[-5, 5]$ matching the NSF spline domain.
+
+\subsubsection{Analytic VB for rDCM}
+
+Regression DCM admits closed-form posterior computation
+\citep{frassle2017}:
+\begin{align}
+  \Sigma_j &= \left(\Lambda_0 + \langle\lambda_j\rangle X_j^H X_j\right)^{-1}
+    \label{eq:rdcm-cov} \\
+  \mu_j &= \Sigma_j
+    \left(\Lambda_0 m_0 + \langle\lambda_j\rangle X_j^H y_j\right)
+    \label{eq:rdcm-mean}
+\end{align}
+with noise precision updates $a_N = a_0 + N_y/2$ and
+$b_N = b_0 + \frac{1}{2}(y^H y - \mu^T \Sigma^{-1} \mu + m_0^T \Lambda_0 m_0)$.
+
+The free energy is computed per region as the sum of five terms
+(log-likelihood, prior complexity, posterior entropy, noise prior, noise
+posterior). The sparse variant \citep{frassle2018} extends this with ARD
+binary indicators $z_{j,k} \sim \text{Bernoulli}(0.5)$.
+
+\subsection{Bayesian Model Comparison}
+
+For task and spectral DCM, the final ELBO serves as a lower bound on the
+log model evidence \citep{friston2007vfe}. The model with the higher
+ELBO is preferred. For rDCM, the analytic free energy $F = \sum_r F_r$
+provides an exact bound within the variational approximation
+\citep{frassle2017}. A difference $\Delta > 3$~nats (Bayes factor $> 20$)
+is considered strong evidence.
+
+\subsection{Implementation}
+
+Pyro-DCM is implemented in Python 3.11+ using PyTorch 2.x for tensor
+computation, Pyro 1.9+ for probabilistic programming, torchdiffeq for
+ODE integration, and Zuko for normalizing flows. Numerical stability is
+ensured via log-space hemodynamic states, eigenvalue stabilization
+($\text{Re}(\lambda) \leq -1/32$), gradient clipping (norm 10.0),
+NaN detection with early termination, and \texttt{torch.linalg.solve}
+for matrix operations.
+
+ODE integration uses adaptive dopri5 for simulation ($\Delta t = 0.01$~s)
+and fixed-step rk4 for SVI ($\Delta t = 0.5$~s) to ensure predictable
+runtime during optimization.
+
+\subsection{Benchmarks}
+
+Parameter recovery benchmarks follow a simulate--infer--compare protocol
+with 3-region networks. Metrics include RMSE$(A)$, 90\% coverage,
+Pearson correlation, ELBO/free energy, and wall time per subject.
+Amortization-specific metrics include the RMSE ratio, amortization gap
+($\text{ELBO}_\text{SVI} - \text{ELBO}_\text{amortized}$), and speed
+ratio. See the benchmark report for detailed results.
