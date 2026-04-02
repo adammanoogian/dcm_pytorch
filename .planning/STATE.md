@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 8 in progress (Metrics, Benchmarks, and Documentation). 24/26 plans delivered.
+**Current focus:** Phase 8 COMPLETE (Metrics, Benchmarks, and Documentation). All 26/26 plans delivered.
 
 ## Current Position
 
 **Milestone:** v0.1.0-foundation
 **Phase:** 8 of 8 (Metrics, Benchmarks, and Documentation)
-**Plan:** 08-03 complete (Benchmark runners: 7 runners wired into CLI)
-**Status:** In progress. Plans 08-04 through 08-05 remaining.
-**Last activity:** 2026-03-30 -- Completed 08-03-PLAN.md (benchmark runners)
+**Plan:** 08-05 complete (all 5 plans in phase complete)
+**Status:** MILESTONE COMPLETE. All 8 phases, 26 plans delivered.
+**Last activity:** 2026-04-02 -- Completed 08-04-PLAN.md (benchmark figures and report)
 
-Progress: [████████████████████████░] 92% (24/26 plans)
+Progress: [██████████████████████████] 100% (26/26 plans)
 
 ## Decisions
 
@@ -94,6 +94,8 @@ Progress: [███████████████████████
 | 2-particle amortized SVI | Better gradient estimates than single particle; 2x cost acceptable for CI | 2026-03-29 |
 | sys.path.insert for benchmark CLI | benchmarks/ not installed as package; script needs project root on path | 2026-03-30 |
 | Module-level imports in quickstart | from pyro_dcm.simulators.task_simulator, not top-level; works without __init__.py | 2026-03-30 |
+| Figures and results gitignored | Generated PNG/PDF/JSON are binary artifacts; only source code and markdown committed | 2026-04-02 |
+| Style fallback chain for plots | SciencePlots -> seaborn-v0_8-whitegrid -> default matplotlib; graceful degradation | 2026-04-02 |
 | LaTeX methods.tex as includeable fragment | No documentclass/preamble; use \input{methods.tex} in paper template | 2026-03-30 |
 | Separate rigid/sparse rdcm runners | Different algorithms with different output fields (F1 only in sparse) | 2026-03-30 |
 | Spectral SVI 500 steps in benchmark | Override config; spectral converges in 500 steps (calibrated Phase 5) | 2026-03-30 |
@@ -166,18 +168,19 @@ Three swappable module interfaces:
 - **Plan 03:** Spectral DCM amortized tests, cross-variant benchmark (AMR-04), package exports (10 tests)
 - **Total:** 35 tests, all passing (296 total non-slow with Phases 1-6)
 
-## Phase 8 Deliverables (In Progress)
+## Phase 8 Deliverables (Complete)
 
 - **Plan 01:** Benchmark infrastructure -- metrics.py (5 functions), config.py (BenchmarkConfig), run_all_benchmarks.py CLI, runners registry (7 entries), 9 tests
 - **Plan 02:** Documentation -- quickstart.md, methods.md, methods.tex, equations.md, references.bib (5 files)
 - **Plan 03:** Benchmark runners -- 7 runners (task_svi, spectral_svi, rdcm_rigid_vb, rdcm_sparse_vb, task_amortized, spectral_amortized, spm_reference), RUNNER_REGISTRY wired, CLI end-to-end
-- **Plans 04-05:** Remaining
+- **Plan 04:** Plotting module (7 functions), 4 dual-format figures (PDF + PNG), benchmark narrative report with BNC-01/02/03 tables
+- **Plan 05:** API docstring audit, Examples sections on top 15 functions, 23 public exports in __init__.py
 
 ## Session Continuity
 
-Last session: 2026-03-30
-Stopped at: Completed 08-03-PLAN.md (benchmark runners)
+Last session: 2026-04-02
+Stopped at: Completed 08-04-PLAN.md (benchmark figures and report) -- ALL PLANS COMPLETE
 Resume file: None
 
 ---
-*Last updated: 2026-03-30 after 08-03 benchmark runners complete*
+*Last updated: 2026-04-02 after 08-04 benchmark figures and report complete -- v0.1.0-foundation milestone complete*
