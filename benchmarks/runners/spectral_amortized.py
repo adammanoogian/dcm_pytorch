@@ -299,6 +299,7 @@ def run_spectral_amortized(
 
     rmse_list: list[float] = []
     coverage_list: list[float] = []
+    correlation_list: list[float] = []
     amort_time_list: list[float] = []
     svi_time_list: list[float] = []
     rmse_ratio_list: list[float] = []
@@ -333,9 +334,15 @@ def run_spectral_amortized(
                 true_A_free, lower, upper,
             )
 
+            # Correlation
+            corr = pearson_corr(
+                true_A_free.flatten(), amort_A_mean.flatten(),
+            )
+
             rmse_list.append(rmse_amort)
             coverage_list.append(coverage)
             amort_time_list.append(amort_elapsed)
+            correlation_list.append(corr)
 
             # Per-subject SVI comparison
             pyro.clear_param_store()
@@ -367,9 +374,15 @@ def run_spectral_amortized(
                         amort_elapsed / svi_elapsed,
                     )
 
+                # Compute amortized ELBO via Trace_ELBO
+                elbo = Trace_ELBO()
+                amort_loss = elbo.loss(
+                    spectral_dcm_model, svi_guide,
+                    *model_args,
+                )
                 gap = compute_amortization_gap(
                     svi_result["final_loss"],
-                    svi_result["final_loss"] * 1.1,
+                    amort_loss,
                 )
                 gap_list.append(gap)
                 svi_time_list.append(svi_elapsed)
@@ -402,7 +415,8 @@ def run_spectral_amortized(
         "mean_coverage": float(np.mean(coverage_list)),
         "std_coverage": float(np.std(coverage_list)),
         "mean_amort_time": float(np.mean(amort_time_list)),
-        "mean_correlation": 0.0,  # placeholder for table compat
+        "mean_correlation": float(np.mean(correlation_list)),
+        "std_correlation": float(np.std(correlation_list)),
     }
 
     if rmse_ratio_list:

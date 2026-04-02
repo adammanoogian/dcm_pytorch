@@ -347,6 +347,23 @@ def main() -> None:
     print("\n=== Benchmark Summary ===\n")
     print(_format_results_table(results))
 
+    # Generate figures
+    if not args.no_figures:
+        try:
+            from benchmarks.plotting import generate_all_figures
+
+            figures_dir = os.path.join(
+                os.path.dirname(args.output_dir), "figures",
+            )
+            generate_all_figures(results, output_dir=figures_dir)
+        except ImportError:
+            print(
+                "\n[WARN] matplotlib not available, "
+                "skipping figure generation"
+            )
+        except Exception as e:
+            print(f"\n[WARN] Figure generation failed: {e}")
+
 
 if __name__ == "__main__":
     main()

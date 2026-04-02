@@ -101,6 +101,18 @@ class TaskDCMPacker:
         torch.Tensor
             Flat vector of shape ``(n_features,)``. The last element
             is ``log(noise_prec)`` (log-space contract).
+
+        Examples
+        --------
+        >>> packer = TaskDCMPacker(3, 1, torch.ones(3, 3), torch.ones(3, 1))
+        >>> params = {
+        ...     "A_free": torch.randn(3, 3),
+        ...     "C": torch.randn(3, 1),
+        ...     "noise_prec": torch.tensor(10.0),
+        ... }
+        >>> z = packer.pack(params)
+        >>> z.shape
+        torch.Size([13])
         """
         a_flat = params["A_free"].flatten()
         c_flat = params["C"].flatten()
@@ -126,6 +138,14 @@ class TaskDCMPacker:
             ``"noise_prec"`` (scalar). Note: ``noise_prec`` is still
             in log-space -- caller must call ``.exp()`` for positive
             precision.
+
+        Examples
+        --------
+        >>> packer = TaskDCMPacker(3, 1, torch.ones(3, 3), torch.ones(3, 1))
+        >>> z = torch.randn(13)
+        >>> params = packer.unpack(z)
+        >>> params["A_free"].shape
+        torch.Size([3, 3])
         """
         N, M = self.n_regions, self.n_inputs
         a_end = N * N
@@ -263,6 +283,20 @@ class SpectralDCMPacker:
         torch.Tensor
             Flat vector of shape ``(n_features,)``. The last element
             is ``log(csd_noise_scale)``.
+
+        Examples
+        --------
+        >>> packer = SpectralDCMPacker(3)
+        >>> params = {
+        ...     "A_free": torch.randn(3, 3),
+        ...     "noise_a": torch.randn(2, 3),
+        ...     "noise_b": torch.randn(2, 1),
+        ...     "noise_c": torch.randn(2, 3),
+        ...     "csd_noise_scale": torch.tensor(1.0),
+        ... }
+        >>> z = packer.pack(params)
+        >>> z.shape
+        torch.Size([22])
         """
         a_flat = params["A_free"].flatten()
         na_flat = params["noise_a"].flatten()
@@ -289,6 +323,14 @@ class SpectralDCMPacker:
             ``"noise_a"`` (2, N), ``"noise_b"`` (2, 1),
             ``"noise_c"`` (2, N), ``"csd_noise_scale"`` (scalar,
             log-space).
+
+        Examples
+        --------
+        >>> packer = SpectralDCMPacker(3)
+        >>> z = torch.randn(22)
+        >>> params = packer.unpack(z)
+        >>> params["A_free"].shape
+        torch.Size([3, 3])
         """
         N = self.n_regions
         batch_shape = z.shape[:-1]
