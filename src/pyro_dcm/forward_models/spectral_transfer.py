@@ -161,6 +161,16 @@ def predicted_csd(
     -------
     torch.Tensor
         Predicted CSD, shape ``(F, nn, nn)``, complex128.
+
+    Examples
+    --------
+    >>> import torch
+    >>> F, N = 16, 2
+    >>> H = torch.randn(F, N, N, dtype=torch.complex128)
+    >>> Gu = torch.eye(N, dtype=torch.complex128).unsqueeze(0).expand(F, -1, -1)
+    >>> Gn = torch.zeros(F, N, N, dtype=torch.complex128)
+    >>> S = predicted_csd(H, Gu, Gn)
+    >>> S.shape  # (16, 2, 2)
     """
     # S(w) = H(w) @ Gu(w) @ H(w)^H + Gn(w)
     G = H @ Gu @ H.conj().transpose(-2, -1)

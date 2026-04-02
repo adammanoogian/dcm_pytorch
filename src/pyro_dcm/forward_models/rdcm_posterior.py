@@ -69,6 +69,14 @@ def get_priors_rigid(
     References
     ----------
     [REF-020] Eq. 9-10. Julia ``get_priors.jl``.
+
+    Examples
+    --------
+    >>> import torch
+    >>> a_mask = torch.ones(3, 3, dtype=torch.float64)
+    >>> c_mask = torch.tensor([[1, 0], [0, 1], [0, 0]], dtype=torch.float64)
+    >>> priors = get_priors_rigid(a_mask, c_mask)
+    >>> priors['m0'].shape  # (3, 5)
     """
     nr = a_mask.shape[0]
     nu = c_mask.shape[1]
@@ -136,6 +144,14 @@ def get_priors_sparse(
     References
     ----------
     Julia ``get_priors.jl`` for ``SparseRdcm``.
+
+    Examples
+    --------
+    >>> import torch
+    >>> a_mask = torch.ones(3, 3, dtype=torch.float64)
+    >>> c_mask = torch.ones(3, 1, dtype=torch.float64)
+    >>> priors = get_priors_sparse(a_mask, c_mask)
+    >>> 'p0' in priors  # True (Bernoulli prior)
     """
     nr = a_mask.shape[0]
     nu = c_mask.shape[1]
@@ -376,6 +392,24 @@ def rigid_inversion(
     References
     ----------
     [REF-020] Eq. 11-15. Julia ``rigid_inversion.jl``.
+
+    Examples
+    --------
+    >>> import torch
+    >>> from pyro_dcm.forward_models.rdcm_forward import (
+    ...     generate_bold, get_hrf, create_regressors,
+    ... )
+    >>> A = torch.diag(torch.tensor([-0.5, -0.5], dtype=torch.float64))
+    >>> C = torch.tensor([[1.0], [0.0]], dtype=torch.float64)
+    >>> u = torch.zeros(200, 1, dtype=torch.float64)
+    >>> u[:40, 0] = 1.0
+    >>> data = generate_bold(A, C, u, u_dt=0.5, y_dt=2.0, SNR=5.0)
+    >>> hrf = get_hrf(200, 0.5)
+    >>> X, Y, N_eff = create_regressors(hrf, data['y'], u, 0.5, 2.0)
+    >>> a_mask = torch.ones(2, 2, dtype=torch.float64)
+    >>> c_mask = torch.ones(2, 1, dtype=torch.float64)
+    >>> result = rigid_inversion(X, Y, a_mask, c_mask)
+    >>> result['A_mu'].shape  # (2, 2)
     """
     nr = a_mask.shape[0]
     nu = c_mask.shape[1]

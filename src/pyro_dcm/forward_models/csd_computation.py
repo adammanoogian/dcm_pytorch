@@ -182,6 +182,14 @@ def bold_to_csd_torch(
     See Also
     --------
     compute_empirical_csd : NumPy implementation.
+
+    Examples
+    --------
+    >>> import torch
+    >>> bold = torch.randn(200, 3, dtype=torch.float64)
+    >>> freqs = torch.linspace(1/128, 0.25, 32, dtype=torch.float64)
+    >>> csd = bold_to_csd_torch(bold, fs=0.5, freqs=freqs)
+    >>> csd.shape  # (32, 3, 3)
     """
     bold_np = bold.detach().cpu().numpy()
     freqs_np = freqs.detach().cpu().numpy()

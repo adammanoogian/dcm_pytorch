@@ -63,6 +63,17 @@ class CoupledDCMSystem(nn.Module):
     Implements [REF-001] Eq. 1 for the neural component and
     [REF-002] Eq. 2-5 for the hemodynamic component, matching
     SPM12 spm_fx_fmri.m.
+
+    Examples
+    --------
+    >>> import torch
+    >>> A = torch.tensor([[-0.5, 0.1], [0.2, -0.5]], dtype=torch.float64)
+    >>> C = torch.tensor([[1.0], [0.0]], dtype=torch.float64)
+    >>> input_fn = lambda t: torch.tensor([1.0], dtype=torch.float64)
+    >>> system = CoupledDCMSystem(A, C, input_fn)
+    >>> state = torch.zeros(10, dtype=torch.float64)  # 5*N=10
+    >>> dstate = system.forward(torch.tensor(0.0), state)
+    >>> dstate.shape  # (10,)
     """
 
     def __init__(

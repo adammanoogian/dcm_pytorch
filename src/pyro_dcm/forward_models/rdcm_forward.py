@@ -100,6 +100,17 @@ def dcm_euler_step(
     References
     ----------
     Julia ``dcm_euler_integration.jl``.
+
+    Examples
+    --------
+    >>> import torch
+    >>> nr, nu = 2, 1
+    >>> x = torch.zeros(nr, dtype=torch.float64)
+    >>> s = f = v = q = torch.ones(nr, dtype=torch.float64)
+    >>> A = torch.eye(nr, dtype=torch.float64) * -0.5
+    >>> C = torch.zeros(nr, nu, dtype=torch.float64)
+    >>> u_t = torch.zeros(nu, dtype=torch.float64)
+    >>> x2, s2, f2, v2, q2 = dcm_euler_step(x, s, f, v, q, A, C, u_t, dt=0.01)
     """
     kappa, gamma, tau, alpha, rho = H
 
@@ -171,6 +182,16 @@ def euler_integrate_dcm(
     References
     ----------
     Julia ``dcm_euler_integration.jl``, ``generate_BOLD.jl``.
+
+    Examples
+    --------
+    >>> import torch
+    >>> A = torch.diag(torch.tensor([-0.5, -0.5], dtype=torch.float64))
+    >>> C = torch.tensor([[1.0], [0.0]], dtype=torch.float64)
+    >>> u = torch.zeros(100, 1, dtype=torch.float64)
+    >>> u[:20, 0] = 1.0
+    >>> x_all, bold_all = euler_integrate_dcm(A, C, u, dt=0.5)
+    >>> x_all.shape  # (100, 2)
     """
     N_t = u.shape[0]
     nr = A.shape[0]
@@ -301,6 +322,16 @@ def generate_bold(
     References
     ----------
     [REF-020] Frässle et al. (2017). Julia ``generate_BOLD.jl``.
+
+    Examples
+    --------
+    >>> import torch
+    >>> A = torch.diag(torch.tensor([-0.5, -0.5], dtype=torch.float64))
+    >>> C = torch.tensor([[1.0], [0.0]], dtype=torch.float64)
+    >>> u = torch.zeros(200, 1, dtype=torch.float64)
+    >>> u[:40, 0] = 1.0
+    >>> result = generate_bold(A, C, u, u_dt=0.5, y_dt=2.0, SNR=3.0)
+    >>> result['y'].shape  # (50, 2)
     """
     N_u = u.shape[0]
     nr = A.shape[0]
@@ -518,6 +549,15 @@ def create_regressors(
     References
     ----------
     [REF-020] Eq. 4-8. Julia ``create_regressors.jl``.
+
+    Examples
+    --------
+    >>> import torch
+    >>> hrf = get_hrf(N=200, u_dt=0.5)
+    >>> y = torch.randn(50, 2, dtype=torch.float64)
+    >>> u = torch.zeros(200, 1, dtype=torch.float64)
+    >>> u[:40, 0] = 1.0
+    >>> X, Y, N_eff = create_regressors(hrf, y, u, u_dt=0.5, y_dt=2.0)
     """
     N_u = u.shape[0]
     N_y = y.shape[0]
