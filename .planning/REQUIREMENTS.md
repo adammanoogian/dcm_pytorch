@@ -50,9 +50,9 @@ Requirements for v0.1.0-foundation milestone. Each maps to roadmap phases.
 
 ### Metrics & Benchmarking
 
-- [ ] **BNC-01**: Report per-variant: RMSE on A matrix, posterior calibration (coverage), ELBO, wall-clock time, number of gradient steps
-- [ ] **BNC-02**: Compare mean-field guide vs amortized guide on all metrics
-- [ ] **BNC-03**: Report amortization gap (per-subject ELBO minus amortized ELBO)
+- [x] **BNC-01**: Report per-variant: RMSE on A matrix, posterior calibration (coverage), ELBO, wall-clock time, number of gradient steps
+- [x] **BNC-02**: Compare mean-field guide vs amortized guide on all metrics
+- [x] **BNC-03**: Report amortization gap (per-subject ELBO minus amortized ELBO)
 
 ## v2 Requirements
 
@@ -107,9 +107,9 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | AMR-02 | Phase 7 | Complete |
 | AMR-03 | Phase 7 | Complete |
 | AMR-04 | Phase 7 | Complete |
-| BNC-01 | Phase 8 | Pending |
-| BNC-02 | Phase 8 | Pending |
-| BNC-03 | Phase 8 | Pending |
+| BNC-01 | Phase 8 | Complete |
+| BNC-02 | Phase 8 | Complete |
+| BNC-03 | Phase 8 | Complete |
 
 **Coverage:**
 - v1 requirements: 29 total

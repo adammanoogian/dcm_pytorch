@@ -13,7 +13,7 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 **Phase:** 8 of 8 (Metrics, Benchmarks, and Documentation)
 **Plan:** 08-05 complete (all 5 plans in phase complete)
 **Status:** MILESTONE COMPLETE. All 8 phases, 26 plans delivered.
-**Last activity:** 2026-04-02 -- Completed 08-04-PLAN.md (benchmark figures and report)
+**Last activity:** 2026-04-02 -- Phase 8 complete (08-04 + 08-05 + gap closure verified)
 
 Progress: [██████████████████████████] 100% (26/26 plans)
 

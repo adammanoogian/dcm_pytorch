@@ -250,17 +250,18 @@ Plans:
 ---
 
 ## Phase 8: Metrics, Benchmarks, and Documentation
-**Status:** in-progress
+**Status:** complete (2026-04-02)
 **Requirements:** BNC-01, BNC-02, BNC-03
-**Plans:** 5 plans
+**Plans:** 5 plans (all complete)
 **Goal:** Comprehensive benchmarking comparing all inference methods across all DCM variants, plus API documentation, quickstart tutorial, paper-ready methods section, and reproducibility scripts.
+**Verification:** 11/11 must-haves passed (3 gaps closed)
 
 Plans:
-- [ ] 08-01-PLAN.md — Benchmark infrastructure: metrics module, config, CLI skeleton, pyproject.toml extras
-- [ ] 08-02-PLAN.md — Documentation: quickstart tutorial, methods section (Markdown + LaTeX), equations reference
-- [ ] 08-03-PLAN.md — Benchmark runners: all 6 variant/method runners + RUNNER_REGISTRY
-- [ ] 08-04-PLAN.md — Plotting module + figure generation + benchmark report narrative
-- [ ] 08-05-PLAN.md — API docstring audit + expanded top-level exports
+- [x] 08-01-PLAN.md — Benchmark infrastructure: metrics module, config, CLI skeleton, pyproject.toml extras
+- [x] 08-02-PLAN.md — Documentation: quickstart tutorial, methods section (Markdown + LaTeX), equations reference
+- [x] 08-03-PLAN.md — Benchmark runners: all 6 variant/method runners + RUNNER_REGISTRY
+- [x] 08-04-PLAN.md — Plotting module + figure generation + benchmark report narrative
+- [x] 08-05-PLAN.md — API docstring audit + expanded top-level exports
 
 **Success criteria:**
 1. Comprehensive benchmark table: RMSE, coverage, ELBO, wall time per variant x method
