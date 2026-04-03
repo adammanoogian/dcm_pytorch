@@ -1,8 +1,8 @@
 """Benchmark figure generation from JSON results.
 
 Produces publication-quality figures from benchmark results JSON:
-bar charts for RMSE/time/coverage comparisons, scatter plots for
-true vs inferred connectivity, and amortization gap visualizations.
+element-wise true vs inferred scatter plots, metric distribution
+strip plots, and amortization gap visualizations.
 
 Figures default to PNG. Pass ``formats=("png", "pdf")`` for vector output.
 """
@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import matplotlib
+import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -133,17 +134,48 @@ def _get_variant_results(
     return entries
 
 
+def _get_label_with_method(
+    key: str, data: dict,
+) -> str:
+    """Build a display label including variant name and method.
+
+    Parameters
+    ----------
+    key : str
+        Result dictionary key (e.g. ``"spectral"``).
+    data : dict
+        Result data dict containing ``metadata.method``.
+
+    Returns
+    -------
+    str
+        Label like ``"Spectral DCM (SVI)"``.
+    """
+    base = _VARIANT_LABELS.get(key, key)
+    meta = data.get("metadata", {})
+    if isinstance(meta, dict):
+        m = meta.get("method", "")
+        method_label = _METHOD_LABELS.get(m, m.upper())
+        if method_label:
+            return f"{base} ({method_label})"
+    return base
+
+
 # ---------------------------------------------------------------------------
 # Public plotting functions
 # ---------------------------------------------------------------------------
 
 
-def plot_rmse_comparison(
+def plot_true_vs_inferred(
     results: dict,
     output_dir: str,
     formats: tuple[str, ...] = ("png",),
 ) -> None:
-    """Grouped bar chart of RMSE(A) by variant and method.
+    """Scatter plot of ALL per-element true vs inferred A values.
+
+    For each variant that has ``a_true_list`` and ``a_inferred_list``,
+    pools all elements from all datasets and plots them. Identity line
+    y=x shown as black dashed. Legend includes Pearson r per variant.
 
     Parameters
     ----------
@@ -157,140 +189,204 @@ def plot_rmse_comparison(
     _apply_style()
     entries = _get_variant_results(results)
     if not entries:
-        print("No valid results for RMSE comparison -- skipping")
+        print("No valid results for scatter plot -- skipping")
         return
 
-    fig, ax = plt.subplots(figsize=(8, 5), dpi=150)
+    fig, ax = plt.subplots(figsize=(7, 7), dpi=150)
 
-    labels = [e[1] for e in entries]
-    means = [e[2].get("mean_rmse", 0.0) for e in entries]
-    stds = [e[2].get("std_rmse", 0.0) for e in entries]
+    has_data = False
+    all_vals: list[float] = []
 
-    x = np.arange(len(labels))
-    bars = ax.bar(
-        x, means, yerr=stds, capsize=4,
-        color=[_COLORS[i % len(_COLORS)] for i in range(len(labels))],
-        edgecolor="black", linewidth=0.5,
-    )
+    for i, (key, _label, data) in enumerate(entries):
+        a_true = data.get("a_true_list")
+        a_inf = data.get("a_inferred_list")
+        if not a_true or not a_inf:
+            continue
 
-    # Add method annotation below each bar
-    for i, (key, _, data) in enumerate(entries):
-        method = "SVI"
-        meta = data.get("metadata", {})
-        if isinstance(meta, dict):
-            m = meta.get("method", "")
-            method = _METHOD_LABELS.get(m, m.upper())
-        ax.text(
-            i, -0.003, method,
-            ha="center", va="top", fontsize=8, style="italic",
+        # Pool all elements from all datasets
+        true_flat: list[float] = []
+        inf_flat: list[float] = []
+        for t_row, i_row in zip(a_true, a_inf):
+            true_flat.extend(t_row)
+            inf_flat.extend(i_row)
+
+        if len(true_flat) == 0:
+            continue
+
+        true_arr = np.array(true_flat)
+        inf_arr = np.array(inf_flat)
+        all_vals.extend(true_flat)
+        all_vals.extend(inf_flat)
+
+        # Get correlation from summary or compute
+        corr = data.get("mean_correlation", None)
+        if corr is None and len(true_arr) > 1:
+            num = np.sum(
+                (true_arr - true_arr.mean())
+                * (inf_arr - inf_arr.mean()),
+            )
+            den = (
+                np.sqrt(np.sum((true_arr - true_arr.mean()) ** 2))
+                * np.sqrt(np.sum((inf_arr - inf_arr.mean()) ** 2))
+            )
+            corr = float(num / den) if den > 1e-15 else 0.0
+
+        label = _get_label_with_method(key, data)
+        corr_str = f"{corr:.3f}" if corr is not None else "N/A"
+
+        ax.scatter(
+            true_arr, inf_arr, s=18, alpha=0.6,
+            color=_COLORS[i % len(_COLORS)],
+            edgecolors="none",
+            label=f"{label} (r={corr_str})",
+            zorder=3,
         )
+        has_data = True
 
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=9)
-    ax.set_ylabel("RMSE(A)")
-    ax.set_title("Parameter Recovery: RMSE(A) by Variant and Method")
-    fig.tight_layout()
-
-    _save_figure(fig, os.path.join(output_dir, "benchmark_rmse_comparison"), formats)
-
-
-def plot_time_comparison(
-    results: dict,
-    output_dir: str,
-    formats: tuple[str, ...] = ("png",),
-) -> None:
-    """Grouped bar chart of wall time by variant and method.
-
-    Parameters
-    ----------
-    results : dict
-        Benchmark results loaded from JSON.
-    output_dir : str
-        Directory for saving the figure.
-    formats : tuple of str, optional
-        File formats to save. Default ``("png",)``.
-    """
-    _apply_style()
-    entries = _get_variant_results(results)
-    if not entries:
-        print("No valid results for time comparison -- skipping")
+    if not has_data:
+        print(
+            "No a_true_list/a_inferred_list data for scatter "
+            "plot -- skipping"
+        )
+        plt.close(fig)
         return
 
-    fig, ax = plt.subplots(figsize=(8, 5), dpi=150)
+    # Identity line
+    if all_vals:
+        lo = min(all_vals)
+        hi = max(all_vals)
+        margin = (hi - lo) * 0.05 if hi > lo else 0.1
+        lims = [lo - margin, hi + margin]
+        ax.plot(
+            lims, lims, "k--", linewidth=1.0,
+            alpha=0.7, zorder=2, label="y = x",
+        )
+        ax.set_xlim(lims)
+        ax.set_ylim(lims)
 
-    labels = [e[1] for e in entries]
-    times = [e[2].get("mean_time", 0.0) for e in entries]
-
-    x = np.arange(len(labels))
-    bars = ax.bar(  # noqa: F841
-        x, times, capsize=4,
-        color=[_COLORS[i % len(_COLORS)] for i in range(len(labels))],
-        edgecolor="black", linewidth=0.5,
-    )
-
-    # Use log scale if range is large
-    if len(times) > 0:
-        t_pos = [t for t in times if t > 0]
-        if len(t_pos) >= 2 and max(t_pos) / min(t_pos) > 100:
-            ax.set_yscale("log")
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=9)
-    ax.set_ylabel("Wall Time (seconds)")
-    ax.set_title("Inference Time per Subject")
-    fig.tight_layout()
-
-    _save_figure(fig, os.path.join(output_dir, "benchmark_time_comparison"), formats)
-
-
-def plot_coverage_comparison(
-    results: dict,
-    output_dir: str,
-    formats: tuple[str, ...] = ("png",),
-) -> None:
-    """Grouped bar chart of 90% CI coverage by variant and method.
-
-    Parameters
-    ----------
-    results : dict
-        Benchmark results loaded from JSON.
-    output_dir : str
-        Directory for saving the figure.
-    formats : tuple of str, optional
-        File formats to save. Default ``("png",)``.
-    """
-    _apply_style()
-    entries = _get_variant_results(results)
-    if not entries:
-        print("No valid results for coverage comparison -- skipping")
-        return
-
-    fig, ax = plt.subplots(figsize=(8, 5), dpi=150)
-
-    labels = [e[1] for e in entries]
-    coverages = [e[2].get("mean_coverage", 0.0) for e in entries]
-    stds = [e[2].get("std_coverage", 0.0) for e in entries]
-
-    x = np.arange(len(labels))
-    ax.bar(
-        x, coverages, yerr=stds, capsize=4,
-        color=[_COLORS[i % len(_COLORS)] for i in range(len(labels))],
-        edgecolor="black", linewidth=0.5,
-    )
-    ax.axhline(0.90, color="red", linestyle="--", linewidth=1.0,
-               label="Nominal 90%")
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=9)
-    ax.set_ylabel("90% CI Coverage")
-    ax.set_ylim(0, 1.05)
-    ax.set_title("Posterior Calibration: 90% CI Coverage")
-    ax.legend(loc="upper right", fontsize=9)
+    ax.set_xlabel("True A element")
+    ax.set_ylabel("Inferred A element")
+    ax.set_title("Element-wise Parameter Recovery (A matrix)")
+    ax.legend(loc="upper left", fontsize=8)
+    ax.set_aspect("equal")
     fig.tight_layout()
 
     _save_figure(
         fig,
-        os.path.join(output_dir, "benchmark_coverage_comparison"),
+        os.path.join(output_dir, "true_vs_inferred_scatter"),
+        formats,
+    )
+
+
+def plot_metric_strips(
+    results: dict,
+    output_dir: str,
+    formats: tuple[str, ...] = ("png",),
+) -> None:
+    """Strip/jitter plot of per-dataset metrics in a 2x2 grid.
+
+    Subplots: RMSE, Coverage, Correlation, Wall Time.
+    Each variant is shown as a jittered strip of per-dataset values
+    with a horizontal line at the mean. Coverage subplot includes a
+    horizontal reference at 0.90 (nominal).
+
+    Parameters
+    ----------
+    results : dict
+        Benchmark results loaded from JSON.
+    output_dir : str
+        Directory for saving the figure.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
+    """
+    _apply_style()
+    entries = _get_variant_results(results)
+    if not entries:
+        print("No valid results for metric strips -- skipping")
+        return
+
+    metric_specs = [
+        ("RMSE(A)", "rmse_list", "mean_rmse"),
+        ("Coverage", "coverage_list", "mean_coverage"),
+        ("Correlation", "correlation_list", "mean_correlation"),
+        ("Wall Time (s)", "time_list", "mean_time"),
+    ]
+
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8), dpi=150)
+    axes_flat = axes.flatten()
+
+    rng = np.random.default_rng(42)
+
+    for ax_idx, (title, list_key, mean_key) in enumerate(
+        metric_specs,
+    ):
+        ax = axes_flat[ax_idx]
+
+        x_positions: list[float] = []
+        x_labels: list[str] = []
+
+        for v_idx, (key, _label, data) in enumerate(entries):
+            values = data.get(list_key)
+            # Amortized runners store time as amort_time_list
+            if values is None and list_key == "time_list":
+                values = data.get("amort_time_list")
+            if values is None:
+                continue
+
+            label = _get_label_with_method(key, data)
+            x_pos = float(v_idx)
+            x_positions.append(x_pos)
+            x_labels.append(label)
+
+            # Jitter x
+            n_pts = len(values)
+            jitter = rng.uniform(-0.15, 0.15, size=n_pts)
+            xs = x_pos + jitter
+
+            color = _COLORS[v_idx % len(_COLORS)]
+            ax.scatter(
+                xs, values, s=30, alpha=0.7,
+                color=color, edgecolors="none",
+                zorder=3,
+            )
+
+            # Mean line
+            mean_val = data.get(mean_key)
+            if mean_val is None and len(values) > 0:
+                mean_val = float(np.mean(values))
+            if mean_val is not None:
+                ax.hlines(
+                    mean_val,
+                    x_pos - 0.3, x_pos + 0.3,
+                    colors=color, linewidth=2.0,
+                    zorder=4,
+                )
+
+        # Coverage nominal line
+        if list_key == "coverage_list":
+            ax.axhline(
+                0.90, color="red", linestyle="--",
+                linewidth=1.0, alpha=0.7,
+                label="Nominal 90%",
+            )
+            ax.legend(fontsize=8, loc="lower right")
+
+        if x_positions:
+            ax.set_xticks(x_positions)
+            ax.set_xticklabels(x_labels, fontsize=8, rotation=15)
+
+        ax.set_title(title, fontsize=11)
+        ax.grid(axis="y", alpha=0.3)
+
+    fig.suptitle(
+        "Benchmark Metrics (per-dataset distributions)",
+        fontsize=13, y=1.01,
+    )
+    fig.tight_layout()
+
+    _save_figure(
+        fig,
+        os.path.join(output_dir, "benchmark_metric_strips"),
         formats,
     )
 
@@ -327,25 +423,40 @@ def plot_amortization_gap(
         amort_data = results.get(amort_key, {})
 
         # Also check if amortized is stored as a sub-key
-        if not isinstance(amort_data, dict) or "mean_elbo" not in amort_data:
+        if (
+            not isinstance(amort_data, dict)
+            or "mean_elbo" not in amort_data
+        ):
             # Try alternate naming
             for k, v in results.items():
                 if not isinstance(v, dict):
                     continue
                 meta = v.get("metadata", {})
-                if (isinstance(meta, dict)
-                        and meta.get("variant") == base_variant
-                        and meta.get("method") == "amortized"):
+                if (
+                    isinstance(meta, dict)
+                    and meta.get("variant") == base_variant
+                    and meta.get("method") == "amortized"
+                ):
                     amort_data = v
                     break
 
-        if (isinstance(svi_data, dict) and isinstance(amort_data, dict)
-                and "mean_elbo" in svi_data and "mean_elbo" in amort_data):
+        if (
+            isinstance(svi_data, dict)
+            and isinstance(amort_data, dict)
+            and "mean_elbo" in svi_data
+            and "mean_elbo" in amort_data
+        ):
             svi_elbo = svi_data["mean_elbo"]
             amort_elbo = amort_data["mean_elbo"]
-            denom = abs(svi_elbo) if abs(svi_elbo) > 1e-15 else 1.0
-            rel_gap = abs(amort_elbo - svi_elbo) / denom * 100.0
-            label = _VARIANT_LABELS.get(base_variant, base_variant)
+            denom = (
+                abs(svi_elbo) if abs(svi_elbo) > 1e-15 else 1.0
+            )
+            rel_gap = (
+                abs(amort_elbo - svi_elbo) / denom * 100.0
+            )
+            label = _VARIANT_LABELS.get(
+                base_variant, base_variant,
+            )
             gaps.append((label, rel_gap))
 
     if not gaps:
@@ -363,83 +474,29 @@ def plot_amortization_gap(
 
     ax.bar(
         x, values,
-        color=[_COLORS[i % len(_COLORS)] for i in range(len(labels))],
+        color=[
+            _COLORS[i % len(_COLORS)]
+            for i in range(len(labels))
+        ],
         edgecolor="black", linewidth=0.5,
     )
-    ax.axhline(10.0, color="red", linestyle="--", linewidth=1.0,
-               label="10% target threshold")
+    ax.axhline(
+        10.0, color="red", linestyle="--", linewidth=1.0,
+        label="10% target threshold",
+    )
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=10)
     ax.set_ylabel("Relative Amortization Gap (%)")
-    ax.set_title("Amortization Gap: ELBO Degradation from Amortization")
+    ax.set_title(
+        "Amortization Gap: ELBO Degradation from Amortization",
+    )
     ax.legend(loc="upper right", fontsize=9)
-    fig.tight_layout()
-
-    _save_figure(fig, os.path.join(output_dir, "amortization_gap"), formats)
-
-
-def plot_true_vs_inferred(
-    results: dict,
-    output_dir: str,
-    formats: tuple[str, ...] = ("png",),
-) -> None:
-    """Scatter plot of true vs inferred A matrix elements.
-
-    Shows identity line and Pearson correlation per variant.
-
-    Parameters
-    ----------
-    results : dict
-        Benchmark results loaded from JSON.
-    output_dir : str
-        Directory for saving the figure.
-    formats : tuple of str, optional
-        File formats to save. Default ``("png",)``.
-    """
-    _apply_style()
-    entries = _get_variant_results(results)
-    if not entries:
-        print("No valid results for scatter plot -- skipping")
-        return
-
-    fig, ax = plt.subplots(figsize=(8, 5), dpi=150)
-
-    has_data = False
-    for i, (key, label, data) in enumerate(entries):
-        corr = data.get("mean_correlation", None)
-        if corr is None:
-            continue
-
-        # We plot summary statistics rather than raw A elements
-        # since raw A elements are not stored in JSON
-        # Instead show mean RMSE vs correlation as a proxy
-        rmse = data.get("mean_rmse", None)
-        if rmse is not None:
-            corr_label = f"{label} (r={corr:.3f})"
-            ax.scatter(
-                [rmse], [corr], s=120, marker="o",
-                color=_COLORS[i % len(_COLORS)],
-                edgecolors="black", linewidth=0.5,
-                label=corr_label, zorder=5,
-            )
-            has_data = True
-
-    if not has_data:
-        print("No correlation data for scatter plot -- skipping")
-        plt.close(fig)
-        return
-
-    ax.set_xlabel("Mean RMSE(A)")
-    ax.set_ylabel("Mean Correlation")
-    ax.set_title("True vs. Inferred Connectivity (A matrix)")
-    ax.legend(loc="best", fontsize=8)
-    ax.set_ylim(0, 1.05)
     fig.tight_layout()
 
     _save_figure(
         fig,
-        os.path.join(output_dir, "true_vs_inferred_scatter"),
+        os.path.join(output_dir, "amortization_gap"),
         formats,
     )
 
@@ -451,7 +508,7 @@ def generate_all_figures(
 ) -> None:
     """Generate all benchmark figures from results.
 
-    Calls all five plotting functions. Creates output directory
+    Calls all three plotting functions. Creates output directory
     if it does not exist.
 
     Parameters
@@ -467,11 +524,9 @@ def generate_all_figures(
     os.makedirs(output_dir, exist_ok=True)
 
     plot_funcs = [
-        plot_rmse_comparison,
-        plot_time_comparison,
-        plot_coverage_comparison,
-        plot_amortization_gap,
         plot_true_vs_inferred,
+        plot_metric_strips,
+        plot_amortization_gap,
     ]
 
     n_generated = 0
@@ -511,7 +566,10 @@ if __name__ == "__main__":
     results_path = "benchmarks/results/benchmark_results.json"
     if not Path(results_path).exists():
         print(f"Error: results file not found at {results_path}")
-        print("Run 'python benchmarks/run_all_benchmarks.py --quick' first")
+        print(
+            "Run 'python benchmarks/run_all_benchmarks.py "
+            "--quick' first"
+        )
         sys.exit(1)
 
     data = load_results(results_path)
