@@ -252,6 +252,8 @@ def run_rdcm_rigid_vb(config: BenchmarkConfig) -> dict[str, Any]:
     correlation_list: list[float] = []
     free_energy_list: list[float] = []
     time_list: list[float] = []
+    a_true_list: list[list[float]] = []
+    a_inferred_list: list[list[float]] = []
     n_failed = 0
 
     for i in range(config.n_datasets):
@@ -292,6 +294,10 @@ def run_rdcm_rigid_vb(config: BenchmarkConfig) -> dict[str, Any]:
             correlation_list.append(corr)
             free_energy_list.append(float(inv_result["F_total"]))
             time_list.append(elapsed)
+            a_true_list.append(A_true.flatten().tolist())
+            a_inferred_list.append(
+                A_inferred.flatten().tolist(),
+            )
 
             print(
                 f"  RMSE={rmse:.4f}, coverage={coverage:.3f}, "
@@ -328,6 +334,8 @@ def run_rdcm_rigid_vb(config: BenchmarkConfig) -> dict[str, Any]:
         "correlation_list": correlation_list,
         "free_energy_list": free_energy_list,
         "time_list": time_list,
+        "a_true_list": a_true_list,
+        "a_inferred_list": a_inferred_list,
         "n_success": n_success,
         "n_failed": n_failed,
         **summary,
@@ -371,6 +379,8 @@ def run_rdcm_sparse_vb(config: BenchmarkConfig) -> dict[str, Any]:
     f1_list: list[float] = []
     free_energy_list: list[float] = []
     time_list: list[float] = []
+    a_true_list: list[list[float]] = []
+    a_inferred_list: list[list[float]] = []
     n_failed = 0
 
     for i in range(config.n_datasets):
@@ -424,6 +434,10 @@ def run_rdcm_sparse_vb(config: BenchmarkConfig) -> dict[str, Any]:
             f1_list.append(f1)
             free_energy_list.append(float(inv_result["F_total"]))
             time_list.append(elapsed)
+            a_true_list.append(A_true.flatten().tolist())
+            a_inferred_list.append(
+                A_inferred.flatten().tolist(),
+            )
 
             print(
                 f"  RMSE={rmse:.4f}, F1={f1:.3f}, "
@@ -463,6 +477,8 @@ def run_rdcm_sparse_vb(config: BenchmarkConfig) -> dict[str, Any]:
         "f1_list": f1_list,
         "free_energy_list": free_energy_list,
         "time_list": time_list,
+        "a_true_list": a_true_list,
+        "a_inferred_list": a_inferred_list,
         "n_success": n_success,
         "n_failed": n_failed,
         **summary,

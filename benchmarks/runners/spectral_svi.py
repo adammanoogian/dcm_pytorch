@@ -100,6 +100,8 @@ def run_spectral_svi(config: BenchmarkConfig) -> dict[str, Any]:
     elbo_list: list[float] = []
     time_list: list[float] = []
     n_steps_list: list[int] = []
+    a_true_list: list[list[float]] = []
+    a_inferred_list: list[list[float]] = []
     n_failed = 0
 
     for i in range(config.n_datasets):
@@ -179,6 +181,10 @@ def run_spectral_svi(config: BenchmarkConfig) -> dict[str, Any]:
             elbo_list.append(svi_result["final_loss"])
             time_list.append(elapsed)
             n_steps_list.append(num_steps)
+            a_true_list.append(A_true.flatten().tolist())
+            a_inferred_list.append(
+                A_inferred.flatten().tolist(),
+            )
 
             print(
                 f"  RMSE={rmse:.4f}, coverage={coverage:.3f}, "
@@ -218,6 +224,8 @@ def run_spectral_svi(config: BenchmarkConfig) -> dict[str, Any]:
         "elbo_list": elbo_list,
         "time_list": time_list,
         "n_steps_list": n_steps_list,
+        "a_true_list": a_true_list,
+        "a_inferred_list": a_inferred_list,
         "n_success": n_success,
         "n_failed": n_failed,
         **summary,

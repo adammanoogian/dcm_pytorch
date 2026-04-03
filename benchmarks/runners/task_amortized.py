@@ -281,6 +281,8 @@ def run_task_amortized(config: BenchmarkConfig) -> dict[str, Any]:
     rmse_ratio_list: list[float] = []
     speed_ratio_list: list[float] = []
     gap_list: list[dict[str, float]] = []
+    a_true_list: list[list[float]] = []
+    a_inferred_list: list[list[float]] = []
     n_failed = 0
 
     stimulus = make_block_stimulus(
@@ -347,6 +349,12 @@ def run_task_amortized(config: BenchmarkConfig) -> dict[str, Any]:
             coverage_list.append(coverage)
             amort_time_list.append(amort_elapsed)
             correlation_list.append(corr)
+            a_true_list.append(
+                A_true_free.flatten().tolist(),
+            )
+            a_inferred_list.append(
+                amort_A_mean.flatten().tolist(),
+            )
 
             # Per-subject SVI for comparison
             pyro.clear_param_store()
@@ -454,6 +462,8 @@ def run_task_amortized(config: BenchmarkConfig) -> dict[str, Any]:
         "rmse_ratio_list": rmse_ratio_list,
         "speed_ratio_list": speed_ratio_list,
         "amortization_gap_list": [g for g in gap_list],
+        "a_true_list": a_true_list,
+        "a_inferred_list": a_inferred_list,
         "n_success": n_success,
         "n_failed": n_failed,
         **summary,
