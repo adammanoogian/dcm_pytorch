@@ -4,7 +4,7 @@ Produces publication-quality figures from benchmark results JSON:
 bar charts for RMSE/time/coverage comparisons, scatter plots for
 true vs inferred connectivity, and amortization gap visualizations.
 
-All figures are saved in dual format (PDF vector + PNG raster).
+Figures default to PNG. Pass ``formats=("png", "pdf")`` for vector output.
 """
 
 from __future__ import annotations
@@ -79,8 +79,12 @@ _METHOD_LABELS: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 
-def _save_figure(fig: matplotlib.figure.Figure, path: str) -> None:
-    """Save figure in both PDF and PNG formats.
+def _save_figure(
+    fig: matplotlib.figure.Figure,
+    path: str,
+    formats: tuple[str, ...] = ("png",),
+) -> None:
+    """Save figure in the specified formats.
 
     Parameters
     ----------
@@ -88,9 +92,12 @@ def _save_figure(fig: matplotlib.figure.Figure, path: str) -> None:
         Figure to save.
     path : str
         Base path without extension.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
+        Common choices: ``"png"``, ``"pdf"``, ``"svg"``.
     """
-    fig.savefig(path + ".pdf")
-    fig.savefig(path + ".png", dpi=150)
+    for fmt in formats:
+        fig.savefig(f"{path}.{fmt}", dpi=150)
     plt.close(fig)
 
 
@@ -134,6 +141,7 @@ def _get_variant_results(
 def plot_rmse_comparison(
     results: dict,
     output_dir: str,
+    formats: tuple[str, ...] = ("png",),
 ) -> None:
     """Grouped bar chart of RMSE(A) by variant and method.
 
@@ -143,6 +151,8 @@ def plot_rmse_comparison(
         Benchmark results loaded from JSON.
     output_dir : str
         Directory for saving the figure.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
     """
     _apply_style()
     entries = _get_variant_results(results)
@@ -181,12 +191,13 @@ def plot_rmse_comparison(
     ax.set_title("Parameter Recovery: RMSE(A) by Variant and Method")
     fig.tight_layout()
 
-    _save_figure(fig, os.path.join(output_dir, "benchmark_rmse_comparison"))
+    _save_figure(fig, os.path.join(output_dir, "benchmark_rmse_comparison"), formats)
 
 
 def plot_time_comparison(
     results: dict,
     output_dir: str,
+    formats: tuple[str, ...] = ("png",),
 ) -> None:
     """Grouped bar chart of wall time by variant and method.
 
@@ -196,6 +207,8 @@ def plot_time_comparison(
         Benchmark results loaded from JSON.
     output_dir : str
         Directory for saving the figure.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
     """
     _apply_style()
     entries = _get_variant_results(results)
@@ -227,12 +240,13 @@ def plot_time_comparison(
     ax.set_title("Inference Time per Subject")
     fig.tight_layout()
 
-    _save_figure(fig, os.path.join(output_dir, "benchmark_time_comparison"))
+    _save_figure(fig, os.path.join(output_dir, "benchmark_time_comparison"), formats)
 
 
 def plot_coverage_comparison(
     results: dict,
     output_dir: str,
+    formats: tuple[str, ...] = ("png",),
 ) -> None:
     """Grouped bar chart of 90% CI coverage by variant and method.
 
@@ -242,6 +256,8 @@ def plot_coverage_comparison(
         Benchmark results loaded from JSON.
     output_dir : str
         Directory for saving the figure.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
     """
     _apply_style()
     entries = _get_variant_results(results)
@@ -275,12 +291,14 @@ def plot_coverage_comparison(
     _save_figure(
         fig,
         os.path.join(output_dir, "benchmark_coverage_comparison"),
+        formats,
     )
 
 
 def plot_amortization_gap(
     results: dict,
     output_dir: str,
+    formats: tuple[str, ...] = ("png",),
 ) -> None:
     """Bar chart of amortization gap (relative ELBO degradation).
 
@@ -292,6 +310,8 @@ def plot_amortization_gap(
         Benchmark results loaded from JSON.
     output_dir : str
         Directory for saving the figure.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
     """
     _apply_style()
 
@@ -356,12 +376,13 @@ def plot_amortization_gap(
     ax.legend(loc="upper right", fontsize=9)
     fig.tight_layout()
 
-    _save_figure(fig, os.path.join(output_dir, "amortization_gap"))
+    _save_figure(fig, os.path.join(output_dir, "amortization_gap"), formats)
 
 
 def plot_true_vs_inferred(
     results: dict,
     output_dir: str,
+    formats: tuple[str, ...] = ("png",),
 ) -> None:
     """Scatter plot of true vs inferred A matrix elements.
 
@@ -373,6 +394,8 @@ def plot_true_vs_inferred(
         Benchmark results loaded from JSON.
     output_dir : str
         Directory for saving the figure.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
     """
     _apply_style()
     entries = _get_variant_results(results)
@@ -417,12 +440,14 @@ def plot_true_vs_inferred(
     _save_figure(
         fig,
         os.path.join(output_dir, "true_vs_inferred_scatter"),
+        formats,
     )
 
 
 def generate_all_figures(
     results: dict,
     output_dir: str = "figures",
+    formats: tuple[str, ...] = ("png",),
 ) -> None:
     """Generate all benchmark figures from results.
 
@@ -435,6 +460,9 @@ def generate_all_figures(
         Benchmark results loaded from JSON.
     output_dir : str, optional
         Directory for saving figures. Default ``"figures"``.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
+        Use ``("png", "pdf")`` for publication-quality output.
     """
     os.makedirs(output_dir, exist_ok=True)
 
@@ -449,7 +477,7 @@ def generate_all_figures(
     n_generated = 0
     for func in plot_funcs:
         try:
-            func(results, output_dir)
+            func(results, output_dir, formats)
             n_generated += 1
         except Exception as e:
             print(f"Warning: {func.__name__} failed: {e}")
