@@ -19,25 +19,25 @@ point estimate. This is the scientific meaning that must be preserved above all 
 
 ### Validated
 
-(None yet — ship to validate)
+- Balloon-Windkessel hemodynamic forward model with torchdiffeq ODE integration — v0.1.0
+- Bilinear neural state equation (dx/dt = Ax + Cu) with explicit A matrix — v0.1.0
+- BOLD signal equation mapping hemodynamic states to observations — v0.1.0
+- Cross-spectral density computation matching SPM conventions — v0.1.0
+- Spectral DCM transfer function H(w) and predicted CSD — v0.1.0
+- Regression DCM analytic frequency-domain likelihood — v0.1.0
+- Pyro generative models for all three DCM variants with proper priors — v0.1.0
+- Mean-field Gaussian variational guides (Laplace baseline) — v0.1.0
+- Data simulators for all three variants with realistic SNR — v0.1.0
+- Parameter recovery tests: RMSE < 0.05, calibrated 95% CI coverage — v0.1.0
+- Cross-validated against SPM12 and tapas/rDCM reference implementations — v0.1.0
+- ELBO-based Bayesian model comparison across connectivity architectures — v0.1.0
+- Neural amortized guides (normalizing flows) for task and spectral DCM — v0.1.0
+- Amortized guide accuracy within 2x of per-subject SVI — v0.1.0
+- Comprehensive benchmark suite comparing all inference methods — v0.1.0
 
 ### Active
 
-- [ ] Implement Balloon-Windkessel hemodynamic forward model with torchdiffeq ODE integration
-- [ ] Implement bilinear neural state equation (dx/dt = Ax + Cu) with explicit A matrix
-- [ ] Implement BOLD signal equation mapping hemodynamic states to observations
-- [ ] Implement cross-spectral density computation matching SPM conventions
-- [ ] Implement spectral DCM transfer function H(w) and predicted CSD
-- [ ] Implement regression DCM analytic frequency-domain likelihood
-- [ ] Define Pyro generative models for all three DCM variants with proper priors
-- [ ] Implement mean-field Gaussian variational guides (Laplace baseline)
-- [ ] Build data simulators for all three variants with realistic SNR
-- [ ] Parameter recovery tests: RMSE < 0.05, calibrated 95% CI coverage
-- [ ] Cross-validate against SPM12 and tapas/rDCM reference implementations
-- [ ] ELBO-based Bayesian model comparison across connectivity architectures
-- [ ] Implement neural amortized guides (normalizing flows) for all variants
-- [ ] Demonstrate amortized guide accuracy within 2x of per-subject NUTS
-- [ ] Comprehensive benchmark suite comparing all inference methods
+(None — next milestone not yet planned)
 
 ### Out of Scope
 
@@ -80,4 +80,4 @@ point estimate. This is the scientific meaning that must be preserved above all 
 | NumPyro for NUTS only | JAX speed for validation sampling, not primary inference | -- Pending |
 
 ---
-*Last updated: 2026-03-25 after initialization*
+*Last updated: 2026-04-03 after v0.1.0 milestone*

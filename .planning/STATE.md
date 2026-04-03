@@ -2,20 +2,16 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-25)
+See: .planning/PROJECT.md (updated 2026-04-03)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Phase 8 COMPLETE (Metrics, Benchmarks, and Documentation). All 26/26 plans delivered.
+**Current focus:** v0.1.0 shipped. Planning next milestone.
 
 ## Current Position
 
-**Milestone:** v0.1.0-foundation
-**Phase:** 8 of 8 (Metrics, Benchmarks, and Documentation)
-**Plan:** 08-05 complete (all 5 plans in phase complete)
-**Status:** MILESTONE COMPLETE. All 8 phases, 26 plans delivered.
-**Last activity:** 2026-04-02 -- Phase 8 complete (08-04 + 08-05 + gap closure verified)
-
-Progress: [██████████████████████████] 100% (26/26 plans)
+**Milestone:** v0.1.0-foundation SHIPPED
+**Status:** Ready to plan next milestone
+**Last activity:** 2026-04-03 -- v0.1.0 milestone archived and tagged
 
 ## Decisions
 
