@@ -5,13 +5,15 @@
 See: .planning/PROJECT.md (updated 2026-04-03)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.1.0 shipped. Planning next milestone.
+**Current focus:** v0.2.0 Cross-Backend Inference Benchmarking
 
 ## Current Position
 
-**Milestone:** v0.1.0-foundation SHIPPED
-**Status:** Ready to plan next milestone
-**Last activity:** 2026-04-03 -- v0.1.0 milestone archived and tagged
+**Milestone:** v0.2.0 Cross-Backend Inference Benchmarking
+**Phase:** Not started (defining requirements)
+**Plan:** --
+**Status:** Defining requirements
+**Last activity:** 2026-04-06 -- Milestone v0.2.0 started
 
 ## Decisions
 
@@ -174,9 +176,9 @@ Three swappable module interfaces:
 
 ## Session Continuity
 
-Last session: 2026-04-02
-Stopped at: Completed 08-04-PLAN.md (benchmark figures and report) -- ALL PLANS COMPLETE
+Last session: 2026-04-06
+Stopped at: Starting v0.2.0 milestone
 Resume file: None
 
 ---
-*Last updated: 2026-04-02 after 08-04 benchmark figures and report complete -- v0.1.0-foundation milestone complete*
+*Last updated: 2026-04-06 after v0.2.0 milestone started*

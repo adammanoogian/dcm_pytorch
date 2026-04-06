@@ -37,7 +37,19 @@ point estimate. This is the scientific meaning that must be preserved above all 
 
 ### Active
 
-(None — next milestone not yet planned)
+**Current Milestone: v0.2.0 Cross-Backend Inference Benchmarking**
+
+Goal: Establish inference quality guarantees across all backends, fix calibration
+(0.44-0.78 coverage → 0.90 nominal), determine the real cost of the variational
+approximation for DCM, and produce a practical recommendation guide.
+
+Target features:
+- Extended Pyro guide variants (low-rank, structured, ELBO variants, amortized refinement)
+- NumPyro backends (NUTS, ADVI, Laplace) via DCM_PPLs integration
+- Regularization study (non-centered parameterization, prior scale sensitivity)
+- Cross-backend comparison table (9 methods x 3 variants x 3 network sizes)
+- Coverage calibration as the key figure
+- Practical recommendation guide for users
 
 ### Out of Scope
 
@@ -80,4 +92,4 @@ point estimate. This is the scientific meaning that must be preserved above all 
 | NumPyro for NUTS only | JAX speed for validation sampling, not primary inference | -- Pending |
 
 ---
-*Last updated: 2026-04-03 after v0.1.0 milestone*
+*Last updated: 2026-04-06 after v0.2.0 milestone started*
