@@ -74,24 +74,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GUIDE-01 | — | Pending |
-| GUIDE-02 | — | Pending |
-| BENCH-01 | — | Pending |
-| BENCH-02 | — | Pending |
-| BENCH-03 | — | Pending |
-| CAL-01 | — | Pending |
-| CAL-02 | — | Pending |
-| CAL-03 | — | Pending |
-| CAL-04 | — | Pending |
-| CAL-05 | — | Pending |
-| DOC-01 | — | Pending |
-| DOC-02 | — | Pending |
+| GUIDE-01 | Phase 10 | Pending |
+| GUIDE-02 | Phase 10 | Pending |
+| BENCH-01 | Phase 9 | Pending |
+| BENCH-02 | Phase 9 | Pending |
+| BENCH-03 | Phase 9 | Pending |
+| CAL-01 | Phase 11 | Pending |
+| CAL-02 | Phase 11 | Pending |
+| CAL-03 | Phase 11 | Pending |
+| CAL-04 | Phase 11 | Pending |
+| CAL-05 | Phase 11 | Pending |
+| DOC-01 | Phase 12 | Pending |
+| DOC-02 | Phase 12 | Pending |
 
 **Coverage:**
 - v0.2.0 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 (pending roadmap creation)
+- Mapped to phases: 12
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-07*
-*Last updated: 2026-04-07 after user scoping*
+*Last updated: 2026-04-07 after roadmap creation*
