@@ -17,6 +17,7 @@ import numpy as np
 import torch
 
 from benchmarks.config import BenchmarkConfig
+from benchmarks.fixtures import load_fixture
 from benchmarks.metrics import (
     compute_coverage_from_ci,
     compute_rmse,
@@ -264,7 +265,24 @@ def run_rdcm_rigid_vb(config: BenchmarkConfig) -> dict[str, Any]:
             torch.manual_seed(seed_i)
             np.random.seed(seed_i)
 
-            data = _generate_rdcm_data(seed_i, nr)
+            if config.fixtures_dir is not None:
+                fdata = load_fixture(
+                    "rdcm", nr, i, config.fixtures_dir,
+                )
+                hrf = get_hrf(_N_TIME, _U_DT)
+                X, Y, N_eff = create_regressors(
+                    hrf, fdata["y"], fdata["u"],
+                    _U_DT, _Y_DT,
+                )
+                data = {
+                    "A": fdata["A_true"],
+                    "a_mask": fdata["a_mask"],
+                    "C": fdata["C_true"],
+                    "c_mask": fdata["c_mask"],
+                    "X": X, "Y": Y, "N_eff": N_eff,
+                }
+            else:
+                data = _generate_rdcm_data(seed_i, nr)
 
             t0 = time.time()
             inv_result = rigid_inversion(
@@ -391,7 +409,24 @@ def run_rdcm_sparse_vb(config: BenchmarkConfig) -> dict[str, Any]:
             torch.manual_seed(seed_i)
             np.random.seed(seed_i)
 
-            data = _generate_rdcm_data(seed_i, nr)
+            if config.fixtures_dir is not None:
+                fdata = load_fixture(
+                    "rdcm", nr, i, config.fixtures_dir,
+                )
+                hrf = get_hrf(_N_TIME, _U_DT)
+                X, Y, N_eff = create_regressors(
+                    hrf, fdata["y"], fdata["u"],
+                    _U_DT, _Y_DT,
+                )
+                data = {
+                    "A": fdata["A_true"],
+                    "a_mask": fdata["a_mask"],
+                    "C": fdata["C_true"],
+                    "c_mask": fdata["c_mask"],
+                    "X": X, "Y": Y, "N_eff": N_eff,
+                }
+            else:
+                data = _generate_rdcm_data(seed_i, nr)
 
             t0 = time.time()
             inv_result = sparse_inversion(

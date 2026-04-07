@@ -24,6 +24,7 @@ from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import ClippedAdam
 
 from benchmarks.config import BenchmarkConfig
+from benchmarks.fixtures import load_fixture
 from benchmarks.metrics import (
     compute_amortization_gap,
     compute_coverage_from_ci,
@@ -300,18 +301,26 @@ def run_task_amortized(config: BenchmarkConfig) -> dict[str, Any]:
             torch.manual_seed(seed_i)
             np.random.seed(seed_i)
 
-            # Generate test data
-            A_true = make_random_stable_A(N, seed=seed_i)
-            C = torch.zeros(N, M, dtype=torch.float64)
-            C[0, 0] = 1.0
+            if config.fixtures_dir is not None:
+                data = load_fixture(
+                    "task", N, i, config.fixtures_dir,
+                )
+                A_true = data["A_true"]
+                bold = data["bold"]
+            else:
+                # Generate test data
+                A_true = make_random_stable_A(N, seed=seed_i)
+                C = torch.zeros(N, M, dtype=torch.float64)
+                C[0, 0] = 1.0
 
-            sim = simulate_task_dcm(
-                A_true, C, stimulus,
-                duration=duration, dt=0.01, TR=TR, SNR=5.0,
-                seed=seed_i,
-            )
+                sim = simulate_task_dcm(
+                    A_true, C, stimulus,
+                    duration=duration, dt=0.01, TR=TR,
+                    SNR=5.0, seed=seed_i,
+                )
 
-            bold = sim["bold"]
+                bold = sim["bold"]
+
             if torch.isnan(bold).any():
                 n_failed += 1
                 continue

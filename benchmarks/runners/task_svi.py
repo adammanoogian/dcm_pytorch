@@ -18,6 +18,7 @@ import pyro
 import torch
 
 from benchmarks.config import BenchmarkConfig
+from benchmarks.fixtures import load_fixture
 from benchmarks.metrics import (
     compute_coverage_from_ci,
     compute_rmse,
@@ -35,6 +36,7 @@ from pyro_dcm.simulators.task_simulator import (
     make_random_stable_A,
     simulate_task_dcm,
 )
+from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
 
 
 def _build_A_ci(
@@ -117,24 +119,41 @@ def run_task_svi(config: BenchmarkConfig) -> dict[str, Any]:
             pyro.enable_validation(False)
             pyro.clear_param_store()
 
-            # Generate ground truth
-            A_true = make_random_stable_A(N, density=0.5, seed=seed_i)
-            C = torch.zeros(N, M, dtype=torch.float64)
-            C[0, 0] = 1.0
+            if config.fixtures_dir is not None:
+                data = load_fixture(
+                    "task", N, i, config.fixtures_dir,
+                )
+                A_true = data["A_true"]
+                C = data["C"]
+                bold = data["bold"]
+                stim = PiecewiseConstantInput(
+                    data["stimulus_times"],
+                    data["stimulus_values"],
+                )
+                sim = {"bold": bold, "stimulus": stim}
+                # Override duration from fixture metadata
+                duration = float(data["duration"])
+            else:
+                # Generate ground truth
+                A_true = make_random_stable_A(
+                    N, density=0.5, seed=seed_i,
+                )
+                C = torch.zeros(N, M, dtype=torch.float64)
+                C[0, 0] = 1.0
 
-            stim = make_block_stimulus(
-                n_blocks=n_blocks,
-                block_duration=15.0,
-                rest_duration=15.0,
-                n_inputs=M,
-            )
+                stim = make_block_stimulus(
+                    n_blocks=n_blocks,
+                    block_duration=15.0,
+                    rest_duration=15.0,
+                    n_inputs=M,
+                )
 
-            # Simulate BOLD
-            sim = simulate_task_dcm(
-                A_true, C, stim,
-                duration=duration, dt=0.01, TR=2.0, SNR=5.0,
-                seed=seed_i,
-            )
+                # Simulate BOLD
+                sim = simulate_task_dcm(
+                    A_true, C, stim,
+                    duration=duration, dt=0.01, TR=2.0,
+                    SNR=5.0, seed=seed_i,
+                )
 
             # Model args
             a_mask = torch.ones(N, N, dtype=torch.float64)

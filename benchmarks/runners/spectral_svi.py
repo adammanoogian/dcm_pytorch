@@ -18,6 +18,7 @@ import pyro
 import torch
 
 from benchmarks.config import BenchmarkConfig
+from benchmarks.fixtures import load_fixture
 from benchmarks.metrics import (
     compute_coverage_from_ci,
     compute_rmse,
@@ -115,33 +116,50 @@ def run_spectral_svi(config: BenchmarkConfig) -> dict[str, Any]:
             pyro.set_rng_seed(seed_i)
             pyro.clear_param_store()
 
-            # Generate ground truth A
-            A_true = make_stable_A_spectral(N, seed=seed_i)
+            if config.fixtures_dir is not None:
+                data = load_fixture(
+                    "spectral", N, i, config.fixtures_dir,
+                )
+                A_true = data["A_true"]
+                noisy_csd = torch.complex(
+                    data["noisy_csd_real"].to(torch.float64),
+                    data["noisy_csd_imag"].to(torch.float64),
+                )
+                sim_freqs = data["freqs"]
+            else:
+                # Generate ground truth A
+                A_true = make_stable_A_spectral(N, seed=seed_i)
 
-            # Simulate CSD
-            sim = simulate_spectral_dcm(
-                A_true, TR=2.0, n_freqs=32, seed=seed_i,
-            )
+                # Simulate CSD
+                sim = simulate_spectral_dcm(
+                    A_true, TR=2.0, n_freqs=32, seed=seed_i,
+                )
 
-            # Add noise in decomposed real/imag space
-            obs_real = decompose_csd_for_likelihood(sim["csd"])
-            signal_power = obs_real.pow(2).mean().sqrt()
-            noise_std = signal_power / snr
-            torch.manual_seed(seed_i + 1000)
-            noisy_obs = obs_real + noise_std * torch.randn_like(
-                obs_real,
-            )
+                # Add noise in decomposed real/imag space
+                obs_real = decompose_csd_for_likelihood(
+                    sim["csd"],
+                )
+                signal_power = obs_real.pow(2).mean().sqrt()
+                noise_std = signal_power / snr
+                torch.manual_seed(seed_i + 1000)
+                noisy_obs = (
+                    obs_real
+                    + noise_std * torch.randn_like(obs_real)
+                )
 
-            # Reconstruct noisy complex CSD
-            F, n, _ = sim["csd"].shape
-            half = F * n * n
-            noisy_real = noisy_obs[:half].reshape(F, n, n)
-            noisy_imag = noisy_obs[half:].reshape(F, n, n)
-            noisy_csd = torch.complex(noisy_real, noisy_imag)
+                # Reconstruct noisy complex CSD
+                F, n, _ = sim["csd"].shape
+                half = F * n * n
+                noisy_real = noisy_obs[:half].reshape(F, n, n)
+                noisy_imag = noisy_obs[half:].reshape(F, n, n)
+                noisy_csd = torch.complex(
+                    noisy_real, noisy_imag,
+                )
+                sim_freqs = sim["freqs"]
 
             # Model args
             a_mask = torch.ones(N, N, dtype=torch.float64)
-            model_args = (noisy_csd, sim["freqs"], a_mask, N)
+            model_args = (noisy_csd, sim_freqs, a_mask, N)
 
             # SVI
             guide = create_guide(

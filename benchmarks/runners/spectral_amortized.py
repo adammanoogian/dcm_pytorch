@@ -23,6 +23,7 @@ from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import ClippedAdam
 
 from benchmarks.config import BenchmarkConfig
+from benchmarks.fixtures import load_fixture
 from benchmarks.metrics import (
     compute_amortization_gap,
     compute_coverage_from_ci,
@@ -289,13 +290,35 @@ def run_spectral_amortized(
 
     # Generate test data
     n_test = config.n_datasets
-    test_seed = config.seed + 5000
-    test_data, test_params, test_freqs, _ = (
-        _generate_spectral_datasets(n_test, N, test_seed)
-    )
 
-    if test_freqs is not None:
-        freqs = test_freqs
+    if config.fixtures_dir is not None:
+        test_data: list[torch.Tensor] = []
+        test_params: list[dict[str, torch.Tensor]] = []
+        for fi in range(n_test):
+            fdata = load_fixture(
+                "spectral", N, fi,
+                config.fixtures_dir,
+            )
+            noisy_csd = torch.complex(
+                fdata["noisy_csd_real"].to(torch.float64),
+                fdata["noisy_csd_imag"].to(torch.float64),
+            )
+            test_data.append(noisy_csd)
+            test_params.append({
+                "A_free": invert_A_to_A_free(
+                    fdata["A_true"],
+                ),
+            })
+            freqs = fdata["freqs"]
+    else:
+        test_seed = config.seed + 5000
+        test_data, test_params, test_freqs, _ = (
+            _generate_spectral_datasets(
+                n_test, N, test_seed,
+            )
+        )
+        if test_freqs is not None:
+            freqs = test_freqs
 
     rmse_list: list[float] = []
     coverage_list: list[float] = []
