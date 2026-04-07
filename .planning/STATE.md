@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Milestone:** v0.2.0 Cross-Backend Inference Benchmarking
 **Phase:** 9 of 12 (Benchmark Foundation)
-**Plan:** 1 of 3
+**Plan:** 2 of 3
 **Status:** In progress
-**Last activity:** 2026-04-07 -- Completed 09-01-PLAN.md (config extension + ELBO gap fix)
+**Last activity:** 2026-04-07 -- Completed 09-02-PLAN.md (fixture generation + loading)
 
-Progress: [█████████░] 93% (27/29 plans)
+Progress: [█████████░] 97% (28/29 plans)
 
 ## Decisions
 
@@ -28,6 +28,8 @@ Progress: [█████████░] 93% (27/29 plans)
 | num_particles=5 for ELBO gap evaluation | Balances variance reduction vs cost for amortization gap metric | 2026-04-07 |
 | kwargs passthrough in BenchmarkConfig factories | Forward-compatible extensibility without touching factory methods | 2026-04-07 |
 | ELBO before clear_param_store ordering | Amortized guide params live in param store; must evaluate before clear | 2026-04-07 |
+| rk4 solver for task fixture generation | dopri5 underflows with dt=0.01 + piecewise stimulus; rk4 is reliable | 2026-04-07 |
+| No regressors stored in rDCM fixtures | Runners call create_regressors themselves; deterministic, saves space | 2026-04-07 |
 
 See STATE.md v0.1.0 decisions in git history.
 
@@ -46,8 +48,8 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-07
-Stopped at: Completed 09-01-PLAN.md
+Stopped at: Completed 09-02-PLAN.md
 Resume file: None
 
 ---
-*Last updated: 2026-04-07 after 09-01 execution*
+*Last updated: 2026-04-07 after 09-02 execution*
