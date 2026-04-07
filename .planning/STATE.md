@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Milestone:** v0.2.0 Cross-Backend Inference Benchmarking
 **Phase:** 9 of 12 (Benchmark Foundation)
-**Plan:** --
-**Status:** Ready to plan
-**Last activity:** 2026-04-07 -- Roadmap created for v0.2.0 (4 phases, 12 requirements)
+**Plan:** 1 of 3
+**Status:** In progress
+**Last activity:** 2026-04-07 -- Completed 09-01-PLAN.md (config extension + ELBO gap fix)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████████░] 93% (27/29 plans)
 
 ## Decisions
 
@@ -25,6 +25,9 @@ Progress: [░░░░░░░░░░] 0%
 | Regularization deferred to v0.3+ | NCP, prior scale sensitivity orthogonal to main calibration story | 2026-04-07 |
 | Amortized refinement deferred to v0.3+ | Semi-amortized pipeline requires Phase 10 guide variants first | 2026-04-07 |
 | 4 phases for v0.2.0 | 12 requirements cluster into 4 natural delivery boundaries | 2026-04-07 |
+| num_particles=5 for ELBO gap evaluation | Balances variance reduction vs cost for amortization gap metric | 2026-04-07 |
+| kwargs passthrough in BenchmarkConfig factories | Forward-compatible extensibility without touching factory methods | 2026-04-07 |
+| ELBO before clear_param_store ordering | Amortized guide params live in param store; must evaluate before clear | 2026-04-07 |
 
 See STATE.md v0.1.0 decisions in git history.
 
@@ -43,8 +46,8 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-07
-Stopped at: Roadmap created for v0.2.0
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None
 
 ---
-*Last updated: 2026-04-07 after roadmap creation*
+*Last updated: 2026-04-07 after 09-01 execution*
