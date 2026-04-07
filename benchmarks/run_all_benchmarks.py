@@ -22,6 +22,14 @@ Specific variant and method::
 All rDCM benchmarks (rigid + sparse)::
 
     python benchmarks/run_all_benchmarks.py --variant rdcm
+
+With shared fixtures::
+
+    python benchmarks/run_all_benchmarks.py --fixtures-dir benchmarks/fixtures
+
+Multi-region benchmark::
+
+    python benchmarks/run_all_benchmarks.py --n-regions 3,5,10 --quick
 """
 
 from __future__ import annotations
@@ -266,6 +274,29 @@ def main() -> None:
         action="store_true",
         help="Skip figure generation",
     )
+    parser.add_argument(
+        "--fixtures-dir",
+        type=str,
+        default=None,
+        help=(
+            "Load data from pre-generated fixtures instead "
+            "of inline generation"
+        ),
+    )
+    parser.add_argument(
+        "--guide-type",
+        type=str,
+        default="mean_field",
+        help="Guide type for inference (default: mean_field)",
+    )
+    parser.add_argument(
+        "--n-regions",
+        type=str,
+        default="3",
+        help=(
+            "Comma-separated region sizes (default: 3)"
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -305,6 +336,13 @@ def main() -> None:
         config.seed = args.seed
         config.output_dir = args.output_dir
         config.save_figures = not args.no_figures
+        config.fixtures_dir = args.fixtures_dir
+        config.guide_type = args.guide_type
+        n_regions_list = [
+            int(x) for x in args.n_regions.split(",")
+        ]
+        config.n_regions_list = n_regions_list
+        config.n_regions = n_regions_list[0]
 
         print(f"[RUN]  {label} (n_datasets={config.n_datasets}, "
               f"n_svi_steps={config.n_svi_steps})")
