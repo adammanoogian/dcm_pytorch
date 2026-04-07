@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Milestone:** v0.2.0 Cross-Backend Inference Benchmarking
 **Phase:** 9 of 12 (Benchmark Foundation)
-**Plan:** 2 of 3
-**Status:** In progress
-**Last activity:** 2026-04-07 -- Completed 09-02-PLAN.md (fixture generation + loading)
+**Plan:** 3 of 3 (Phase complete)
+**Status:** Phase complete
+**Last activity:** 2026-04-07 -- Completed 09-03-PLAN.md (runner integration + CLI flags)
 
-Progress: [█████████░] 97% (28/29 plans)
+Progress: [██████████] 100% (29/29 plans)
 
 ## Decisions
 
@@ -30,6 +30,8 @@ Progress: [█████████░] 97% (28/29 plans)
 | ELBO before clear_param_store ordering | Amortized guide params live in param store; must evaluate before clear | 2026-04-07 |
 | rk4 solver for task fixture generation | dopri5 underflows with dt=0.01 + piecewise stimulus; rk4 is reliable | 2026-04-07 |
 | No regressors stored in rDCM fixtures | Runners call create_regressors themselves; deterministic, saves space | 2026-04-07 |
+| Duration override from fixture metadata | Fixtures may be generated with full-mode params; runners must use fixture duration to avoid shape mismatches | 2026-04-07 |
+| PiecewiseConstantInput for fixture stimulus | task_dcm_model expects callable input_fn, not raw dict; fixtures must be wrapped | 2026-04-07 |
 
 See STATE.md v0.1.0 decisions in git history.
 
@@ -48,8 +50,8 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-07
-Stopped at: Completed 09-02-PLAN.md
+Stopped at: Completed 09-03-PLAN.md (Phase 9 complete)
 Resume file: None
 
 ---
-*Last updated: 2026-04-07 after 09-02 execution*
+*Last updated: 2026-04-07 after 09-03 execution*
