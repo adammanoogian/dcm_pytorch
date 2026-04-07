@@ -76,9 +76,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | GUIDE-01 | Phase 10 | Pending |
 | GUIDE-02 | Phase 10 | Pending |
-| BENCH-01 | Phase 9 | Pending |
-| BENCH-02 | Phase 9 | Pending |
-| BENCH-03 | Phase 9 | Pending |
+| BENCH-01 | Phase 9 | Complete |
+| BENCH-02 | Phase 9 | Complete |
+| BENCH-03 | Phase 9 | Complete |
 | CAL-01 | Phase 11 | Pending |
 | CAL-02 | Phase 11 | Pending |
 | CAL-03 | Phase 11 | Pending |
@@ -94,4 +94,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-04-07*
-*Last updated: 2026-04-07 after roadmap creation*
+*Last updated: 2026-04-07 after Phase 9 completion*

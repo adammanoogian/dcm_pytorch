@@ -29,7 +29,7 @@ and produce a practical recommendation guide for DCM users.
 
 ### Phases
 
-- [ ] **Phase 9: Benchmark Foundation** - Shared fixtures, extended config, amortization gap fix
+- [x] **Phase 9: Benchmark Foundation** - Shared fixtures, extended config, amortization gap fix
 - [ ] **Phase 10: Guide Variants** - 6 guide types in create_guide factory, ELBO variant comparison
 - [ ] **Phase 11: Calibration Analysis** - Coverage curves, scaling study, comparison table, timing, plots
 - [ ] **Phase 12: Documentation** - Recommendation guide and updated benchmark narrative
@@ -89,7 +89,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 9. Benchmark Foundation | v0.2.0 | 0/3 | Not started | - |
+| 9. Benchmark Foundation | v0.2.0 | 3/3 | Complete | 2026-04-07 |
 | 10. Guide Variants | v0.2.0 | 0/TBD | Not started | - |
 | 11. Calibration Analysis | v0.2.0 | 0/TBD | Not started | - |
 | 12. Documentation | v0.2.0 | 0/TBD | Not started | - |
