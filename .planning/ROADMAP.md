@@ -45,7 +45,11 @@ and produce a practical recommendation guide for DCM users.
   2. All existing v0.1.0 runners load from shared fixtures (when fixtures_dir is set) and produce identical results to inline generation
   3. BenchmarkConfig accepts guide_type, n_regions_list, elbo_type, and fixtures_dir with defaults that preserve v0.1.0 behavior
   4. Amortization gap metric computes real ELBO via Trace_ELBO().differentiable_loss() for both amortized and per-subject guides, not the RMSE-ratio proxy
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 09-01-PLAN.md -- Extend BenchmarkConfig + fix amortization gap ELBO proxy
+- [ ] 09-02-PLAN.md -- Create fixture generation script and loading helper
+- [ ] 09-03-PLAN.md -- Wire fixture loading into runners + CLI flags
 
 ### Phase 10: Guide Variants
 **Goal**: Users can select from 6 guide types and 3 ELBO objectives for any DCM variant
@@ -85,7 +89,7 @@ and produce a practical recommendation guide for DCM users.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 9. Benchmark Foundation | v0.2.0 | 0/TBD | Not started | - |
+| 9. Benchmark Foundation | v0.2.0 | 0/3 | Not started | - |
 | 10. Guide Variants | v0.2.0 | 0/TBD | Not started | - |
 | 11. Calibration Analysis | v0.2.0 | 0/TBD | Not started | - |
 | 12. Documentation | v0.2.0 | 0/TBD | Not started | - |
