@@ -22,7 +22,13 @@ import math
 import torch
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SVI, Trace_ELBO, TraceMeanField_ELBO, RenyiELBO
+from pyro.infer import (
+    Predictive,
+    RenyiELBO,
+    SVI,
+    Trace_ELBO,
+    TraceMeanField_ELBO,
+)
 from pyro.infer.autoguide import (
     AutoDelta,
     AutoGuide,
@@ -348,12 +354,16 @@ def run_svi(
 def extract_posterior_params(
     guide: AutoGuide,
     model_args: tuple[Any, ...],
+    model: Callable[..., Any] | None = None,
+    num_samples: int = 1000,
 ) -> dict[str, Any]:
-    """Extract posterior parameters from a trained AutoGuide.
+    """Extract posterior parameters via Predictive-based sampling.
 
-    Retrieves the variational median (posterior mode approximation)
-    and all learned guide parameters (locs and scales) from Pyro's
-    parameter store.
+    Draws ``num_samples`` from the trained guide using
+    ``pyro.infer.Predictive``, then computes per-site mean, std, and
+    raw samples. Works identically for all six guide types in
+    ``GUIDE_REGISTRY`` (including ``AutoDelta``, which returns
+    ``std=0`` for all sites).
 
     Parameters
     ----------
@@ -361,42 +371,84 @@ def extract_posterior_params(
         Trained Pyro guide instance (any type from
         ``GUIDE_REGISTRY``).
     model_args : tuple
-        Arguments to the model (needed for ``guide.median()``).
+        Positional arguments passed to the model/guide.
+    model : callable or None, optional
+        Pyro model function. If ``None``, uses ``guide.model``
+        (all ``AutoGuide`` subclasses store the model). Default
+        ``None`` preserves backward compatibility.
+    num_samples : int, optional
+        Number of posterior samples to draw. Default 1000.
 
     Returns
     -------
     dict
-        Keys:
+        Per-site dicts with keys ``'mean'``, ``'std'``, ``'samples'``,
+        plus a top-level ``'median'`` key mapping site names to their
+        mean values for backward compatibility.
 
-        - ``'median'``: dict mapping site names to median values.
-        - ``'params'``: dict mapping parameter store keys to tensors.
+        Example structure::
+
+            {
+                "A_free": {
+                    "mean": Tensor,
+                    "std": Tensor,
+                    "samples": Tensor,  # (num_samples, ...)
+                },
+                "C": { ... },
+                "median": {"A_free": Tensor, "C": Tensor},
+            }
 
     Notes
     -----
-    Call this after ``run_svi`` completes. The median values
-    approximate the posterior mode under the mean-field assumption.
-    The params dict contains the raw ``AutoNormal_loc`` and
-    ``AutoNormal_scale`` parameters for each latent variable.
+    Call this after ``run_svi`` completes. The ``'median'`` key
+    provides backward compatibility with code that previously used
+    ``guide.median()`` -- the values are sample means (which
+    approximate medians for symmetric posteriors).
+
+    For ``AutoDelta`` guides, all samples are identical point
+    estimates, so ``std`` is exactly zero.
 
     Examples
     --------
     >>> from pyro_dcm.models import create_guide, run_svi, extract_posterior_params
     >>> # After running SVI:
     >>> posterior = extract_posterior_params(guide, model_args)
-    >>> A_median = posterior['median']['A']
-    >>> A_free_loc = posterior['params']['AutoNormal.locs.A_free']
+    >>> A_mean = posterior['A_free']['mean']
+    >>> A_std = posterior['A_free']['std']
+    >>> A_median_compat = posterior['median']['A_free']
     """
-    # Get median values from guide
-    median = guide.median(*model_args)
+    if model is None:
+        model = guide.model
 
-    # Get all parameters from the param store
-    param_store = pyro.get_param_store()
-    params = {
-        name: param_store[name].detach().clone()
-        for name in param_store
-    }
+    predictive = Predictive(
+        model,
+        guide=guide,
+        num_samples=num_samples,
+        return_sites=None,
+    )
 
-    return {
-        "median": median,
-        "params": params,
-    }
+    with torch.no_grad():
+        samples = predictive(*model_args)
+
+    result: dict[str, Any] = {}
+    median_dict: dict[str, torch.Tensor] = {}
+
+    for site_name, tensor in samples.items():
+        if tensor.is_complex():
+            # Complex sites (e.g. predicted_csd) -- compute
+            # statistics on real/imag parts separately.
+            site_mean = tensor.mean(dim=0)
+            site_std = tensor.real.float().std(dim=0)
+        else:
+            site_mean = tensor.float().mean(dim=0)
+            site_std = tensor.float().std(dim=0)
+        result[site_name] = {
+            "mean": site_mean,
+            "std": site_std,
+            "samples": tensor,
+        }
+        median_dict[site_name] = site_mean
+
+    result["median"] = median_dict
+
+    return result
