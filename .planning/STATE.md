@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 ## Current Position
 
 **Milestone:** v0.2.0 Cross-Backend Inference Benchmarking
-**Phase:** 9 of 12 (Benchmark Foundation) -- VERIFIED
-**Plan:** 3/3 complete
-**Status:** Phase 9 verified, ready for Phase 10
-**Last activity:** 2026-04-07 -- Phase 9 verified (4/4 must-haves passed)
+**Phase:** 10 of 12 (Guide Variants)
+**Plan:** 1/3 complete
+**Status:** In progress -- Plan 10-01 complete, ready for 10-02
+**Last activity:** 2026-04-12 -- Completed 10-01-PLAN.md (guide factory extension)
 
-Progress: [██░░░░░░░░] 25% (1/4 phases)
+Progress: [████░░░░░░] 33% (1.3/4 phases)
 
 ## Decisions
 
@@ -32,6 +32,7 @@ Progress: [██░░░░░░░░] 25% (1/4 phases)
 | No regressors stored in rDCM fixtures | Runners call create_regressors themselves; deterministic, saves space | 2026-04-07 |
 | Duration override from fixture metadata | Fixtures may be generated with full-mode params; runners must use fixture duration to avoid shape mismatches | 2026-04-07 |
 | PiecewiseConstantInput for fixture stimulus | task_dcm_model expects callable input_fn, not raw dict; fixtures must be wrapped | 2026-04-07 |
+| AutoIAFNormal hidden_dim as list | Pyro's AutoRegressiveNN iterates over hidden_dims; int causes TypeError | 2026-04-12 |
 
 See STATE.md v0.1.0 decisions in git history.
 
@@ -49,9 +50,9 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-04-07
-Stopped at: Phase 9 verified, ready for Phase 10
+Last session: 2026-04-12
+Stopped at: Completed 10-01-PLAN.md (guide factory extension)
 Resume file: None
 
 ---
-*Last updated: 2026-04-07 after Phase 9 verification*
+*Last updated: 2026-04-12 after Plan 10-01 execution*
