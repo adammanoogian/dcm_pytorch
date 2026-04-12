@@ -1,15 +1,16 @@
 """Guide factory, SVI runner, and posterior extraction for Pyro DCM models.
 
 Provides shared inference infrastructure for all three DCM variants:
-task-based, spectral, and regression. The guide factory wraps
-``AutoNormal`` with appropriate initialization, the SVI runner handles
-``ClippedAdam`` with gradient clipping, learning rate decay, and NaN
-detection, and the posterior extraction helper simplifies retrieval
-of variational parameters.
+task-based, spectral, and regression. The guide factory supports six
+Pyro ``AutoGuide`` types via a string-based registry, the SVI runner
+handles ``ClippedAdam`` with gradient clipping, learning rate decay,
+and NaN detection, and the posterior extraction helper simplifies
+retrieval of variational parameters.
 
 References
 ----------
 04-RESEARCH.md -- Pyro patterns, pitfalls, and configuration.
+10-RESEARCH.md -- Guide variant init_scale asymmetry and blocklists.
 """
 
 from __future__ import annotations
@@ -21,57 +22,153 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI, Trace_ELBO
-from pyro.infer.autoguide import AutoNormal
+from pyro.infer.autoguide import (
+    AutoDelta,
+    AutoGuide,
+    AutoIAFNormal,
+    AutoLaplaceApproximation,
+    AutoLowRankMultivariateNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+)
 from pyro.optim import ClippedAdam
+
+
+GUIDE_REGISTRY: dict[str, type[AutoGuide]] = {
+    "auto_delta": AutoDelta,
+    "auto_normal": AutoNormal,
+    "auto_lowrank_mvn": AutoLowRankMultivariateNormal,
+    "auto_mvn": AutoMultivariateNormal,
+    "auto_iaf": AutoIAFNormal,
+    "auto_laplace": AutoLaplaceApproximation,
+}
+"""Mapping of guide type keys to Pyro AutoGuide classes."""
+
+_INIT_SCALE_GUIDES: set[str] = {
+    "auto_normal",
+    "auto_lowrank_mvn",
+    "auto_mvn",
+}
+"""Guide types that accept an ``init_scale`` constructor argument."""
+
+MEAN_FIELD_GUIDES: set[str] = {"auto_delta", "auto_normal"}
+"""Guide types compatible with ``TraceMeanField_ELBO``."""
+
+_MAX_REGIONS: dict[str, int] = {
+    "auto_mvn": 7,
+}
+"""Maximum allowed ``n_regions`` per guide type (inclusive)."""
 
 
 def create_guide(
     model: Callable[..., Any],
+    *,
+    guide_type: str = "auto_normal",
     init_scale: float = 0.01,
-) -> AutoNormal:
-    """Create an AutoNormal mean-field guide for a Pyro model.
+    n_regions: int | None = None,
+    **kwargs: Any,
+) -> AutoGuide:
+    """Create a Pyro AutoGuide for a DCM model.
 
-    Creates a diagonal Gaussian (mean-field) variational guide using
-    Pyro's ``AutoNormal``. Each latent variable gets independent
-    ``loc`` and ``scale`` variational parameters.
-
-    The ``init_scale`` parameter controls the initial width of guide
-    distributions. A small value (0.01) starts the guide tight around
-    zero, preventing ODE blow-up from extreme initial ``A_free``
-    samples during SVI (see 04-RESEARCH.md Pitfall 1).
+    Factory that instantiates one of six supported guide types with
+    appropriate constructor arguments. Handles ``init_scale`` asymmetry
+    (only passed to guides that accept it) and enforces an N-based
+    blocklist to prevent memory explosion with full-covariance guides
+    on large models.
 
     Parameters
     ----------
     model : callable
         Pyro model function (e.g., ``task_dcm_model``,
         ``spectral_dcm_model``, ``rdcm_model``).
+    guide_type : str, optional
+        Guide variant key. One of ``'auto_delta'``,
+        ``'auto_normal'`` (default), ``'auto_lowrank_mvn'``,
+        ``'auto_mvn'``, ``'auto_iaf'``, ``'auto_laplace'``.
     init_scale : float, optional
-        Initial scale for guide distributions. Default 0.01.
+        Initial scale for guide distributions. Only passed to
+        ``auto_normal``, ``auto_lowrank_mvn``, and ``auto_mvn``.
+        Default 0.01.
+    n_regions : int or None, optional
+        Number of brain regions. Used for blocklist enforcement.
+        When provided, ``auto_mvn`` is blocked at ``n_regions >= 8``
+        to prevent memory explosion. Default None (no check).
+    **kwargs
+        Extra keyword arguments forwarded to the guide constructor.
+        Useful overrides:
+
+        - ``rank`` (int): for ``auto_lowrank_mvn``, default 2.
+        - ``num_transforms`` (int): for ``auto_iaf``, default 2.
+        - ``hidden_dim`` (int): for ``auto_iaf``, default 20.
 
     Returns
     -------
-    AutoNormal
-        Pyro ``AutoNormal`` guide instance.
+    AutoGuide
+        Pyro guide instance of the requested type.
+
+    Raises
+    ------
+    ValueError
+        If ``guide_type`` is not in ``GUIDE_REGISTRY``, or if
+        ``n_regions`` exceeds the blocklist limit for the requested
+        guide type.
 
     Notes
     -----
-    ``AutoNormal`` creates independent Normal variational distributions
-    for each latent variable, with learnable ``loc`` (mean) and
-    ``scale`` (standard deviation) parameters. This is a mean-field
-    approximation that ignores posterior correlations but is fast and
-    numerically stable.
-
     The ``init_scale=0.01`` default is critical for ODE-based models
     (task DCM, spectral DCM): starting with larger scales can produce
     A matrices with large positive eigenvalues, causing ODE blow-up
-    during the first SVI steps.
+    during the first SVI steps (see 04-RESEARCH.md Pitfall 1).
+
+    ``AutoDelta``, ``AutoIAFNormal``, and ``AutoLaplaceApproximation``
+    do not accept ``init_scale``; it is silently ignored for those
+    guide types.
 
     Examples
     --------
     >>> from pyro_dcm.models import task_dcm_model, create_guide
     >>> guide = create_guide(task_dcm_model, init_scale=0.01)
+    >>> iaf = create_guide(task_dcm_model, guide_type='auto_iaf')
     """
-    return AutoNormal(model, init_scale=init_scale)
+    # Validate guide_type
+    if guide_type not in GUIDE_REGISTRY:
+        valid = sorted(GUIDE_REGISTRY.keys())
+        msg = (
+            f"Unknown guide_type {guide_type!r}. "
+            f"Available: {valid}"
+        )
+        raise ValueError(msg)
+
+    # Blocklist check
+    if n_regions is not None and guide_type in _MAX_REGIONS:
+        max_n = _MAX_REGIONS[guide_type]
+        if n_regions > max_n:
+            msg = (
+                f"guide_type {guide_type!r} is blocked for "
+                f"n_regions={n_regions} (max {max_n}). "
+                f"Use 'auto_lowrank_mvn' instead."
+            )
+            raise ValueError(msg)
+
+    # Build constructor kwargs
+    ctor_kwargs: dict[str, Any] = {}
+
+    if guide_type in _INIT_SCALE_GUIDES:
+        ctor_kwargs["init_scale"] = init_scale
+
+    if guide_type == "auto_lowrank_mvn":
+        ctor_kwargs["rank"] = kwargs.pop("rank", 2)
+
+    if guide_type == "auto_iaf":
+        ctor_kwargs["num_transforms"] = kwargs.pop(
+            "num_transforms", 2,
+        )
+        ctor_kwargs["hidden_dim"] = kwargs.pop("hidden_dim", 20)
+
+    # Pass remaining kwargs through
+    ctor_kwargs.update(kwargs)
+
+    return GUIDE_REGISTRY[guide_type](model, **ctor_kwargs)
 
 
 def run_svi(
@@ -180,10 +277,10 @@ def run_svi(
 
 
 def extract_posterior_params(
-    guide: AutoNormal,
+    guide: AutoGuide,
     model_args: tuple[Any, ...],
 ) -> dict[str, Any]:
-    """Extract posterior parameters from a trained AutoNormal guide.
+    """Extract posterior parameters from a trained AutoGuide.
 
     Retrieves the variational median (posterior mode approximation)
     and all learned guide parameters (locs and scales) from Pyro's
@@ -191,8 +288,9 @@ def extract_posterior_params(
 
     Parameters
     ----------
-    guide : AutoNormal
-        Trained ``AutoNormal`` guide instance.
+    guide : AutoGuide
+        Trained Pyro guide instance (any type from
+        ``GUIDE_REGISTRY``).
     model_args : tuple
         Arguments to the model (needed for ``guide.median()``).
 
