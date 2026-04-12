@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Milestone:** v0.2.0 Cross-Backend Inference Benchmarking
 **Phase:** 10 of 12 (Guide Variants)
-**Plan:** 1/3 complete
-**Status:** In progress -- Plan 10-01 complete, ready for 10-02
-**Last activity:** 2026-04-12 -- Completed 10-01-PLAN.md (guide factory extension)
+**Plan:** 2/3 complete
+**Status:** In progress -- Plan 10-02 complete, ready for 10-03
+**Last activity:** 2026-04-12 -- Completed 10-02-PLAN.md (ELBO variant plumbing)
 
-Progress: [████░░░░░░] 33% (1.3/4 phases)
+Progress: [█████░░░░░] 50% (2/4 phases)
 
 ## Decisions
 
@@ -33,6 +33,9 @@ Progress: [████░░░░░░] 33% (1.3/4 phases)
 | Duration override from fixture metadata | Fixtures may be generated with full-mode params; runners must use fixture duration to avoid shape mismatches | 2026-04-07 |
 | PiecewiseConstantInput for fixture stimulus | task_dcm_model expects callable input_fn, not raw dict; fixtures must be wrapped | 2026-04-07 |
 | AutoIAFNormal hidden_dim as list | Pyro's AutoRegressiveNN iterates over hidden_dims; int causes TypeError | 2026-04-12 |
+| ELBO_REGISTRY string-keyed dispatch | Consistent with GUIDE_REGISTRY; extensible, no enum overhead | 2026-04-12 |
+| RenyiELBO alpha=0.5, min 2 particles | Standard midpoint alpha; 2 particles is minimum for valid Renyi gradients | 2026-04-12 |
+| Post-Laplace guide in result["guide"] | Users need AutoMVN for posterior queries, not the MAP guide | 2026-04-12 |
 
 See STATE.md v0.1.0 decisions in git history.
 
@@ -51,8 +54,8 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-12
-Stopped at: Completed 10-01-PLAN.md (guide factory extension)
+Stopped at: Completed 10-02-PLAN.md (ELBO variant plumbing)
 Resume file: None
 
 ---
-*Last updated: 2026-04-12 after Plan 10-01 execution*
+*Last updated: 2026-04-12 after Plan 10-02 execution*
