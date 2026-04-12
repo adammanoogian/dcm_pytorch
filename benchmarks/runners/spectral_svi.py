@@ -163,27 +163,39 @@ def run_spectral_svi(config: BenchmarkConfig) -> dict[str, Any]:
 
             # SVI
             guide = create_guide(
-                spectral_dcm_model, init_scale=0.01,
+                spectral_dcm_model,
+                init_scale=0.01,
+                guide_type=config.guide_type,
+                n_regions=N,
             )
             t0 = time.time()
             svi_result = run_svi(
                 spectral_dcm_model, guide, model_args,
                 num_steps=num_steps, lr=0.01,
                 clip_norm=10.0, lr_decay_factor=0.1,
+                elbo_type=config.elbo_type,
+                guide_type=config.guide_type,
             )
             elapsed = time.time() - t0
 
-            # Posterior
-            posterior = extract_posterior_params(guide, model_args)
-            A_free_median = posterior["median"]["A_free"]
-            A_inferred = parameterize_A(A_free_median)
+            # Use post-Laplace guide if available
+            extract_guide = svi_result.get("guide", guide)
 
-            # 95% CI via quantiles
-            quantiles = guide.quantiles(
-                [0.025, 0.975], *model_args,
+            # Posterior via Predictive sampling
+            posterior = extract_posterior_params(
+                extract_guide, model_args,
             )
-            A_free_lo = quantiles["A_free"][0]
-            A_free_hi = quantiles["A_free"][1]
+            A_free_mean = posterior["A_free"]["mean"]
+            A_inferred = parameterize_A(A_free_mean)
+
+            # 95% CI via sample-based quantiles
+            A_free_samples = posterior["A_free"]["samples"]
+            A_free_lo = torch.quantile(
+                A_free_samples.float(), 0.025, dim=0,
+            )
+            A_free_hi = torch.quantile(
+                A_free_samples.float(), 0.975, dim=0,
+            )
             A_lo, A_hi = _build_A_ci(A_free_lo, A_free_hi, N)
 
             # Metrics

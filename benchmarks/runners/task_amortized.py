@@ -37,7 +37,12 @@ from pyro_dcm.guides import (
     BoldSummaryNet,
     TaskDCMPacker,
 )
-from pyro_dcm.models import create_guide, run_svi, task_dcm_model
+from pyro_dcm.models import (
+    create_guide,
+    extract_posterior_params,
+    run_svi,
+    task_dcm_model,
+)
 from pyro_dcm.models.amortized_wrappers import amortized_task_dcm_model
 from pyro_dcm.simulators.task_simulator import (
     make_block_stimulus,
@@ -398,18 +403,28 @@ def run_task_amortized(config: BenchmarkConfig) -> dict[str, Any]:
                 )
 
                 svi_guide = create_guide(
-                    task_dcm_model, init_scale=0.01,
+                    task_dcm_model,
+                    init_scale=0.01,
+                    guide_type=config.guide_type,
+                    n_regions=N,
                 )
                 t0 = time.time()
                 svi_result = run_svi(
                     task_dcm_model, svi_guide, model_args,
                     num_steps=200, lr=0.005,
                     clip_norm=10.0, lr_decay_factor=0.01,
+                    elbo_type=config.elbo_type,
+                    guide_type=config.guide_type,
                 )
                 svi_elapsed = time.time() - t0
 
-                svi_median = svi_guide.median(*model_args)
-                svi_A_free = svi_median.get(
+                svi_extract = svi_result.get(
+                    "guide", svi_guide,
+                )
+                svi_post = extract_posterior_params(
+                    svi_extract, model_args,
+                )
+                svi_A_free = svi_post["median"].get(
                     "A_free",
                     torch.zeros(N, N, dtype=torch.float64),
                 )
