@@ -13,11 +13,13 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import matplotlib
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 
 # ---------------------------------------------------------------------------
 # Style configuration
@@ -1291,6 +1293,321 @@ def _extract_metric_values(
             t = data.get("amort_time_list")
         return t
     return None
+
+
+def plot_posterior_violins(
+    posterior_samples: dict[str, torch.Tensor],
+    A_true: torch.Tensor,
+    output_dir: str,
+    formats: tuple[str, ...] = ("png",),
+) -> None:
+    """Plot per-A_ij violin overlay across guide types.
+
+    Creates an NxN grid of subplots (one per A matrix element). Each
+    subplot shows one violin per guide type, allowing visual comparison
+    of posterior distributions. Ground truth is marked with a horizontal
+    dashed red line.
+
+    Parameters
+    ----------
+    posterior_samples : dict[str, torch.Tensor]
+        Mapping from guide type label to A parameter samples tensor
+        of shape ``(S, N, N)`` where S is number of samples.
+        **Must be in parameterized A space** (not A_free space).
+        Caller is responsible for applying ``parameterize_A`` before
+        passing samples.
+    A_true : torch.Tensor
+        Ground truth A matrix, shape ``(N, N)``.
+    output_dir : str
+        Directory for saving the figure.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
+
+    Notes
+    -----
+    Samples must be in parameterized A space (diagonal elements are
+    negative via ``a_ii = -exp(A_free_ii) / 2``). Apply
+    ``parameterize_A`` to each A_free sample before passing.
+    """
+    _apply_style()
+
+    # Determine N from A_true
+    N = A_true.shape[0]
+    guide_types = list(posterior_samples.keys())
+    n_guides = len(guide_types)
+
+    if n_guides == 0:
+        print("No posterior samples for violin plot -- skipping")
+        return
+
+    fig, axes = plt.subplots(
+        N, N, figsize=(3 * N + 2, 3 * N),
+        dpi=150, squeeze=False,
+    )
+
+    for i in range(N):
+        for j in range(N):
+            ax = axes[i, j]
+            data_list = []
+            colors = []
+
+            for gt in guide_types:
+                samples = posterior_samples[gt]
+                if isinstance(samples, torch.Tensor):
+                    vals = samples[:, i, j].detach().cpu().numpy()
+                else:
+                    vals = np.array(samples)[:, i, j]
+                data_list.append(vals)
+                colors.append(
+                    GUIDE_COLORS.get(gt, "#333333"),
+                )
+
+            if data_list:
+                parts = ax.violinplot(
+                    data_list,
+                    positions=list(range(n_guides)),
+                    showmeans=False,
+                    showmedians=True,
+                )
+                # Color each violin body
+                for idx, body in enumerate(
+                    parts.get("bodies", []),
+                ):
+                    body.set_facecolor(colors[idx])
+                    body.set_alpha(0.7)
+
+            # Ground truth horizontal dashed red line
+            true_val = float(A_true[i, j])
+            ax.axhline(
+                true_val, color="red", linestyle="--",
+                linewidth=1.5, alpha=0.8,
+                label="Ground truth" if (i == 0 and j == 0) else None,
+            )
+
+            ax.set_title(f"A[{i},{j}]", fontsize=9)
+            ax.set_xticks(list(range(n_guides)))
+            ax.set_xticklabels(
+                [GUIDE_LABELS.get(gt, gt) for gt in guide_types],
+                fontsize=6, rotation=45, ha="right",
+            )
+
+    fig.suptitle(
+        f"Posterior Violins (N={N})", fontsize=13, y=1.01,
+    )
+    fig.tight_layout()
+
+    fname = f"posterior_violins_N{N}"
+    _save_figure(fig, os.path.join(output_dir, fname), formats)
+
+
+def plot_pareto_frontier(
+    results: dict,
+    output_dir: str,
+    n_regions: int = 3,
+    formats: tuple[str, ...] = ("png",),
+) -> None:
+    """Plot wall-time vs RMSE scatter with Pareto front overlay.
+
+    X-axis is median wall time (log scale), Y-axis is median RMSE.
+    One scatter point per (guide_type, variant) combination at the
+    given network size. Error bars show IQR on both axes. Pareto-
+    optimal points are connected with a dashed line.
+
+    Parameters
+    ----------
+    results : dict
+        Calibration results loaded from JSON.
+    output_dir : str
+        Directory for saving the figure.
+    n_regions : int, optional
+        Network size to plot. Default 3.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
+    """
+    _apply_style()
+
+    # Marker shapes by variant
+    variant_markers: dict[str, str] = {
+        "task": "o",
+        "spectral": "s",
+        "rdcm_rigid": "^",
+        "rdcm_sparse": "v",
+    }
+
+    # Collect scatter data
+    points: list[dict[str, Any]] = []
+    for key, val in results.items():
+        parsed = _parse_calibration_key(key)
+        if parsed is None:
+            continue
+        if parsed["n_regions"] != str(n_regions):
+            continue
+        if not isinstance(val, dict):
+            continue
+
+        time_list = val.get("time_list")
+        if time_list is None:
+            time_list = val.get("amort_time_list")
+        rmse_list = val.get("rmse_list")
+
+        if not time_list or not rmse_list:
+            continue
+
+        t_arr = np.array(time_list)
+        r_arr = np.array(rmse_list)
+
+        points.append({
+            "variant": parsed["variant"],
+            "guide_type": parsed["guide_type"],
+            "time_med": float(np.median(t_arr)),
+            "time_q25": float(np.percentile(t_arr, 25)),
+            "time_q75": float(np.percentile(t_arr, 75)),
+            "rmse_med": float(np.median(r_arr)),
+            "rmse_q25": float(np.percentile(r_arr, 25)),
+            "rmse_q75": float(np.percentile(r_arr, 75)),
+        })
+
+    if not points:
+        print(
+            f"No data for Pareto frontier at N={n_regions} "
+            "-- skipping"
+        )
+        return
+
+    fig, ax = plt.subplots(figsize=(9, 6), dpi=150)
+
+    for pt in points:
+        color = GUIDE_COLORS.get(pt["guide_type"], "#333333")
+        marker = variant_markers.get(pt["variant"], "o")
+        label = (
+            f"{GUIDE_LABELS.get(pt['guide_type'], pt['guide_type'])}"
+            f" ({_VARIANT_LABELS.get(pt['variant'], pt['variant'])})"
+        )
+
+        ax.errorbar(
+            pt["time_med"], pt["rmse_med"],
+            xerr=[
+                [pt["time_med"] - pt["time_q25"]],
+                [pt["time_q75"] - pt["time_med"]],
+            ],
+            yerr=[
+                [pt["rmse_med"] - pt["rmse_q25"]],
+                [pt["rmse_q75"] - pt["rmse_med"]],
+            ],
+            color=color, marker=marker, markersize=8,
+            capsize=3, linewidth=0, elinewidth=1.0,
+            label=label, zorder=3,
+        )
+
+    # Compute and draw Pareto front
+    sorted_pts = sorted(points, key=lambda p: p["time_med"])
+    pareto: list[dict[str, Any]] = []
+    best_rmse = float("inf")
+    for pt in sorted_pts:
+        if pt["rmse_med"] < best_rmse:
+            pareto.append(pt)
+            best_rmse = pt["rmse_med"]
+
+    if len(pareto) >= 2:
+        px = [p["time_med"] for p in pareto]
+        py = [p["rmse_med"] for p in pareto]
+        ax.plot(
+            px, py, "k--", linewidth=1.0,
+            alpha=0.6, label="Pareto front", zorder=2,
+        )
+
+    ax.set_xscale("log")
+    ax.set_xlabel("Median wall time (s, log scale)")
+    ax.set_ylabel("Median RMSE(A)")
+    ax.set_title(
+        f"Pareto Frontier: Wall Time vs RMSE (N={n_regions})",
+    )
+    ax.legend(
+        loc="upper right", fontsize=7,
+        bbox_to_anchor=(1.0, 1.0),
+    )
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+
+    fname = f"pareto_frontier_N{n_regions}"
+    _save_figure(fig, os.path.join(output_dir, fname), formats)
+
+
+def plot_timing_breakdown(
+    timing_data: dict[str, dict[str, float]],
+    output_dir: str,
+    formats: tuple[str, ...] = ("png",),
+) -> None:
+    """Plot stacked horizontal bar chart of SVI step timing components.
+
+    Each bar represents one guide type, decomposed into forward model
+    (blue), guide evaluation (orange), and gradient/backward (green)
+    percentages.
+
+    Parameters
+    ----------
+    timing_data : dict[str, dict[str, float]]
+        Mapping from guide type to timing profile with keys
+        ``"forward_pct"``, ``"guide_pct"``, ``"gradient_pct"``.
+    output_dir : str
+        Directory for saving the figure.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
+    """
+    _apply_style()
+
+    guide_types = list(timing_data.keys())
+    if not guide_types:
+        print("No timing data for breakdown plot -- skipping")
+        return
+
+    labels = [
+        GUIDE_LABELS.get(gt, gt) for gt in guide_types
+    ]
+    forward_pcts = [
+        timing_data[gt]["forward_pct"] for gt in guide_types
+    ]
+    guide_pcts = [
+        timing_data[gt]["guide_pct"] for gt in guide_types
+    ]
+    gradient_pcts = [
+        timing_data[gt]["gradient_pct"] for gt in guide_types
+    ]
+
+    y_pos = np.arange(len(guide_types))
+
+    fig, ax = plt.subplots(figsize=(10, 5), dpi=150)
+
+    ax.barh(
+        y_pos, forward_pcts,
+        color="#1f77b4", label="Forward model",
+    )
+    ax.barh(
+        y_pos, guide_pcts, left=forward_pcts,
+        color="#ff7f0e", label="Guide evaluation",
+    )
+    left_for_grad = [
+        f + g for f, g in zip(forward_pcts, guide_pcts)
+    ]
+    ax.barh(
+        y_pos, gradient_pcts, left=left_for_grad,
+        color="#2ca02c", label="Gradient/backward",
+    )
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(labels, fontsize=9)
+    ax.set_xlabel("Percentage of total step time")
+    ax.set_title("SVI Step Timing Breakdown by Guide Type")
+    ax.legend(loc="lower right", fontsize=8)
+    ax.set_xlim(0, 105)
+    ax.grid(axis="x", alpha=0.3)
+    fig.tight_layout()
+
+    _save_figure(
+        fig,
+        os.path.join(output_dir, "timing_breakdown"),
+        formats,
+    )
 
 
 def generate_all_figures(
