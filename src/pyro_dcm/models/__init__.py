@@ -11,6 +11,7 @@ from pyro_dcm.models.spectral_dcm_model import (
 )
 from pyro_dcm.models.rdcm_model import rdcm_model
 from pyro_dcm.models.guides import (
+    ELBO_REGISTRY,
     GUIDE_REGISTRY,
     MEAN_FIELD_GUIDES,
     create_guide,
@@ -25,6 +26,7 @@ __all__ = [
     "spectral_dcm_model",
     "decompose_csd_for_likelihood",
     "rdcm_model",
+    "ELBO_REGISTRY",
     "GUIDE_REGISTRY",
     "MEAN_FIELD_GUIDES",
     "create_guide",

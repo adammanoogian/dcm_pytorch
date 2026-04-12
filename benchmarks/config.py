@@ -38,13 +38,16 @@ class BenchmarkConfig:
     figure_dir : str
         Directory for saving figures.
     guide_type : str
-        Guide type for inference. Default ``"mean_field"`` uses
-        ``AutoNormal``.
+        Guide type for inference. Uses string keys matching
+        ``GUIDE_REGISTRY`` in ``guides.py``: ``"auto_normal"``
+        (default), ``"auto_delta"``, ``"auto_lowrank_mvn"``,
+        ``"auto_mvn"``, ``"auto_iaf"``, ``"auto_laplace"``.
     n_regions_list : list[int]
         List of network sizes to benchmark.
     elbo_type : str
-        ELBO objective type (``"trace"``, future: ``"mean_field"``,
-        ``"renyi"``).
+        ELBO objective type. Uses string keys matching
+        ``ELBO_REGISTRY`` in ``guides.py``: ``"trace_elbo"``
+        (default), ``"tracemeanfield_elbo"``, ``"renyi_elbo"``.
     fixtures_dir : str or None
         Path to shared fixtures directory. ``None`` means inline
         generation (v0.1.0 behavior).
@@ -60,9 +63,9 @@ class BenchmarkConfig:
     output_dir: str = "benchmarks/results"
     save_figures: bool = True
     figure_dir: str = "figures"
-    guide_type: str = "mean_field"
+    guide_type: str = "auto_normal"
     n_regions_list: list[int] = field(default_factory=lambda: [3])
-    elbo_type: str = "trace"
+    elbo_type: str = "trace_elbo"
     fixtures_dir: str | None = None
 
     @classmethod

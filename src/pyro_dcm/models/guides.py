@@ -4,8 +4,9 @@ Provides shared inference infrastructure for all three DCM variants:
 task-based, spectral, and regression. The guide factory supports six
 Pyro ``AutoGuide`` types via a string-based registry, the SVI runner
 handles ``ClippedAdam`` with gradient clipping, learning rate decay,
-and NaN detection, and the posterior extraction helper simplifies
-retrieval of variational parameters.
+NaN detection, and three ELBO variants (Trace, TraceMeanField, Renyi),
+and the posterior extraction helper simplifies retrieval of
+variational parameters.
 
 References
 ----------
@@ -21,7 +22,7 @@ import math
 import torch
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, Trace_ELBO, TraceMeanField_ELBO, RenyiELBO
 from pyro.infer.autoguide import (
     AutoDelta,
     AutoGuide,
@@ -58,6 +59,13 @@ _MAX_REGIONS: dict[str, int] = {
     "auto_mvn": 7,
 }
 """Maximum allowed ``n_regions`` per guide type (inclusive)."""
+
+ELBO_REGISTRY: dict[str, type] = {
+    "trace_elbo": Trace_ELBO,
+    "tracemeanfield_elbo": TraceMeanField_ELBO,
+    "renyi_elbo": RenyiELBO,
+}
+"""Mapping of ELBO type keys to Pyro ELBO classes."""
 
 
 def create_guide(
@@ -184,12 +192,14 @@ def run_svi(
     clip_norm: float = 10.0,
     lr_decay_factor: float = 0.01,
     num_particles: int = 1,
+    elbo_type: str = "trace_elbo",
+    guide_type: str | None = None,
 ) -> dict[str, Any]:
     """Run SVI optimization for a Pyro model/guide pair.
 
     Trains the variational guide to approximate the posterior using
     stochastic variational inference with ``ClippedAdam`` optimizer,
-    ``Trace_ELBO`` loss, gradient clipping, and exponential learning
+    configurable ELBO loss, gradient clipping, and exponential learning
     rate decay.
 
     Parameters
@@ -211,6 +221,16 @@ def run_svi(
         full training run. Default 0.01 (decay to 1% of initial lr).
     num_particles : int, optional
         Number of ELBO particles for gradient estimation. Default 1.
+    elbo_type : str, optional
+        ELBO objective key. One of ``'trace_elbo'`` (default),
+        ``'tracemeanfield_elbo'``, or ``'renyi_elbo'``.
+        ``'renyi_elbo'`` uses ``alpha=0.5`` and forces
+        ``num_particles >= 2``.
+    guide_type : str or None, optional
+        Guide type key (e.g., ``'auto_normal'``). Used for
+        validation: ``'tracemeanfield_elbo'`` requires a mean-field
+        guide (``'auto_delta'`` or ``'auto_normal'``). Default None
+        (no validation).
 
     Returns
     -------
@@ -220,9 +240,14 @@ def run_svi(
         - ``'losses'``: list of float, ELBO loss at each step.
         - ``'final_loss'``: float, loss at last step.
         - ``'num_steps'``: int, number of steps completed.
+        - ``'guide'``: (only for ``guide_type='auto_laplace'``)
+          Post-Laplace ``AutoMultivariateNormal`` guide.
 
     Raises
     ------
+    ValueError
+        If ``elbo_type`` is not in ``ELBO_REGISTRY``, or if
+        ``'tracemeanfield_elbo'`` is used with a non-mean-field guide.
     RuntimeError
         If ELBO becomes NaN at any step.
 
@@ -246,6 +271,28 @@ def run_svi(
     ... )
     >>> print(f"Final loss: {result['final_loss']:.2f}")
     """
+    # Validate elbo_type
+    if elbo_type not in ELBO_REGISTRY:
+        valid = sorted(ELBO_REGISTRY.keys())
+        msg = (
+            f"Unknown elbo_type {elbo_type!r}. "
+            f"Available: {valid}"
+        )
+        raise ValueError(msg)
+
+    # Mean-field guard
+    if (
+        elbo_type == "tracemeanfield_elbo"
+        and guide_type is not None
+        and guide_type not in MEAN_FIELD_GUIDES
+    ):
+        msg = (
+            f"TraceMeanField_ELBO requires a mean-field guide "
+            f"(auto_delta or auto_normal), got {guide_type!r}. "
+            f"Use 'trace_elbo' or 'renyi_elbo' instead."
+        )
+        raise ValueError(msg)
+
     pyro.clear_param_store()
 
     # Per-step multiplicative LR decay
@@ -257,10 +304,20 @@ def run_svi(
         "lrd": lrd,
     })
 
-    elbo = Trace_ELBO(
-        num_particles=num_particles,
-        vectorize_particles=(num_particles > 1),
-    )
+    # Build ELBO object
+    if elbo_type == "renyi_elbo":
+        renyi_particles = max(num_particles, 2)
+        elbo = RenyiELBO(
+            alpha=0.5,
+            num_particles=renyi_particles,
+            vectorize_particles=(renyi_particles > 1),
+        )
+    else:
+        elbo_cls = ELBO_REGISTRY[elbo_type]
+        elbo = elbo_cls(
+            num_particles=num_particles,
+            vectorize_particles=(num_particles > 1),
+        )
 
     svi = SVI(model, guide, optimizer, loss=elbo)
 
@@ -273,11 +330,19 @@ def run_svi(
             msg = f"NaN ELBO at step {step}"
             raise RuntimeError(msg)
 
-    return {
+    # Post-process AutoLaplaceApproximation
+    post_guide = None
+    if guide_type == "auto_laplace":
+        post_guide = guide.laplace_approximation(*model_args)
+
+    result: dict[str, Any] = {
         "losses": losses,
         "final_loss": losses[-1],
         "num_steps": num_steps,
     }
+    if post_guide is not None:
+        result["guide"] = post_guide
+    return result
 
 
 def extract_posterior_params(
