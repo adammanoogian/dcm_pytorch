@@ -20,11 +20,11 @@ Requirements for Cross-Backend Inference Benchmarking. Each maps to roadmap phas
 
 ### Calibration Analysis
 
-- [ ] **CAL-01**: Per-parameter coverage calibration curves showing expected vs observed coverage at 50%, 75%, 90%, 95% nominal levels for each guide type
-- [ ] **CAL-02**: Network size scaling benchmarks at 3 and 5 regions for all guides, 10 regions for mean-field and rDCM only
-- [ ] **CAL-03**: Cross-method comparison table: 6+ methods x 3 variants x 3 sizes reporting RMSE, coverage@90%, Pearson correlation, and wall time
-- [ ] **CAL-04**: Per-parameter posterior comparison plots (violin or ridge overlay of all methods per A_ij element)
-- [ ] **CAL-05**: Wall-clock timing breakdown (ODE/CSD forward, guide evaluation, gradient) and Pareto frontier (wall-time vs RMSE)
+- [x] **CAL-01**: Per-parameter coverage calibration curves showing expected vs observed coverage at 50%, 75%, 90%, 95% nominal levels for each guide type
+- [x] **CAL-02**: Network size scaling benchmarks at 3 and 5 regions for all guides, 10 regions for mean-field and rDCM only
+- [x] **CAL-03**: Cross-method comparison table: 6+ methods x 3 variants x 3 sizes reporting RMSE, coverage@90%, Pearson correlation, and wall time
+- [x] **CAL-04**: Per-parameter posterior comparison plots (violin or ridge overlay of all methods per A_ij element)
+- [x] **CAL-05**: Wall-clock timing breakdown (ODE/CSD forward, guide evaluation, gradient) and Pareto frontier (wall-time vs RMSE)
 
 ### Documentation
 
@@ -79,11 +79,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BENCH-01 | Phase 9 | Complete |
 | BENCH-02 | Phase 9 | Complete |
 | BENCH-03 | Phase 9 | Complete |
-| CAL-01 | Phase 11 | Pending |
-| CAL-02 | Phase 11 | Pending |
-| CAL-03 | Phase 11 | Pending |
-| CAL-04 | Phase 11 | Pending |
-| CAL-05 | Phase 11 | Pending |
+| CAL-01 | Phase 11 | Complete |
+| CAL-02 | Phase 11 | Complete |
+| CAL-03 | Phase 11 | Complete |
+| CAL-04 | Phase 11 | Complete |
+| CAL-05 | Phase 11 | Complete |
 | DOC-01 | Phase 12 | Pending |
 | DOC-02 | Phase 12 | Pending |
 
@@ -94,4 +94,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-04-07*
-*Last updated: 2026-04-12 after Phase 10 completion*
+*Last updated: 2026-04-12 after Phase 11 completion*

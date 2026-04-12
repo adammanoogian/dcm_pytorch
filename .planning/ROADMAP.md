@@ -31,7 +31,7 @@ and produce a practical recommendation guide for DCM users.
 
 - [x] **Phase 9: Benchmark Foundation** - Shared fixtures, extended config, amortization gap fix
 - [x] **Phase 10: Guide Variants** - 6 guide types in create_guide factory, ELBO variant comparison
-- [ ] **Phase 11: Calibration Analysis** - Coverage curves, scaling study, comparison table, timing, plots
+- [x] **Phase 11: Calibration Analysis** - Coverage curves, scaling study, comparison table, timing, plots
 - [ ] **Phase 12: Documentation** - Recommendation guide and updated benchmark narrative
 
 ## Phase Details
@@ -76,7 +76,11 @@ Plans:
   3. Cross-method comparison table reports RMSE, coverage@90%, Pearson correlation, and wall time for 6+ methods x 3 variants x 3 sizes, with results never aggregated across DCM variants
   4. Per-parameter posterior comparison plots (violin or ridge) overlay all methods per A_ij element for a representative dataset, with ground truth marked
   5. Wall-clock timing breakdown (forward model, guide evaluation, gradient) and Pareto frontier (wall-time vs RMSE) are generated, reporting median+IQR not just means
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [x] 11-01-PLAN.md -- Extended metrics + multi-level coverage + calibration sweep orchestrator
+- [x] 11-02-PLAN.md -- Calibration curve plotting + comparison table + scaling study
+- [x] 11-03-PLAN.md -- Violin plots + timing profiler + Pareto frontier
 
 ### Phase 12: Documentation
 **Goal**: Users can select the right guide for their use case from a decision tree, and the benchmark narrative contains real results
@@ -95,9 +99,9 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 9. Benchmark Foundation | v0.2.0 | 3/3 | Complete | 2026-04-07 |
 | 10. Guide Variants | v0.2.0 | 3/3 | Complete | 2026-04-12 |
-| 11. Calibration Analysis | v0.2.0 | 0/TBD | Not started | - |
+| 11. Calibration Analysis | v0.2.0 | 3/3 | Complete | 2026-04-12 |
 | 12. Documentation | v0.2.0 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-04-12*
+*Last updated: 2026-04-12 after Phase 11 completion*
