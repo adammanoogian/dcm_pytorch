@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Milestone:** v0.2.0 Cross-Backend Inference Benchmarking
 **Phase:** 11 of 12 (Calibration Analysis)
-**Plan:** 2/3 complete
-**Status:** In progress -- Plan 11-02 complete, ready for 11-03
-**Last activity:** 2026-04-12 -- Completed 11-02-PLAN.md (calibration figures + comparison tables)
+**Plan:** 3/3 complete
+**Status:** Phase 11 complete -- all calibration analysis delivered
+**Last activity:** 2026-04-12 -- Completed 11-03-PLAN.md (supplementary calibration analysis)
 
-Progress: [████████░░] 89% (8/9 plans)
+Progress: [█████████░] 100% (9/9 plans)
 
 ## Decisions
 
@@ -41,6 +41,8 @@ Progress: [████████░░] 89% (8/9 plans)
 | Default num_samples=1000 for extraction | Balances accuracy vs speed for standard posterior queries | 2026-04-12 |
 | Empirical quantiles for SVI, z-scores for rDCM | SVI posteriors may be non-Gaussian (IAF/flows); rDCM is analytic Gaussian | 2026-04-12 |
 | String keys for coverage_multi dicts in JSON | JSON does not support float keys; convert at serialization boundary | 2026-04-12 |
+| Spectral-only profiling in profile_all_guides | Fastest variant for profiling; task DCM requires fixture IO; extensible later | 2026-04-12 |
+| Exclude auto_delta from violin plots | Point estimate has no distribution to visualize; misleading violin | 2026-04-12 |
 
 See STATE.md v0.1.0 decisions in git history.
 
@@ -59,8 +61,8 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-12
-Stopped at: Completed 11-02-PLAN.md
+Stopped at: Completed 11-03-PLAN.md (Phase 11 complete)
 Resume file: None
 
 ---
-*Last updated: 2026-04-12 after Phase 11 Plan 02 completion*
+*Last updated: 2026-04-12 after Phase 11 Plan 03 completion*
