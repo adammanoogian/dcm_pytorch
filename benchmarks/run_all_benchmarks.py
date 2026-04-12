@@ -286,8 +286,14 @@ def main() -> None:
     parser.add_argument(
         "--guide-type",
         type=str,
-        default="mean_field",
-        help="Guide type for inference (default: mean_field)",
+        default="auto_normal",
+        help="Guide type for inference (default: auto_normal)",
+    )
+    parser.add_argument(
+        "--elbo-type",
+        type=str,
+        default="trace_elbo",
+        help="ELBO type for SVI (default: trace_elbo)",
     )
     parser.add_argument(
         "--n-regions",
@@ -338,6 +344,7 @@ def main() -> None:
         config.save_figures = not args.no_figures
         config.fixtures_dir = args.fixtures_dir
         config.guide_type = args.guide_type
+        config.elbo_type = args.elbo_type
         n_regions_list = [
             int(x) for x in args.n_regions.split(",")
         ]
