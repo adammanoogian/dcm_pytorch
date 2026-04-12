@@ -99,7 +99,8 @@ def create_guide(
 
         - ``rank`` (int): for ``auto_lowrank_mvn``, default 2.
         - ``num_transforms`` (int): for ``auto_iaf``, default 2.
-        - ``hidden_dim`` (int): for ``auto_iaf``, default 20.
+        - ``hidden_dim`` (int or list[int]): for ``auto_iaf``,
+          default ``[20]``. An int is wrapped in a list.
 
     Returns
     -------
@@ -163,7 +164,10 @@ def create_guide(
         ctor_kwargs["num_transforms"] = kwargs.pop(
             "num_transforms", 2,
         )
-        ctor_kwargs["hidden_dim"] = kwargs.pop("hidden_dim", 20)
+        hidden_dim = kwargs.pop("hidden_dim", [20])
+        if isinstance(hidden_dim, int):
+            hidden_dim = [hidden_dim]
+        ctor_kwargs["hidden_dim"] = hidden_dim
 
     # Pass remaining kwargs through
     ctor_kwargs.update(kwargs)
