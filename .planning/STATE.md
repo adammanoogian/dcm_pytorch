@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Milestone:** v0.2.0 Cross-Backend Inference Benchmarking
 **Phase:** 10 of 12 (Guide Variants)
-**Plan:** 2/3 complete
-**Status:** In progress -- Plan 10-02 complete, ready for 10-03
-**Last activity:** 2026-04-12 -- Completed 10-02-PLAN.md (ELBO variant plumbing)
+**Plan:** 3/3 complete
+**Status:** Phase 10 complete -- ready for Phase 11
+**Last activity:** 2026-04-12 -- Completed 10-03-PLAN.md (Predictive extraction + runner plumbing)
 
-Progress: [█████░░░░░] 50% (2/4 phases)
+Progress: [██████░░░░] 60% (3/4 phases -- Phase 10 complete)
 
 ## Decisions
 
@@ -36,6 +36,9 @@ Progress: [█████░░░░░] 50% (2/4 phases)
 | ELBO_REGISTRY string-keyed dispatch | Consistent with GUIDE_REGISTRY; extensible, no enum overhead | 2026-04-12 |
 | RenyiELBO alpha=0.5, min 2 particles | Standard midpoint alpha; 2 particles is minimum for valid Renyi gradients | 2026-04-12 |
 | Post-Laplace guide in result["guide"] | Users need AutoMVN for posterior queries, not the MAP guide | 2026-04-12 |
+| Predictive-based extraction over guide.median() | Guide-agnostic; works for all 6 guide types identically | 2026-04-12 |
+| Complex-site handling in extraction | Avoid float casting warning on complex predicted_csd | 2026-04-12 |
+| Default num_samples=1000 for extraction | Balances accuracy vs speed for standard posterior queries | 2026-04-12 |
 
 See STATE.md v0.1.0 decisions in git history.
 
@@ -54,8 +57,8 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-12
-Stopped at: Completed 10-02-PLAN.md (ELBO variant plumbing)
+Stopped at: Completed 10-03-PLAN.md (Predictive extraction + runner plumbing)
 Resume file: None
 
 ---
-*Last updated: 2026-04-12 after Plan 10-02 execution*
+*Last updated: 2026-04-12 after Plan 10-03 execution*
