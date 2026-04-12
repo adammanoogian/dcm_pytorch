@@ -89,7 +89,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. A decision tree guide exists that recommends a guide type given compute budget, network size, and DCM variant, with clear warnings about mean-field coverage ceilings and full-rank memory limits
   2. The benchmark narrative report has zero TBD entries -- all placeholders from v0.1.0 are replaced with v0.2.0 calibration results and method comparisons
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 12-01-PLAN.md -- Guide selection recommendation with decision tree (DOC-01)
+- [ ] 12-02-PLAN.md -- Updated benchmark narrative with zero TBDs (DOC-02)
 
 ## Progress
 
@@ -100,8 +103,8 @@ Plans:
 | 9. Benchmark Foundation | v0.2.0 | 3/3 | Complete | 2026-04-07 |
 | 10. Guide Variants | v0.2.0 | 3/3 | Complete | 2026-04-12 |
 | 11. Calibration Analysis | v0.2.0 | 3/3 | Complete | 2026-04-12 |
-| 12. Documentation | v0.2.0 | 0/TBD | Not started | - |
+| 12. Documentation | v0.2.0 | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-04-12 after Phase 11 completion*
+*Last updated: 2026-04-12 after Phase 12 planning*
