@@ -30,7 +30,7 @@ and produce a practical recommendation guide for DCM users.
 ### Phases
 
 - [x] **Phase 9: Benchmark Foundation** - Shared fixtures, extended config, amortization gap fix
-- [ ] **Phase 10: Guide Variants** - 6 guide types in create_guide factory, ELBO variant comparison
+- [x] **Phase 10: Guide Variants** - 6 guide types in create_guide factory, ELBO variant comparison
 - [ ] **Phase 11: Calibration Analysis** - Coverage curves, scaling study, comparison table, timing, plots
 - [ ] **Phase 12: Documentation** - Recommendation guide and updated benchmark narrative
 
@@ -60,7 +60,11 @@ Plans:
   2. SVI converges (ELBO decreases) with each guide type on spectral DCM at N=3
   3. Trace_ELBO, TraceMeanField_ELBO, and RenyiELBO(alpha=0.5) each produce valid SVI training runs with identical guide and data
   4. Existing runners gain guide_type parameterization via BenchmarkConfig without breaking v0.1.0 behavior
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 10-01-PLAN.md -- Extend create_guide factory with 6 guide types and blocklist
+- [ ] 10-02-PLAN.md -- Add ELBO plumbing to run_svi with AutoLaplace handling
+- [ ] 10-03-PLAN.md -- Predictive-based extraction and runner updates
 
 ### Phase 11: Calibration Analysis
 **Goal**: The calibration properties of every guide type are characterized across network sizes with publication-quality figures and tables
@@ -90,10 +94,10 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 9. Benchmark Foundation | v0.2.0 | 3/3 | Complete | 2026-04-07 |
-| 10. Guide Variants | v0.2.0 | 0/TBD | Not started | - |
+| 10. Guide Variants | v0.2.0 | 3/3 | Complete | 2026-04-12 |
 | 11. Calibration Analysis | v0.2.0 | 0/TBD | Not started | - |
 | 12. Documentation | v0.2.0 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-04-07*
+*Last updated: 2026-04-12*

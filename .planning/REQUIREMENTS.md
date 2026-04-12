@@ -9,8 +9,8 @@ Requirements for Cross-Backend Inference Benchmarking. Each maps to roadmap phas
 
 ### Pyro Guide Extensions
 
-- [ ] **GUIDE-01**: `create_guide` factory supports 6 guide types: AutoDelta, AutoNormal, AutoLowRankMultivariateNormal, AutoMultivariateNormal, AutoIAFNormal, AutoLaplaceApproximation
-- [ ] **GUIDE-02**: ELBO variant comparison across Trace_ELBO, TraceMeanField_ELBO, and RenyiELBO(alpha=0.5) with identical guide/data
+- [x] **GUIDE-01**: `create_guide` factory supports 6 guide types: AutoDelta, AutoNormal, AutoLowRankMultivariateNormal, AutoMultivariateNormal, AutoIAFNormal, AutoLaplaceApproximation
+- [x] **GUIDE-02**: ELBO variant comparison across Trace_ELBO, TraceMeanField_ELBO, and RenyiELBO(alpha=0.5) with identical guide/data
 
 ### Benchmark Infrastructure
 
@@ -74,8 +74,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GUIDE-01 | Phase 10 | Pending |
-| GUIDE-02 | Phase 10 | Pending |
+| GUIDE-01 | Phase 10 | Complete |
+| GUIDE-02 | Phase 10 | Complete |
 | BENCH-01 | Phase 9 | Complete |
 | BENCH-02 | Phase 9 | Complete |
 | BENCH-03 | Phase 9 | Complete |
@@ -94,4 +94,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-04-07*
-*Last updated: 2026-04-07 after Phase 9 completion*
+*Last updated: 2026-04-12 after Phase 10 completion*
