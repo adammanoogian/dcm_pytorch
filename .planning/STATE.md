@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 ## Current Position
 
 **Milestone:** v0.2.0 Cross-Backend Inference Benchmarking
-**Phase:** 10 of 12 (Guide Variants) -- VERIFIED
-**Plan:** 3/3 complete
-**Status:** Phase 10 verified, ready for Phase 11
-**Last activity:** 2026-04-12 -- Phase 10 verified (gap fixed: CLI defaults aligned)
+**Phase:** 11 of 12 (Calibration Analysis)
+**Plan:** 1/3 complete
+**Status:** In progress -- Plan 11-01 complete, ready for 11-02
+**Last activity:** 2026-04-12 -- Completed 11-01-PLAN.md (multi-level coverage + sweep orchestrator)
 
-Progress: [█████░░░░░] 50% (2/4 phases)
+Progress: [███████░░░] 78% (7/9 plans)
 
 ## Decisions
 
@@ -39,6 +39,8 @@ Progress: [█████░░░░░] 50% (2/4 phases)
 | Predictive-based extraction over guide.median() | Guide-agnostic; works for all 6 guide types identically | 2026-04-12 |
 | Complex-site handling in extraction | Avoid float casting warning on complex predicted_csd | 2026-04-12 |
 | Default num_samples=1000 for extraction | Balances accuracy vs speed for standard posterior queries | 2026-04-12 |
+| Empirical quantiles for SVI, z-scores for rDCM | SVI posteriors may be non-Gaussian (IAF/flows); rDCM is analytic Gaussian | 2026-04-12 |
+| String keys for coverage_multi dicts in JSON | JSON does not support float keys; convert at serialization boundary | 2026-04-12 |
 
 See STATE.md v0.1.0 decisions in git history.
 
@@ -57,8 +59,8 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-12
-Stopped at: Phase 10 verified, ready for Phase 11
+Stopped at: Completed 11-01-PLAN.md
 Resume file: None
 
 ---
-*Last updated: 2026-04-12 after Phase 10 verification*
+*Last updated: 2026-04-12 after Phase 11 Plan 01 completion*
