@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Milestone:** v0.2.0 Cross-Backend Inference Benchmarking
 **Phase:** 12 of 12 (Documentation)
-**Plan:** 1/2 complete
-**Status:** In progress -- Plan 12-01 complete, Plan 12-02 remaining
-**Last activity:** 2026-04-13 -- Completed 12-01-PLAN.md (guide selection recommendation)
+**Plan:** 2/2 complete
+**Status:** Phase complete -- all documentation delivered
+**Last activity:** 2026-04-13 -- Completed 12-02-PLAN.md (benchmark report rewrite)
 
-Progress: [█████████░] 87.5% (3.5/4 phases)
+Progress: [██████████] 100% (4/4 phases)
 
 ## Decisions
 
@@ -45,6 +45,8 @@ Progress: [█████████░] 87.5% (3.5/4 phases)
 | Exclude auto_delta from violin plots | Point estimate has no distribution to visualize; misleading violin | 2026-04-12 |
 | Mermaid + ASCII text fallback for decision tree | GitHub renders Mermaid natively; text fallback covers local editors and PDF | 2026-04-13 |
 | Approximate calibration ranges in guide docs | Exact values change per sweep run; ranges convey the right guidance | 2026-04-13 |
+| No hardcoded numbers in benchmark report | All values come from running calibration sweep; report uses ranges and CLI references | 2026-04-13 |
+| SPM12 and amortized flow deferred to v0.3+ | MATLAB dependency for SPM12; amortized flow needs dedicated benchmarking pass | 2026-04-13 |
 
 See STATE.md v0.1.0 decisions in git history.
 
@@ -63,8 +65,8 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-13
-Stopped at: Completed 12-01-PLAN.md (guide selection recommendation)
+Stopped at: Completed 12-02-PLAN.md (benchmark report rewrite) -- v0.2.0 milestone complete
 Resume file: None
 
 ---
-*Last updated: 2026-04-13 after Plan 12-01 completion*
+*Last updated: 2026-04-13 after Plan 12-02 completion*
