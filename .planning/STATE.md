@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 ## Current Position
 
 **Milestone:** v0.2.0 Cross-Backend Inference Benchmarking
-**Phase:** 11 of 12 (Calibration Analysis) -- VERIFIED
-**Plan:** 3/3 complete
-**Status:** Phase 11 verified, ready for Phase 12
-**Last activity:** 2026-04-12 -- Phase 11 verified (5/5 must-haves passed)
+**Phase:** 12 of 12 (Documentation)
+**Plan:** 1/2 complete
+**Status:** In progress -- Plan 12-01 complete, Plan 12-02 remaining
+**Last activity:** 2026-04-13 -- Completed 12-01-PLAN.md (guide selection recommendation)
 
-Progress: [████████░░] 75% (3/4 phases)
+Progress: [█████████░] 87.5% (3.5/4 phases)
 
 ## Decisions
 
@@ -43,6 +43,8 @@ Progress: [████████░░] 75% (3/4 phases)
 | String keys for coverage_multi dicts in JSON | JSON does not support float keys; convert at serialization boundary | 2026-04-12 |
 | Spectral-only profiling in profile_all_guides | Fastest variant for profiling; task DCM requires fixture IO; extensible later | 2026-04-12 |
 | Exclude auto_delta from violin plots | Point estimate has no distribution to visualize; misleading violin | 2026-04-12 |
+| Mermaid + ASCII text fallback for decision tree | GitHub renders Mermaid natively; text fallback covers local editors and PDF | 2026-04-13 |
+| Approximate calibration ranges in guide docs | Exact values change per sweep run; ranges convey the right guidance | 2026-04-13 |
 
 See STATE.md v0.1.0 decisions in git history.
 
@@ -60,9 +62,9 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-04-12
-Stopped at: Phase 11 verified, ready for Phase 12
+Last session: 2026-04-13
+Stopped at: Completed 12-01-PLAN.md (guide selection recommendation)
 Resume file: None
 
 ---
-*Last updated: 2026-04-12 after Phase 11 verification*
+*Last updated: 2026-04-13 after Plan 12-01 completion*
