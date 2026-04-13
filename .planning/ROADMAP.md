@@ -47,9 +47,9 @@ and produce a practical recommendation guide for DCM users.
   4. Amortization gap metric computes real ELBO via Trace_ELBO().differentiable_loss() for both amortized and per-subject guides, not the RMSE-ratio proxy
 **Plans:** 3 plans
 Plans:
-- [ ] 09-01-PLAN.md -- Extend BenchmarkConfig + fix amortization gap ELBO proxy
-- [ ] 09-02-PLAN.md -- Create fixture generation script and loading helper
-- [ ] 09-03-PLAN.md -- Wire fixture loading into runners + CLI flags
+- [x] 09-01-PLAN.md -- Extend BenchmarkConfig + fix amortization gap ELBO proxy
+- [x] 09-02-PLAN.md -- Create fixture generation script and loading helper
+- [x] 09-03-PLAN.md -- Wire fixture loading into runners + CLI flags
 
 ### Phase 10: Guide Variants
 **Goal**: Users can select from 6 guide types and 3 ELBO objectives for any DCM variant
@@ -62,9 +62,9 @@ Plans:
   4. Existing runners gain guide_type parameterization via BenchmarkConfig without breaking v0.1.0 behavior
 **Plans:** 3 plans
 Plans:
-- [ ] 10-01-PLAN.md -- Extend create_guide factory with 6 guide types and blocklist
-- [ ] 10-02-PLAN.md -- Add ELBO plumbing to run_svi with AutoLaplace handling
-- [ ] 10-03-PLAN.md -- Predictive-based extraction and runner updates
+- [x] 10-01-PLAN.md -- Extend create_guide factory with 6 guide types and blocklist
+- [x] 10-02-PLAN.md -- Add ELBO plumbing to run_svi with AutoLaplace handling
+- [x] 10-03-PLAN.md -- Predictive-based extraction and runner updates
 
 ### Phase 11: Calibration Analysis
 **Goal**: The calibration properties of every guide type are characterized across network sizes with publication-quality figures and tables
