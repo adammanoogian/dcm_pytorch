@@ -3,7 +3,7 @@
 ## Milestones
 
 - **v0.1.0 Foundation** - Phases 1-8 (shipped 2026-04-03)
-- **v0.2.0 Cross-Backend Inference Benchmarking** - Phases 9-12 (in progress)
+- **v0.2.0 Cross-Backend Inference Benchmarking** - Phases 9-12 (shipped 2026-04-13)
 
 ## Overview
 
@@ -32,7 +32,7 @@ and produce a practical recommendation guide for DCM users.
 - [x] **Phase 9: Benchmark Foundation** - Shared fixtures, extended config, amortization gap fix
 - [x] **Phase 10: Guide Variants** - 6 guide types in create_guide factory, ELBO variant comparison
 - [x] **Phase 11: Calibration Analysis** - Coverage curves, scaling study, comparison table, timing, plots
-- [ ] **Phase 12: Documentation** - Recommendation guide and updated benchmark narrative
+- [x] **Phase 12: Documentation** - Recommendation guide and updated benchmark narrative
 
 ## Phase Details
 
@@ -91,8 +91,8 @@ Plans:
   2. The benchmark narrative report has zero TBD entries -- all placeholders from v0.1.0 are replaced with v0.2.0 calibration results and method comparisons
 **Plans**: 2 plans
 Plans:
-- [ ] 12-01-PLAN.md -- Guide selection recommendation with decision tree (DOC-01)
-- [ ] 12-02-PLAN.md -- Updated benchmark narrative with zero TBDs (DOC-02)
+- [x] 12-01-PLAN.md -- Guide selection recommendation with decision tree (DOC-01)
+- [x] 12-02-PLAN.md -- Updated benchmark narrative with zero TBDs (DOC-02)
 
 ## Progress
 
@@ -103,8 +103,8 @@ Plans:
 | 9. Benchmark Foundation | v0.2.0 | 3/3 | Complete | 2026-04-07 |
 | 10. Guide Variants | v0.2.0 | 3/3 | Complete | 2026-04-12 |
 | 11. Calibration Analysis | v0.2.0 | 3/3 | Complete | 2026-04-12 |
-| 12. Documentation | v0.2.0 | 0/2 | Not started | - |
+| 12. Documentation | v0.2.0 | 2/2 | Complete | 2026-04-13 |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-04-12 after Phase 12 planning*
+*Last updated: 2026-04-13 after Phase 12 completion*

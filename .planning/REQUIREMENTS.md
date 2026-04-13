@@ -28,8 +28,8 @@ Requirements for Cross-Backend Inference Benchmarking. Each maps to roadmap phas
 
 ### Documentation
 
-- [ ] **DOC-01**: Practical recommendation guide with decision tree for guide selection by compute budget, network size, and DCM variant
-- [ ] **DOC-02**: Updated benchmark narrative report replacing all TBD entries from v0.1.0 with v0.2.0 results
+- [x] **DOC-01**: Practical recommendation guide with decision tree for guide selection by compute budget, network size, and DCM variant
+- [x] **DOC-02**: Updated benchmark narrative report replacing all TBD entries from v0.1.0 with v0.2.0 results
 
 ## v0.3+ Requirements
 
@@ -84,8 +84,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CAL-03 | Phase 11 | Complete |
 | CAL-04 | Phase 11 | Complete |
 | CAL-05 | Phase 11 | Complete |
-| DOC-01 | Phase 12 | Pending |
-| DOC-02 | Phase 12 | Pending |
+| DOC-01 | Phase 12 | Complete |
+| DOC-02 | Phase 12 | Complete |
 
 **Coverage:**
 - v0.2.0 requirements: 12 total
@@ -94,4 +94,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-04-07*
-*Last updated: 2026-04-12 after Phase 11 completion*
+*Last updated: 2026-04-13 after Phase 12 completion -- all v0.2.0 requirements complete*
