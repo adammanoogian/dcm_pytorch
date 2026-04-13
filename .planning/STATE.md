@@ -2,53 +2,25 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-06)
+See: .planning/PROJECT.md (updated 2026-04-13)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.2.0 Cross-Backend Inference Benchmarking
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-**Milestone:** v0.2.0 Cross-Backend Inference Benchmarking
-**Phase:** 12 of 12 (Documentation) -- VERIFIED
-**Plan:** 2/2 complete
-**Status:** Phase 12 verified, v0.2.0 milestone complete
-**Last activity:** 2026-04-13 -- Phase 12 verified (8/8 must-haves passed)
+**Milestone:** v0.2.0 shipped, next milestone not started
+**Phase:** N/A
+**Plan:** N/A
+**Status:** v0.2.0 complete, ready for /gsd:new-milestone
+**Last activity:** 2026-04-13 -- v0.2.0 milestone archived
 
-Progress: [██████████] 100% (4/4 phases)
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100%
 
 ## Decisions
 
-| Decision | Rationale | Date |
-|----------|-----------|------|
-| NumPyro deferred to v0.3+ | No reason to rewrite PyTorch forward models in JAX; adds bottlenecks | 2026-04-07 |
-| Regularization deferred to v0.3+ | NCP, prior scale sensitivity orthogonal to main calibration story | 2026-04-07 |
-| Amortized refinement deferred to v0.3+ | Semi-amortized pipeline requires Phase 10 guide variants first | 2026-04-07 |
-| 4 phases for v0.2.0 | 12 requirements cluster into 4 natural delivery boundaries | 2026-04-07 |
-| num_particles=5 for ELBO gap evaluation | Balances variance reduction vs cost for amortization gap metric | 2026-04-07 |
-| kwargs passthrough in BenchmarkConfig factories | Forward-compatible extensibility without touching factory methods | 2026-04-07 |
-| ELBO before clear_param_store ordering | Amortized guide params live in param store; must evaluate before clear | 2026-04-07 |
-| rk4 solver for task fixture generation | dopri5 underflows with dt=0.01 + piecewise stimulus; rk4 is reliable | 2026-04-07 |
-| No regressors stored in rDCM fixtures | Runners call create_regressors themselves; deterministic, saves space | 2026-04-07 |
-| Duration override from fixture metadata | Fixtures may be generated with full-mode params; runners must use fixture duration to avoid shape mismatches | 2026-04-07 |
-| PiecewiseConstantInput for fixture stimulus | task_dcm_model expects callable input_fn, not raw dict; fixtures must be wrapped | 2026-04-07 |
-| AutoIAFNormal hidden_dim as list | Pyro's AutoRegressiveNN iterates over hidden_dims; int causes TypeError | 2026-04-12 |
-| ELBO_REGISTRY string-keyed dispatch | Consistent with GUIDE_REGISTRY; extensible, no enum overhead | 2026-04-12 |
-| RenyiELBO alpha=0.5, min 2 particles | Standard midpoint alpha; 2 particles is minimum for valid Renyi gradients | 2026-04-12 |
-| Post-Laplace guide in result["guide"] | Users need AutoMVN for posterior queries, not the MAP guide | 2026-04-12 |
-| Predictive-based extraction over guide.median() | Guide-agnostic; works for all 6 guide types identically | 2026-04-12 |
-| Complex-site handling in extraction | Avoid float casting warning on complex predicted_csd | 2026-04-12 |
-| Default num_samples=1000 for extraction | Balances accuracy vs speed for standard posterior queries | 2026-04-12 |
-| Empirical quantiles for SVI, z-scores for rDCM | SVI posteriors may be non-Gaussian (IAF/flows); rDCM is analytic Gaussian | 2026-04-12 |
-| String keys for coverage_multi dicts in JSON | JSON does not support float keys; convert at serialization boundary | 2026-04-12 |
-| Spectral-only profiling in profile_all_guides | Fastest variant for profiling; task DCM requires fixture IO; extensible later | 2026-04-12 |
-| Exclude auto_delta from violin plots | Point estimate has no distribution to visualize; misleading violin | 2026-04-12 |
-| Mermaid + ASCII text fallback for decision tree | GitHub renders Mermaid natively; text fallback covers local editors and PDF | 2026-04-13 |
-| Approximate calibration ranges in guide docs | Exact values change per sweep run; ranges convey the right guidance | 2026-04-13 |
-| No hardcoded numbers in benchmark report | All values come from running calibration sweep; report uses ranges and CLI references | 2026-04-13 |
-| SPM12 and amortized flow deferred to v0.3+ | MATLAB dependency for SPM12; amortized flow needs dedicated benchmarking pass | 2026-04-13 |
-
-See STATE.md v0.1.0 decisions in git history.
+See `.planning/milestones/v0.2.0-ROADMAP.md` for v0.2.0 decisions.
+See `.planning/milestones/v0.1.0-ROADMAP.md` for v0.1.0 decisions.
 
 ## Blockers
 
@@ -56,17 +28,13 @@ None currently.
 
 ## Key Risks
 
-- P1: Mean-field coverage ceiling ~0.80-0.88 is by design -- report per-parameter, not aggregate
-- P6: AutoMultivariateNormal memory explosion at N=10 -- only run at N=3,5
-- P9: Simpson's paradox in aggregated tables -- never aggregate across DCM variants
-- P11: Combinatorial explosion -- tier the benchmark runs
-- P12: Report median+IQR, not just means
+None active (milestone complete).
 
 ## Session Continuity
 
 Last session: 2026-04-13
-Stopped at: v0.2.0 milestone complete -- all 4 phases verified
+Stopped at: v0.2.0 milestone complete and archived
 Resume file: None
 
 ---
-*Last updated: 2026-04-13 after Phase 12 verification*
+*Last updated: 2026-04-13 after v0.2.0 milestone completion*

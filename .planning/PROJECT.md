@@ -34,22 +34,25 @@ point estimate. This is the scientific meaning that must be preserved above all 
 - Neural amortized guides (normalizing flows) for task and spectral DCM — v0.1.0
 - Amortized guide accuracy within 2x of per-subject SVI — v0.1.0
 - Comprehensive benchmark suite comparing all inference methods — v0.1.0
+- 6 SVI guide types (AutoDelta, AutoNormal, AutoLowRankMVN, AutoMVN, AutoIAF, AutoLaplace) — v0.2.0
+- 3 ELBO objectives (Trace_ELBO, TraceMeanField_ELBO, RenyiELBO) with compatibility enforcement — v0.2.0
+- Shared fixture generation for reproducible benchmarks (3 variants x 3 sizes) — v0.2.0
+- Real ELBO-based amortization gap metric — v0.2.0
+- Multi-level coverage calibration curves (50%, 75%, 90%, 95%) per guide type — v0.2.0
+- Tiered calibration sweep orchestrator with resume support — v0.2.0
+- 9 publication-quality figure types (calibration, scaling, comparison, violin, Pareto, timing) — v0.2.0
+- Practical recommendation guide with Mermaid decision tree — v0.2.0
+- Benchmark narrative with zero TBD entries — v0.2.0
 
 ### Active
 
-**Current Milestone: v0.2.0 Cross-Backend Inference Benchmarking**
+**Next milestone candidates (v0.3+):**
 
-Goal: Establish inference quality guarantees across all backends, fix calibration
-(0.44-0.78 coverage → 0.90 nominal), determine the real cost of the variational
-approximation for DCM, and produce a practical recommendation guide.
-
-Target features:
-- Extended Pyro guide variants (low-rank, structured, ELBO variants, amortized refinement)
-- NumPyro backends (NUTS, ADVI, Laplace) via DCM_PPLs integration
+- NumPyro backends (NUTS reference posterior, ADVI, Laplace)
 - Regularization study (non-centered parameterization, prior scale sensitivity)
-- Cross-backend comparison table (9 methods x 3 variants x 3 network sizes)
-- Coverage calibration as the key figure
-- Practical recommendation guide for users
+- Semi-amortized pipeline (amortized init + SVI refinement)
+- SPM12 cross-validation (requires MATLAB license)
+- Amortized guide calibration benchmarking
 
 ### Out of Scope
 
@@ -92,4 +95,4 @@ Target features:
 | NumPyro for NUTS only | JAX speed for validation sampling, not primary inference | -- Pending |
 
 ---
-*Last updated: 2026-04-06 after v0.2.0 milestone started*
+*Last updated: 2026-04-13 after v0.2.0 milestone shipped*
