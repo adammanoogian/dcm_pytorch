@@ -10,7 +10,9 @@ from pyro_dcm.forward_models.csd_computation import (
 )
 from pyro_dcm.forward_models.neural_state import (
     NeuralStateEquation,
+    compute_effective_A,
     parameterize_A,
+    parameterize_B,
 )
 from pyro_dcm.forward_models.spectral_noise import (
     default_noise_priors,
@@ -47,7 +49,9 @@ __all__ = [
     "CoupledDCMSystem",
     "NeuralStateEquation",
     "bold_signal",
+    "compute_effective_A",
     "parameterize_A",
+    "parameterize_B",
     # Phase 2: Spectral transfer function + predicted CSD
     "compute_transfer_function",
     "default_frequency_grid",
