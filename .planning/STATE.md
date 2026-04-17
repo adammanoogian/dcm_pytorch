@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-04-17)
 
 **Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
 **Phase:** Phase 13 -- Bilinear Neural State & Stability Monitor (in progress)
-**Plan:** 13-01 complete + 13-04 complete; 13-02/13-03 still in Wave 1
-**Status:** Plans 13-01 + 13-04 shipped. BILIN-01 (parameterize_B) + BILIN-02 (compute_effective_A) live in `forward_models/neural_state.py` with 9 new passing tests; BILIN-07 fully closed (source half via 13-01, non-source via 13-04). Existing `test_neural_state.py` (8) + broad regression `test_ode_integrator.py`/`test_task_simulator.py` (34) all green.
-**Last activity:** 2026-04-17 -- 13-01-PLAN.md executed (3 files modified, 3 task commits + 1 metadata commit)
+**Plan:** 13-01 + 13-02 + 13-04 complete; 13-03 still pending
+**Status:** Plans 13-01, 13-02, 13-04 shipped. BILIN-01 (parameterize_B), BILIN-02 (compute_effective_A), and BILIN-03 (NeuralStateEquation bilinear extension + bit-exact linear-invariance test) live in `forward_models/neural_state.py`. BILIN-07 fully closed (source half via 13-01, non-source via 13-04). Phase 13 test totals: `test_neural_state.py` (8) + `test_bilinear_utils.py` (9) + `test_linear_invariance.py` (7) = 24 passing. Downstream regression sweep `test_ode_integrator.py`/`test_task_simulator.py`/`test_task_dcm_model.py` 44/44 green.
+**Last activity:** 2026-04-17 -- 13-02-PLAN.md executed (2 files modified, 2 task commits + 1 metadata commit)
 
-Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [░░░░░░░░░░] 0/4 phases (Phase 13: 2/4 plans complete -- 13-01, 13-04)
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [░░░░░░░░░░] 0/4 phases (Phase 13: 3/4 plans complete -- 13-01, 13-02, 13-04)
 
 ## Decisions
 
@@ -85,12 +85,13 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-17
-Stopped at: Plan 13-01 complete. Bilinear utilities (parameterize_B, compute_effective_A)
-available from `pyro_dcm.forward_models`. SUMMARY at
-`.planning/phases/13-bilinear-neural-state/13-01-SUMMARY.md`.
-Next: Plans 13-02 (extend `NeuralStateEquation.derivatives` with optional `B`/`u_mod`
-kwargs + bit-exact linear-invariance test) and 13-03 (stability monitor inside
-`CoupledDCMSystem`).
+Stopped at: Plan 13-02 complete. `NeuralStateEquation.derivatives` now accepts
+keyword-only `B` / `u_mod`; linear short-circuit is bit-exact (atol=1e-10 gate
+at `tests/test_linear_invariance.py`). SUMMARY at
+`.planning/phases/13-bilinear-neural-state/13-02-SUMMARY.md`.
+Next: Plan 13-03 (stability monitor inside `CoupledDCMSystem` with
+`stability_check_every` cadence + `pyro_dcm.stability` logger + BOLD-level
+linear-invariance regression).
 Resume file: None
 
 ---
@@ -136,5 +137,32 @@ Resume file: None
   linear vs bilinear)`. Two .md files, zero source/test edits -- clean Wave 1
   parallelism with 13-01/13-02/13-03.
 
+### 2026-04-17 -- Plan 13-02 complete
+
+- `src/pyro_dcm/forward_models/neural_state.py`:
+  - `NeuralStateEquation.derivatives` signature extended to
+    `(self, x, u, *, B=None, u_mod=None)`. Linear short-circuit guard at the
+    top of the method body executes the literal expression
+    `return self.A @ x + self.C @ u` when `B is None` or `B.shape[0] == 0`
+    (grep-verified: the literal appears exactly once in the file). Bilinear
+    branch routes through `compute_effective_A(self.A, B, u_mod)` and returns
+    `A_eff @ x + self.C @ u`. `ValueError` raised when `B` is non-empty and
+    `u_mod is None`. Class summary line from 13-01 + module docstring
+    untouched.
+- `tests/test_linear_invariance.py` (new): 7 passing tests across
+  `TestLinearInvariance` (5) and `TestBilinearPathSanity` (2). Primary
+  fixtures (`rtol=0, atol=1e-10`): hand-crafted 2-region; `make_random_stable_A(N=3,
+  seed=42)`; `make_random_stable_A(N=5, seed=7)`; empty-J `(0, N, N)`. Strict
+  `torch.equal` case: no-kwarg vs `B=None`. Bilinear sanity: hand-computed
+  output + `ValueError` on missing `u_mod`.
+- Commits: 55785de `feat(13-02): extend NeuralStateEquation.derivatives with
+  bilinear path`; 7289ff9 `test(13-02): add test_linear_invariance.py with
+  atol=1e-10 gate`.
+- Verification: Phase 13 test suite 24/24 green in 3.89s; downstream
+  regression 44/44 green in 221.68s. BILIN-07 non-regression grep confirms
+  the misleading-label pattern is absent from neural_state.py.
+- BILIN-03 acceptance criterion (bit-exact linear invariance) is now locked
+  structurally (literal short-circuit) AND empirically (atol=1e-10 fixtures).
+
 ---
-*Last updated: 2026-04-17 after plan 13-01 completion (BILIN-01, BILIN-02, BILIN-07 source half)*
+*Last updated: 2026-04-17 after plan 13-02 completion (BILIN-03)*
