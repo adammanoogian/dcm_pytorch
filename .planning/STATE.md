@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-04-17)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.3.0 Bilinear DCM Extension -- roadmap defined, ready to plan Phase 13
+**Current focus:** v0.3.0 Bilinear DCM Extension -- Phase 13 complete and verified; ready for Phase 14
 
 ## Current Position
 
 **Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
-**Phase:** Phase 13 -- Bilinear Neural State & Stability Monitor (4/4 plans complete)
-**Plan:** 13-01 + 13-02 + 13-03 + 13-04 all shipped
-**Status:** All four Phase 13 plans complete. BILIN-01 (parameterize_B), BILIN-02 (compute_effective_A), BILIN-03 (NeuralStateEquation bilinear + bit-exact linear-invariance), BILIN-04 (CoupledDCMSystem bilinear integration), BILIN-05 (pyro_dcm.stability eigenvalue monitor), BILIN-06 (3-sigma 500s no-NaN worst-case), and BILIN-07 (doc-rename) all closed. Phase 13 test totals: `test_neural_state.py` (8) + `test_bilinear_utils.py` (9) + `test_linear_invariance.py` (7) + `test_coupled_system_bilinear.py` (5) + `test_stability_monitor.py` (5) = 34 passing. Downstream regression sweep `test_ode_integrator.py`/`test_task_simulator.py`/`test_task_dcm_model.py` 44/44 green (BILIN-04 acceptance gate).
-**Last activity:** 2026-04-17 -- 13-03-PLAN.md executed (4 files touched, 4 task commits + 1 metadata commit)
+**Phase:** Phase 13 -- Bilinear Neural State & Stability Monitor (COMPLETE, verified 2026-04-17, 18/18 must-haves)
+**Plan:** --
+**Status:** Phase 13 verified against codebase. BILIN-01..07 all Complete in REQUIREMENTS.md traceability. Next: Phase 14 Stimulus Utilities & Bilinear Simulator (SIM-01..05). Branch: run `/gsd:discuss-phase 14` (recommended) or `/gsd:plan-phase 14`.
+**Last activity:** 2026-04-17 -- Phase 13 verification passed; VERIFICATION.md at `.planning/phases/13-bilinear-neural-state/13-VERIFICATION.md`.
 
-Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [██░░░░░░░░] 1/4 phases (Phase 13 complete)
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [██▌░░░░░░░] 1/4 phases (Phase 13 complete; 14-16 pending)
 
 ## Decisions
 
@@ -85,16 +85,15 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-17
-Stopped at: Plan 13-03 complete. `CoupledDCMSystem` now accepts keyword-only
-`B` (J,N,N), `n_driving_inputs`, and `stability_check_every`; bilinear path
-routes through `compute_effective_A`; `_maybe_check_stability` logs WARNING
-on the `pyro_dcm.stability` named logger when `max Re(eig(A_eff)) > 0` and
-never raises (D4). NullHandler attached to `pyro_dcm` root logger in
-`src/pyro_dcm/__init__.py`. BILIN-04/05/06 all closed; BILIN-06 3-sigma
-500s rk4 no-NaN worst-case passing. SUMMARY at
-`.planning/phases/13-bilinear-neural-state/13-03-SUMMARY.md`.
-Next: Phase 13 closure audit + begin Phase 14 (bilinear simulators, SIM-01
-through SIM-05).
+Stopped at: Phase 13 complete + verified (18/18 must-haves against codebase).
+All four plans (13-01..13-04) shipped with 34 new tests + 44-test downstream
+regression sweep both green. BILIN-01..07 all Complete in REQUIREMENTS.md
+traceability. Branch `gsd/phase-13-bilinear-neural-state` carries 12
+Phase-13 commits. VERIFICATION.md at
+`.planning/phases/13-bilinear-neural-state/13-VERIFICATION.md`.
+Next: Phase 14 Stimulus Utilities & Bilinear Simulator (SIM-01..05).
+Recommended: `/gsd:discuss-phase 14` for implementation decisions, then
+`/gsd:plan-phase 14`.
 Resume file: None
 
 ---
@@ -221,4 +220,4 @@ Resume file: None
   structurally (literal short-circuit) AND empirically (atol=1e-10 fixtures).
 
 ---
-*Last updated: 2026-04-17 after plan 13-03 completion (BILIN-04, BILIN-05, BILIN-06)*
+*Last updated: 2026-04-17 after Phase 13 verification passed (18/18 must-haves; BILIN-01..07 Complete)*

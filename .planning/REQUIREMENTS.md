@@ -98,13 +98,13 @@ Explicitly excluded from v0.3.0 (and often permanently).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BILIN-01 | Phase 13 | Pending |
-| BILIN-02 | Phase 13 | Pending |
-| BILIN-03 | Phase 13 | Pending |
-| BILIN-04 | Phase 13 | Pending |
-| BILIN-05 | Phase 13 | Pending |
-| BILIN-06 | Phase 13 | Pending |
-| BILIN-07 | Phase 13 | Pending |
+| BILIN-01 | Phase 13 | Complete |
+| BILIN-02 | Phase 13 | Complete |
+| BILIN-03 | Phase 13 | Complete |
+| BILIN-04 | Phase 13 | Complete |
+| BILIN-05 | Phase 13 | Complete |
+| BILIN-06 | Phase 13 | Complete |
+| BILIN-07 | Phase 13 | Complete |
 | SIM-01 | Phase 14 | Pending |
 | SIM-02 | Phase 14 | Pending |
 | SIM-03 | Phase 14 | Pending |
