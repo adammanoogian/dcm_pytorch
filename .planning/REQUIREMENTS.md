@@ -96,43 +96,47 @@ Explicitly excluded from v0.3.0 (and often permanently).
 
 ## Traceability
 
-Populated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BILIN-01 | TBD | Pending |
-| BILIN-02 | TBD | Pending |
-| BILIN-03 | TBD | Pending |
-| BILIN-04 | TBD | Pending |
-| BILIN-05 | TBD | Pending |
-| BILIN-06 | TBD | Pending |
-| BILIN-07 | TBD | Pending |
-| SIM-01 | TBD | Pending |
-| SIM-02 | TBD | Pending |
-| SIM-03 | TBD | Pending |
-| SIM-04 | TBD | Pending |
-| SIM-05 | TBD | Pending |
-| MODEL-01 | TBD | Pending |
-| MODEL-02 | TBD | Pending |
-| MODEL-03 | TBD | Pending |
-| MODEL-04 | TBD | Pending |
-| MODEL-05 | TBD | Pending |
-| MODEL-06 | TBD | Pending |
-| MODEL-07 | TBD | Pending |
-| RECOV-01 | TBD | Pending |
-| RECOV-02 | TBD | Pending |
-| RECOV-03 | TBD | Pending |
-| RECOV-04 | TBD | Pending |
-| RECOV-05 | TBD | Pending |
-| RECOV-06 | TBD | Pending |
-| RECOV-07 | TBD | Pending |
-| RECOV-08 | TBD | Pending |
+| BILIN-01 | Phase 13 | Pending |
+| BILIN-02 | Phase 13 | Pending |
+| BILIN-03 | Phase 13 | Pending |
+| BILIN-04 | Phase 13 | Pending |
+| BILIN-05 | Phase 13 | Pending |
+| BILIN-06 | Phase 13 | Pending |
+| BILIN-07 | Phase 13 | Pending |
+| SIM-01 | Phase 14 | Pending |
+| SIM-02 | Phase 14 | Pending |
+| SIM-03 | Phase 14 | Pending |
+| SIM-04 | Phase 14 | Pending |
+| SIM-05 | Phase 14 | Pending |
+| MODEL-01 | Phase 15 | Pending |
+| MODEL-02 | Phase 15 | Pending |
+| MODEL-03 | Phase 15 | Pending |
+| MODEL-04 | Phase 15 | Pending |
+| MODEL-05 | Phase 15 | Pending |
+| MODEL-06 | Phase 15 | Pending |
+| MODEL-07 | Phase 15 | Pending |
+| RECOV-01 | Phase 16 | Pending |
+| RECOV-02 | Phase 16 | Pending |
+| RECOV-03 | Phase 16 | Pending |
+| RECOV-04 | Phase 16 | Pending |
+| RECOV-05 | Phase 16 | Pending |
+| RECOV-06 | Phase 16 | Pending |
+| RECOV-07 | Phase 16 | Pending |
+| RECOV-08 | Phase 16 | Pending |
 
 **Coverage:**
 - v0.3.0 requirements: 27 total
-- Mapped to phases: 0 (to be filled by roadmapper)
-- Unmapped: 27 (will be 0 after roadmap creation)
+- Mapped to phases: 27/27 (all mapped)
+- Unmapped: 0
+
+**Per-phase distribution:**
+- Phase 13 (Bilinear Neural State & Stability Monitor): 7 requirements (BILIN-01..07)
+- Phase 14 (Stimulus Utilities & Bilinear Simulator): 5 requirements (SIM-01..05)
+- Phase 15 (Pyro Generative Model): 7 requirements (MODEL-01..07)
+- Phase 16 (Recovery Benchmark): 8 requirements (RECOV-01..08)
 
 ---
 *Requirements defined: 2026-04-17*
-*Last updated: 2026-04-17 after decisions D1-D5 resolved*
+*Last updated: 2026-04-17 after roadmap creation (Phases 13-16 mapped, coverage 27/27)*
