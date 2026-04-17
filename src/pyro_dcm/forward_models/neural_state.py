@@ -259,21 +259,77 @@ class NeuralStateEquation:
         self.A = A
         self.C = C
 
-    def derivatives(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
-        """Compute neural state derivatives dx/dt = Ax + Cu.
+    def derivatives(
+        self,
+        x: torch.Tensor,
+        u: torch.Tensor,
+        *,
+        B: torch.Tensor | None = None,
+        u_mod: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Compute neural state derivatives dx/dt.
 
-        Implements [REF-001] Eq. 1 (linear form).
+        Implements [REF-001] Eq. 1 (Friston, Harrison & Penny, 2003):
+
+        - Linear form (v0.1/v0.2 path, default): ``dx/dt = A @ x + C @ u``
+          when ``B is None`` or ``B.shape[0] == 0``.
+        - Bilinear form (v0.3.0 extension):
+          ``dx/dt = (A + sum_j u_mod[j] * B[j]) @ x + C @ u``
+          when ``B`` and ``u_mod`` are both supplied.
+
+        The linear path evaluates the literal expression
+        ``self.A @ x + self.C @ u`` (NOT ``A_eff = A + 0`` followed by
+        ``A_eff @ x``), guaranteeing bit-exact numerical equivalence to
+        v0.2.0 callers per the CONTEXT-locked short-circuit gate (verified
+        at ``atol=1e-10`` in ``tests/test_linear_invariance.py``).
 
         Parameters
         ----------
         x : torch.Tensor
             Neural activity per region, shape ``(N,)``.
         u : torch.Tensor
-            Experimental input, shape ``(M,)``.
+            Driving experimental input, shape ``(M,)``. When bilinear
+            arguments are supplied, this tensor is the driving-input slice
+            only; the modulator slice is passed separately via ``u_mod``.
+        B : torch.Tensor or None, optional
+            Stacked modulatory matrices, shape ``(J, N, N)``. ``None``
+            (default) or empty ``J=0`` routes through the linear
+            short-circuit. Accepts optional ``B: (J, N, N)`` and
+            ``u_mod: (J,)`` for the bilinear extension; default ``None``
+            preserves exact linear behavior.
+        u_mod : torch.Tensor or None, optional
+            Modulator values at current time, shape ``(J,)``. Required
+            when ``B`` is non-empty; must match ``B.shape[0]``. Ignored
+            when ``B`` triggers the linear short-circuit.
 
         Returns
         -------
         torch.Tensor
             Time derivatives of neural activity, shape ``(N,)``.
+
+        Raises
+        ------
+        ValueError
+            If ``B`` is non-empty and ``u_mod`` is ``None``, or if their
+            modulator counts disagree. (Shape-level validation is
+            delegated to ``compute_effective_A``.)
         """
-        return self.A @ x + self.C @ u
+        # Linear short-circuit gate (BILIN-03 bit-exact guarantee).
+        # Branch on identity (None) FIRST, then on empty-J shape. Do NOT
+        # call compute_effective_A with a zero tensor; the literal
+        # A@x + C@u path must remain byte-identical to the v0.2.0
+        # implementation.
+        if B is None or B.shape[0] == 0:
+            return self.A @ x + self.C @ u
+
+        if u_mod is None:
+            raise ValueError(
+                "NeuralStateEquation.derivatives: B is non-empty but "
+                "u_mod is None; expected u_mod tensor of shape "
+                f"({B.shape[0]},)."
+            )
+
+        # Bilinear path (v0.3.0). Shape validation delegated to
+        # compute_effective_A.
+        A_eff = compute_effective_A(self.A, B, u_mod)
+        return A_eff @ x + self.C @ u
