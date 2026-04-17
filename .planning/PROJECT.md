@@ -46,13 +46,28 @@ point estimate. This is the scientific meaning that must be preserved above all 
 
 ### Active
 
-**Next milestone candidates (v0.3+):**
+## Current Milestone: v0.3.0 Bilinear DCM Extension
 
-- NumPyro backends (NUTS reference posterior, ADVI, Laplace)
-- Regularization study (non-centered parameterization, prior scale sensitivity)
-- Semi-amortized pipeline (amortized init + SVI refinement)
-- SPM12 cross-validation (requires MATLAB license)
-- Amortized guide calibration benchmarking
+**Goal:** Extend the neural state equation from the linear form `dx/dt = Ax + Cu` to
+the full bilinear form `dx/dt = Ax + Σ_j u_j·B_j·x + Cu` (Friston, Harrison & Penny
+2003, Eq. 1), propagating B-matrix modulatory inputs through the forward model,
+Pyro generative model + priors, simulator, and recovery benchmark.
+
+**Target features:**
+
+- Bilinear neural state equation with `compute_effective_A(A, B_list, u_mod)`
+- Bilinear `CoupledDCMSystem` accepting `B_list` and a modulatory input interpolant
+- Pyro model sampling `B_free_j ~ N(0, 1/16)` per modulator with per-modulator masking
+- Variable-amplitude event/epoch stimulus utilities (stick & boxcar)
+- Bilinear simulator accepting `B_list` + `stimulus_mod`
+- Bilinear recovery benchmark (3-region, 1 driving + 1 modulatory input)
+
+**Explicitly deferred out of v0.3.0:**
+
+- Group-level PEB-lite GLM (HEART2ADAPT-specific; not scoped to this single-subject toolbox)
+- 4-node HEART2ADAPT circuit benchmark (study-specific)
+- SPM12 cross-validation of bilinear DCM (requires MATLAB; v0.4+ candidate)
+- NumPyro backends, regularization study, semi-amortized pipeline, amortized calibration (deferred to v0.4.0+)
 
 ### Out of Scope
 
@@ -93,6 +108,7 @@ point estimate. This is the scientific meaning that must be preserved above all 
 | src/ layout | project_utils standard, prevents import confusion | -- Pending |
 | Static A first | Clean first paper; non-stationary A(t) is second contribution | -- Pending |
 | NumPyro for NUTS only | JAX speed for validation sampling, not primary inference | -- Pending |
+| v0.3.0 scoped to bilinear only | Keeps milestone focused and shippable; HEART2ADAPT/PEB/SPM12 extensions land in v0.4+ | -- Pending |
 
 ---
-*Last updated: 2026-04-13 after v0.2.0 milestone shipped*
+*Last updated: 2026-04-17 after v0.3.0 milestone started*
