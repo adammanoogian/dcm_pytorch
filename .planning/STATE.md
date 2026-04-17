@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-04-17)
 ## Current Position
 
 **Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
-**Phase:** Phase 13 -- Bilinear Neural State & Stability Monitor (next, not yet started)
-**Plan:** --
-**Status:** ROADMAP.md appended with Phases 13-16; REQUIREMENTS.md traceability complete (27/27 mapped); ready to run `/gsd:plan-phase 13`.
-**Last activity:** 2026-04-17 -- v0.3.0 roadmap created (4 phases, 27 requirements mapped 1:1 to research-proposed structure)
+**Phase:** Phase 13 -- Bilinear Neural State & Stability Monitor (in progress)
+**Plan:** 13-04 complete (doc-rename non-source sites); 13-01/13-02/13-03 in parallel Wave 1
+**Status:** Plan 13-04 shipped: CLAUDE.md tree corrected to `models/` layout + PROJECT.md line 23 rewritten Bilinear->Linear. BILIN-07 non-source half closed; source half is Plan 13-01's Task 1.
+**Last activity:** 2026-04-17 -- 13-04-PLAN.md executed (docs-only, 2 files, 1 commit f77560d)
 
-Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [░░░░░░░░░░] 0/4 phases
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [░░░░░░░░░░] 0/4 phases (Phase 13 Plan 4/4 of 4 plans complete)
 
 ## Decisions
 
@@ -85,10 +85,26 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-17
-Stopped at: ROADMAP.md created with Phases 13-16; REQUIREMENTS.md traceability complete.
-Next: `/gsd:plan-phase 13` to decompose Phase 13 (Bilinear Neural State & Stability Monitor)
-into executable plans. Phase branch: `gsd/phase-13-bilinear-neural-state`.
+Stopped at: Plan 13-04 complete (docs-only drift correction). Plans 13-01/13-02/13-03 executing
+in Wave 1 parallel (source-code work). 13-04 is Wave 1 final for docs.
+Next: await completion of 13-01/13-02/13-03 to close Phase 13 fully.
 Resume file: None
+
+---
+
+### 2026-04-17 -- Plan 13-04 complete
+
+- CLAUDE.md: directory-tree `generative_models/` block rewritten to actual `models/`
+  layout (5 files: task_dcm_model.py, spectral_dcm_model.py, rdcm_model.py, guides.py,
+  amortized_wrappers.py). task_dcm_model.py annotated `[v0.3.0: + bilinear B path]`.
+- .planning/PROJECT.md line 23: `- Bilinear neural state equation (dx/dt = Ax + Cu)...`
+  rewritten to `- **Linear** neural state equation (dx/dt = Ax + Cu)...`. The v0.3.0
+  true-bilinear entry will be added to Validated when Phase 16 passes.
+- Closes BILIN-07 non-source half. Source half (neural_state.py module + class
+  docstrings) is Plan 13-01 Task 1.
+- Commit: f77560d `docs(13-04): correct stale doc drift (CLAUDE.md tree + PROJECT.md
+  linear vs bilinear)`. Two .md files, zero source/test edits -- clean Wave 1
+  parallelism with 13-01/13-02/13-03.
 
 ---
 *Last updated: 2026-04-17 after v0.3.0 roadmap creation (Phases 13-16, 27 requirements mapped)*
