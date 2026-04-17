@@ -20,7 +20,7 @@ point estimate. This is the scientific meaning that must be preserved above all 
 ### Validated
 
 - Balloon-Windkessel hemodynamic forward model with torchdiffeq ODE integration — v0.1.0
-- Bilinear neural state equation (dx/dt = Ax + Cu) with explicit A matrix — v0.1.0
+- **Linear** neural state equation (dx/dt = Ax + Cu) with explicit A matrix — v0.1.0
 - BOLD signal equation mapping hemodynamic states to observations — v0.1.0
 - Cross-spectral density computation matching SPM conventions — v0.1.0
 - Spectral DCM transfer function H(w) and predicted CSD — v0.1.0
