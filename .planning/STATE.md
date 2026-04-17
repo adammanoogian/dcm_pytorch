@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-04-17)
 
 **Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
 **Phase:** Phase 13 -- Bilinear Neural State & Stability Monitor (in progress)
-**Plan:** 13-04 complete (doc-rename non-source sites); 13-01/13-02/13-03 in parallel Wave 1
-**Status:** Plan 13-04 shipped: CLAUDE.md tree corrected to `models/` layout + PROJECT.md line 23 rewritten Bilinear->Linear. BILIN-07 non-source half closed; source half is Plan 13-01's Task 1.
-**Last activity:** 2026-04-17 -- 13-04-PLAN.md executed (docs-only, 2 files, 1 commit f77560d)
+**Plan:** 13-01 complete + 13-04 complete; 13-02/13-03 still in Wave 1
+**Status:** Plans 13-01 + 13-04 shipped. BILIN-01 (parameterize_B) + BILIN-02 (compute_effective_A) live in `forward_models/neural_state.py` with 9 new passing tests; BILIN-07 fully closed (source half via 13-01, non-source via 13-04). Existing `test_neural_state.py` (8) + broad regression `test_ode_integrator.py`/`test_task_simulator.py` (34) all green.
+**Last activity:** 2026-04-17 -- 13-01-PLAN.md executed (3 files modified, 3 task commits + 1 metadata commit)
 
-Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [░░░░░░░░░░] 0/4 phases (Phase 13 Plan 4/4 of 4 plans complete)
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [░░░░░░░░░░] 0/4 phases (Phase 13: 2/4 plans complete -- 13-01, 13-04)
 
 ## Decisions
 
@@ -85,12 +85,42 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-17
-Stopped at: Plan 13-04 complete (docs-only drift correction). Plans 13-01/13-02/13-03 executing
-in Wave 1 parallel (source-code work). 13-04 is Wave 1 final for docs.
-Next: await completion of 13-01/13-02/13-03 to close Phase 13 fully.
+Stopped at: Plan 13-01 complete. Bilinear utilities (parameterize_B, compute_effective_A)
+available from `pyro_dcm.forward_models`. SUMMARY at
+`.planning/phases/13-bilinear-neural-state/13-01-SUMMARY.md`.
+Next: Plans 13-02 (extend `NeuralStateEquation.derivatives` with optional `B`/`u_mod`
+kwargs + bit-exact linear-invariance test) and 13-03 (stability monitor inside
+`CoupledDCMSystem`).
 Resume file: None
 
 ---
+
+### 2026-04-17 -- Plan 13-01 complete
+
+- `src/pyro_dcm/forward_models/neural_state.py`:
+  - New `parameterize_B(B_free, b_mask)` implements BILIN-01: masked (J,N,N)
+    factory; elementwise mult only; DeprecationWarning on non-zero b_mask
+    diagonal (Pitfall B5); ValueError on shape mismatch or non-3D inputs.
+  - New `compute_effective_A(A, B, u_mod)` implements BILIN-02:
+    `A + einsum('j,jnm->nm', u_mod, B)`; explicit J=0 short-circuit returns
+    `A` bit-exactly (no einsum call, no allocation).
+  - Module docstring rewritten to label `A+Cu` as **linear form** (BILIN-07
+    source half); `NeuralStateEquation` class summary line rewritten likewise.
+    Existing `parameterize_A` body and `NeuralStateEquation` method bodies
+    untouched.
+- `src/pyro_dcm/forward_models/__init__.py`: `compute_effective_A` +
+  `parameterize_B` re-exported in the Phase 1 section of `__all__`.
+- `tests/test_bilinear_utils.py`: new file, 9 passing tests across shape,
+  mask semantics, default-diagonal pattern, DeprecationWarning path, J=0
+  roundtrip, ValueError path, einsum correctness to 1e-12 tolerance, and
+  J=0 short-circuit. Existing `test_neural_state.py` (8/8) untouched and green.
+- Commits: 9e7f993 `feat(13-01): add parameterize_B + compute_effective_A
+  utilities`; df1f15a `feat(13-01): export parameterize_B + compute_effective_A
+  from forward_models`; fcedc56 `test(13-01): add tests/test_bilinear_utils.py
+  with 9 coverage tests`.
+- Regression subset (`test_ode_integrator.py` + `test_task_simulator.py`)
+  green: 34/34 in 194s. No coupling added to `nn.Module` or `torchdiffeq` at
+  this plan -- utilities are pure tensor ops consumable by later plans.
 
 ### 2026-04-17 -- Plan 13-04 complete
 
@@ -107,4 +137,4 @@ Resume file: None
   parallelism with 13-01/13-02/13-03.
 
 ---
-*Last updated: 2026-04-17 after v0.3.0 roadmap creation (Phases 13-16, 27 requirements mapped)*
+*Last updated: 2026-04-17 after plan 13-01 completion (BILIN-01, BILIN-02, BILIN-07 source half)*
