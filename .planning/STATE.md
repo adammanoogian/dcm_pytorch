@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-04-17)
 ## Current Position
 
 **Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
-**Phase:** Phase 13 -- Bilinear Neural State & Stability Monitor (in progress)
-**Plan:** 13-01 + 13-02 + 13-04 complete; 13-03 still pending
-**Status:** Plans 13-01, 13-02, 13-04 shipped. BILIN-01 (parameterize_B), BILIN-02 (compute_effective_A), and BILIN-03 (NeuralStateEquation bilinear extension + bit-exact linear-invariance test) live in `forward_models/neural_state.py`. BILIN-07 fully closed (source half via 13-01, non-source via 13-04). Phase 13 test totals: `test_neural_state.py` (8) + `test_bilinear_utils.py` (9) + `test_linear_invariance.py` (7) = 24 passing. Downstream regression sweep `test_ode_integrator.py`/`test_task_simulator.py`/`test_task_dcm_model.py` 44/44 green.
-**Last activity:** 2026-04-17 -- 13-02-PLAN.md executed (2 files modified, 2 task commits + 1 metadata commit)
+**Phase:** Phase 13 -- Bilinear Neural State & Stability Monitor (4/4 plans complete)
+**Plan:** 13-01 + 13-02 + 13-03 + 13-04 all shipped
+**Status:** All four Phase 13 plans complete. BILIN-01 (parameterize_B), BILIN-02 (compute_effective_A), BILIN-03 (NeuralStateEquation bilinear + bit-exact linear-invariance), BILIN-04 (CoupledDCMSystem bilinear integration), BILIN-05 (pyro_dcm.stability eigenvalue monitor), BILIN-06 (3-sigma 500s no-NaN worst-case), and BILIN-07 (doc-rename) all closed. Phase 13 test totals: `test_neural_state.py` (8) + `test_bilinear_utils.py` (9) + `test_linear_invariance.py` (7) + `test_coupled_system_bilinear.py` (5) + `test_stability_monitor.py` (5) = 34 passing. Downstream regression sweep `test_ode_integrator.py`/`test_task_simulator.py`/`test_task_dcm_model.py` 44/44 green (BILIN-04 acceptance gate).
+**Last activity:** 2026-04-17 -- 13-03-PLAN.md executed (4 files touched, 4 task commits + 1 metadata commit)
 
-Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [░░░░░░░░░░] 0/4 phases (Phase 13: 3/4 plans complete -- 13-01, 13-02, 13-04)
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [██░░░░░░░░] 1/4 phases (Phase 13 complete)
 
 ## Decisions
 
@@ -85,13 +85,16 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-17
-Stopped at: Plan 13-02 complete. `NeuralStateEquation.derivatives` now accepts
-keyword-only `B` / `u_mod`; linear short-circuit is bit-exact (atol=1e-10 gate
-at `tests/test_linear_invariance.py`). SUMMARY at
-`.planning/phases/13-bilinear-neural-state/13-02-SUMMARY.md`.
-Next: Plan 13-03 (stability monitor inside `CoupledDCMSystem` with
-`stability_check_every` cadence + `pyro_dcm.stability` logger + BOLD-level
-linear-invariance regression).
+Stopped at: Plan 13-03 complete. `CoupledDCMSystem` now accepts keyword-only
+`B` (J,N,N), `n_driving_inputs`, and `stability_check_every`; bilinear path
+routes through `compute_effective_A`; `_maybe_check_stability` logs WARNING
+on the `pyro_dcm.stability` named logger when `max Re(eig(A_eff)) > 0` and
+never raises (D4). NullHandler attached to `pyro_dcm` root logger in
+`src/pyro_dcm/__init__.py`. BILIN-04/05/06 all closed; BILIN-06 3-sigma
+500s rk4 no-NaN worst-case passing. SUMMARY at
+`.planning/phases/13-bilinear-neural-state/13-03-SUMMARY.md`.
+Next: Phase 13 closure audit + begin Phase 14 (bilinear simulators, SIM-01
+through SIM-05).
 Resume file: None
 
 ---
@@ -137,6 +140,59 @@ Resume file: None
   linear vs bilinear)`. Two .md files, zero source/test edits -- clean Wave 1
   parallelism with 13-01/13-02/13-03.
 
+### 2026-04-17 -- Plan 13-03 complete
+
+- `src/pyro_dcm/__init__.py`: attached `NullHandler` to the `pyro_dcm` root
+  logger via underscore-prefixed `_logging` alias (PEP 282, stdlib library
+  logging HOWTO). Propagates to `pyro_dcm.stability` child by hierarchical
+  semantics. Not added to `__all__`.
+- `src/pyro_dcm/forward_models/coupled_system.py`:
+  - Module-level `_STABILITY_LOGGER = logging.getLogger("pyro_dcm.stability")`.
+  - `CoupledDCMSystem.__init__` gained keyword-only `B: Tensor | None = None`
+    (J,N,N), `n_driving_inputs: int | None = None`, and
+    `stability_check_every: int = 10`. `B` registered as buffer when
+    supplied, auto-aligned to `A.device` / `A.dtype` (mitigates device-drift
+    risk, 13-RESEARCH Section 10.3). `ValueError` raised when `B` non-empty
+    and `n_driving_inputs is None` (explicit-split policy).
+  - `CoupledDCMSystem.forward` now branches: when `self.B is None` or empty-J,
+    executes the literal `dx = self.A @ x + self.C @ u_all` expression
+    (grep-verified: exactly one match on line 291); when non-empty, slices
+    `u_drive = u_all[:n_driving_inputs]` + `u_mod = u_all[n_driving_inputs:]`,
+    composes `A_eff = compute_effective_A(A, B, u_mod)`, routes
+    `dx = A_eff @ x + C @ u_drive`, then invokes `_maybe_check_stability`.
+  - New `_maybe_check_stability(t, A_eff, u_mod)` method: counter-modulo
+    cadence on RHS evaluations; `stability_check_every=0` disables entirely
+    (zero overhead). `torch.no_grad()` + `A_eff.detach()` avoids
+    complex-gradient overhead. Logs WARNING on `max Re(eig(A_eff)) > 0`
+    with format `"Stability warning at t=%.2fs: max Re(eig(A_eff))=%+.3f;
+    ||B·u_mod||_F=%.3f"`. Never raises (D4).
+- `tests/test_coupled_system_bilinear.py` (new): 5 passing tests in
+  `TestCoupledDCMSystemBilinear` — `torch.equal` bit-exact no-kwarg-vs-B=None,
+  buffer vs parameter assertion, `float32 -> float64` dtype auto-alignment,
+  `pytest.raises(ValueError, match="n_driving_inputs")` on missing
+  n_driving_inputs, and BOLD RMS > 1e-6 sanity check for the bilinear path.
+- `tests/test_stability_monitor.py` (new): 5 passing tests across two
+  classes. `TestStabilityMonitor` (BILIN-05, 4 tests): unstable fires
+  WARNING, stable silent, `stability_check_every=0` disables, monitor
+  never raises. `TestThreeSigmaWorstCase` (BILIN-06, 1 test): deterministic
+  `N=3` fixture with `parameterize_A(zeros)` baseline, `B: (1,3,3)`
+  off-diagonal `3.0` diagonal `0`, `C = zeros(3,1)`, `u_drive=0` +
+  `u_mod=1` sustained, rk4 `dt=0.1` for 500 s — `torch.isfinite(sol).all()`.
+- Commits: `3e2ffa9` `feat(13-03): add pyro_dcm.stability logger
+  NullHandler`; `956e1de` `feat(13-03): extend CoupledDCMSystem with
+  bilinear path + stability monitor`; `5988dbd` `test(13-03): add
+  test_coupled_system_bilinear.py`; `ae9a265` `test(13-03): add
+  test_stability_monitor.py with BILIN-06 3-sigma 500s test`.
+- Verification: Phase 13 full suite + neural_state 34/34 green in 30.92s.
+  BILIN-04 acceptance gate: `test_ode_integrator.py` +
+  `test_task_simulator.py` + `test_task_dcm_model.py` 44/44 green in
+  245.43s. Grep sentinels: `dx = self.A @ x + self.C @ u_all` exactly once
+  (line 291), `_STABILITY_LOGGER = logging.getLogger` exactly once (line
+  50), `NullHandler` twice in `__init__.py` (comment + attachment call,
+  both expected). `pyro_dcm.stability` logger resolves to WARNING (level 30).
+- BILIN-04 / BILIN-05 / BILIN-06 all closed. Phase 13 requirement coverage
+  7/7 (BILIN-01 through BILIN-07). No deviations from plan.
+
 ### 2026-04-17 -- Plan 13-02 complete
 
 - `src/pyro_dcm/forward_models/neural_state.py`:
@@ -165,4 +221,4 @@ Resume file: None
   structurally (literal short-circuit) AND empirically (atol=1e-10 fixtures).
 
 ---
-*Last updated: 2026-04-17 after plan 13-02 completion (BILIN-03)*
+*Last updated: 2026-04-17 after plan 13-03 completion (BILIN-04, BILIN-05, BILIN-06)*
