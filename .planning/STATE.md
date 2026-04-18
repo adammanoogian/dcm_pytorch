@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-04-17)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.3.0 Bilinear DCM Extension -- Phases 13 and 14 complete and verified; ready for Phase 15
+**Current focus:** v0.3.0 Bilinear DCM Extension -- Phase 15 Plan 15-01 complete; Plans 15-02, 15-03 pending
 
 ## Current Position
 
 **Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
-**Phase:** Phase 14 -- Stimulus Utilities & Bilinear Simulator (COMPLETE, verified 2026-04-18, 14/14 must-haves)
-**Plan:** --
-**Status:** Phase 14 verified against codebase. SIM-01..05 all Complete in REQUIREMENTS.md traceability. VERIFICATION.md passed (14/14 must-haves: five ROADMAP SCs + nine plan truths). Next: Phase 15 Pyro Generative Model with B Priors and Masks (MODEL-01..07). Branch: run `/gsd:discuss-phase 15` (recommended) or `/gsd:plan-phase 15`.
-**Last activity:** 2026-04-18 -- Phase 14 verification passed; VERIFICATION.md at `.planning/phases/14-stimulus-utilities-and-bilinear-simulator/14-VERIFICATION.md`.
+**Phase:** Phase 15 -- Pyro Generative Model with B Priors and Masks (IN PROGRESS; Plan 15-01 complete 2026-04-18)
+**Plan:** 15-01 COMPLETE; 15-02 (guide auto-discovery) + 15-03 (packer refusal + extract_posterior bilinear keys) pending
+**Status:** Plan 15-01 closes MODEL-01, MODEL-02, MODEL-03 (BOTH halves), MODEL-04. `task_dcm_model` extended with keyword-only `b_masks` + `stim_mod` kwargs behind structural linear short-circuit (no `B=` kwarg to CoupledDCMSystem when b_masks is None/[]); per-modulator `B_free_j ~ Normal(0, 1.0).to_event(2)` loop + stacked `parameterize_B` + `pyro.deterministic("B", B_stacked)` guarded in bilinear branch (L3). Module-level `B_PRIOR_VARIANCE = 1.0` (D1). NaN-safe predicted_bold guard ported from amortized_wrappers.py:143-145. 19/19 tests green in `test_task_dcm_model.py` (10 pre-existing + 8 TestBilinearStructure + 1 TestBilinearSVI). Phase 13+14 regression 51/51 green. Next: Plan 15-02 (guide factory + auto-discovery tests for AutoNormal / AutoLowRankMVN / AutoIAFNormal).
+**Last activity:** 2026-04-18 -- Plan 15-01 complete; 3 atomic commits on `gsd/phase-15-pyro-bilinear-model` (23a5591, cd405d2, 807fb46).
 
-Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [█████░░░░░] Phases 13 + 14 complete (2/4 phases done; 15-16 pending)
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [██████░░░░] Phases 13 + 14 complete + Phase 15 Plan 15-01 complete (15-02, 15-03, Phase 16 pending)
 
 ## Decisions
 
@@ -85,16 +85,218 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-18
-Stopped at: Plan 14-02 complete. `simulate_task_dcm` extended with
-keyword-only `B_list`, `stimulus_mod`, `n_driving_inputs` args; structural
-linear short-circuit inherits Phase 13's `coupled_system.py:287-291` gate
-(torch.equal bit-exact); return-dict gains `'B_list'` and `'stimulus_mod'`
-keys. 5 new tests in `tests/test_bilinear_simulator.py` close SIM-03 +
-SIM-04 + SIM-05. Phase 14 5/5 requirements closed. Branch
-`gsd/phase-14-stimulus-and-bilinear-simulator` carries 6 Phase-14 commits
-(5900146, c82a961, f955d94, abeb5d8, 88cc1bb, 22ee2f7).
-Next: Phase 15 (Pyro generative model; MODEL-01..07).
+Stopped at: Plan 15-01 complete. `task_dcm_model` extended with
+keyword-only `b_masks`, `stim_mod` kwargs behind structural linear
+short-circuit (`CoupledDCMSystem(A, C, stimulus)` with NO `B=` kwarg
+when `b_masks is None` or `[]` -- inherits Phase 13
+`coupled_system.py:287-291` gate). Bilinear branch: per-modulator
+`pyro.sample(f"B_free_{j}", Normal(0, 1.0).to_event(2))` Python loop
+(NO pyro.plate) + `torch.stack` + single `parameterize_B` call +
+`pyro.deterministic("B", B_stacked)` (L3-guarded). Module-level
+`B_PRIOR_VARIANCE = 1.0` (D1). NaN-safe `predicted_bold` guard ported
+from `amortized_wrappers.py:143-145`. 9 new tests in
+`tests/test_task_dcm_model.py` (8 TestBilinearStructure + 1
+TestBilinearSVI) close MODEL-01, MODEL-02, MODEL-03 (BOTH halves),
+MODEL-04. All 10 pre-Phase-15 tests unchanged and green. Branch
+`gsd/phase-15-pyro-bilinear-model` carries 3 Plan-15-01 commits
+(23a5591, cd405d2, 807fb46) on top of existing Phase 15 planning
+commits.
+Next: Plan 15-02 (guide factory + auto-discovery across AutoNormal /
+AutoLowRankMVN / AutoIAFNormal for the new `B_free_j` sites).
 Resume file: None
+
+---
+
+### 2026-04-18 -- Plan 15-01 complete
+
+- `src/pyro_dcm/models/task_dcm_model.py`:
+  - Import block widened: `parameterize_B` added to the
+    `neural_state` import; `PiecewiseConstantInput` +
+    `merge_piecewise_inputs` added to the `ode_integrator` import
+    (alphabetized within the existing `from ... import ( ... )`
+    blocks).
+  - New module-level constant `B_PRIOR_VARIANCE: float = 1.0` with a
+    NumPy-style docstring citing D1 (SPM12 `spm_dcm_fmri_priors.m`
+    pC.B = B one-state match) and explicitly noting the YAML "1/16"
+    claim was audited as factually wrong (v0.3.0 PITFALLS.md Section
+    B8). Future one-state vs two-state alternatives tracked in
+    REQUIREMENTS.md future-candidate BILIN-08 (v0.4.0+ scope).
+  - New module-private helper `_validate_bilinear_args(b_masks,
+    stim_mod, N) -> None` raising `ValueError` on None `stim_mod` /
+    per-index `b_masks[j].shape != (N, N)` / `len(b_masks) !=
+    stim_mod.values.shape[1]`, and `TypeError` if `stim_mod` lacks
+    `.values` attr. Error messages include expected-vs-actual values
+    per CLAUDE.md convention. Called ONCE from `task_dcm_model`
+    inside `if b_masks is not None:` gate, BEFORE any `pyro.sample`.
+  - `task_dcm_model` signature extended with two keyword-only args
+    after `*` sentinel: `b_masks: list[torch.Tensor] | None = None`,
+    `stim_mod: object | None = None`. All 7 pre-existing positional
+    parameters untouched. All 10 pre-Phase-15 tests (which never
+    pass these kwargs) continue to work unchanged.
+  - Docstring expanded with two new Parameters entries, new
+    "Linear short-circuit (MODEL-04)" + "Bilinear mode (MODEL-01)" +
+    "NaN-safe BOLD guard" Notes sections, and SPM12
+    `spm_dcm_fmri_priors.m` pC.B reference.
+  - Body changes (five structural insertions):
+    1. After `N = a_mask.shape[0]`: empty-list normalization
+       `if b_masks is not None and len(b_masks) == 0: b_masks = None`
+       (MODEL-04 edge case — J=0 takes the linear short-circuit as
+       a single code path).
+    2. After `M = c_mask.shape[1]`: validation gate
+       `if b_masks is not None: _validate_bilinear_args(b_masks,
+       stim_mod, N)`.
+    3. After `C = C * c_mask`: bilinear B-sampling block (MODEL-01).
+       Per-modulator `for j, b_mask_j in enumerate(b_masks): B_free_j
+       = pyro.sample(f"B_free_{j}", dist.Normal(torch.zeros_like(
+       b_mask_j), B_prior_std * torch.ones_like(b_mask_j))
+       .to_event(2))`. L1 locked — full `(N, N)` shape, NOT a flat
+       vector; NO `pyro.plate` around the loop. After the loop:
+       `torch.stack(B_free_list, dim=0)` -> `(J, N, N)`,
+       `torch.stack(list(b_masks), dim=0)` -> `(J, N, N)`, single
+       `parameterize_B(B_free_stacked, b_mask_stacked)` call.
+       `pyro.deterministic("B", B_stacked)` emitted ONLY in this
+       branch (L3 guard preserves linear trace). Merge driving +
+       modulator inputs via `merge_piecewise_inputs(drive_input,
+       mod_input)` — accepts either `PiecewiseConstantInput` directly
+       or a breakpoint dict `{"times", "values"}` (same contract as
+       Phase 14 `_normalize_stimulus_to_input_fn`).
+    4. Replaced `system = CoupledDCMSystem(A, C, stimulus)` with a
+       branched construction:
+       - Bilinear: `CoupledDCMSystem(A, C, merged_input_fn,
+         B=B_stacked, n_driving_inputs=c_mask.shape[1])` — engages
+         Phase 13 gate at `coupled_system.py:292-300`.
+       - Linear short-circuit: `CoupledDCMSystem(A, C, stimulus)` —
+         inherits Phase 13 literal-expression gate at
+         `coupled_system.py:287-291` with NO `B=` kwarg (MODEL-04,
+         L3).
+    5. Before `pyro.deterministic("predicted_bold", predicted_bold)`:
+       NaN/Inf guard `if torch.isnan(predicted_bold).any() or
+       torch.isinf(predicted_bold).any(): predicted_bold =
+       torch.zeros_like(predicted_bold).detach()`. Pattern ported
+       from `amortized_wrappers.py:143-145`; extended to also catch
+       `isinf` (defensive). Applied in BOTH branches.
+- `tests/test_task_dcm_model.py`:
+  - New `task_bilinear_data` fixture extending `task_data` with J=1
+    bilinear coverage. `b_masks = [b_mask_0]` where
+    `b_mask_0[1, 0] = 1.0` (off-diagonal 1<-0 connection modulated,
+    zero diagonal per Pitfall B5). `stim_mod` from
+    `make_epoch_stimulus(event_times=[10.0], event_durations=[10.0],
+    event_amplitudes=[1.0], duration=30.0, dt=0.01, n_inputs=1)`
+    wrapped in `PiecewiseConstantInput` (Pitfall B12 preferred
+    boxcar primitive for dt-invariance under rk4 mid-step sampling).
+    Returns superset of `task_data` with added `b_masks`,
+    `stim_mod`, `J` keys.
+  - New `TestBilinearStructure` class (8 tests, 5.66s):
+    - `test_B_PRIOR_VARIANCE_constant` — imports constant and
+      asserts `== 1.0` (MODEL-02).
+    - `test_linear_reduction_when_b_masks_none` — passes `b_masks=
+      None, stim_mod=None`, asserts `site_names == {A_free, C,
+      noise_prec, obs, A, predicted_bold}` exactly and no
+      `B`/`B_free_*` sites (MODEL-04, L3).
+    - `test_linear_reduction_when_b_masks_empty_list` — passes
+      `b_masks=[]`, asserts same linear site structure (MODEL-04
+      []-to-None normalization).
+    - `test_bilinear_trace_has_B_free_sites` — asserts `B_free_0`
+      exists (NOT bare `B_free`), `B_free_0` value shape `(N, N)`,
+      `B` deterministic site exists with shape `(J, N, N)`
+      (MODEL-01 + L1).
+    - `test_bilinear_masking_applied` — iterates all `(i, k)` where
+      `b_mask == 0` and asserts `B[0, i, k] == 0` exactly (MODEL-03
+      model-side).
+    - `test_bilinear_stim_mod_required_error` —
+      `pytest.raises(ValueError, match="stim_mod is required")` when
+      bilinear with `stim_mod=None`.
+    - `test_bilinear_stim_mod_shape_mismatch_error` — builds
+      2-column `stim_mod` with 1-element `b_masks`, asserts
+      `pytest.raises(ValueError, match=r"stim_mod\.values\.shape
+      \[1\]=2")`.
+    - `test_bilinear_deprecation_warning_on_stacked_nonzero_diag` —
+      constructs non-zero-diagonal `bad_b_mask` (`[0, 0] = 1.0`),
+      wraps `pyro.poutine.trace(conditioned).get_trace(...)` in
+      `pytest.warns(DeprecationWarning, match="non-zero diagonal")`.
+      Closes the SC-4 stacked-path coverage gap that Phase 13
+      `test_bilinear_utils.py` (N, N)-test does not exercise
+      (MODEL-03 stacked half).
+  - New `TestBilinearSVI` class (1 test, 29.8s):
+    - `_silence_stability_logger` autouse fixture sets
+      `pyro_dcm.stability` logger level to ERROR via
+      `caplog.set_level` (D4 + R6 — stability monitor WARN spam
+      silenced; monitor fires frequently in bilinear early-SVI but
+      does NOT raise).
+    - `test_bilinear_svi_smoke_3region_converges` — 40 SVI steps
+      with `AutoNormal(task_dcm_model, init_scale=0.005)` (L2) +
+      `ClippedAdam(lr=0.01, clip_norm=10.0)` + `Trace_ELBO`.
+      Asserts every loss finite; asserts `mean(last_10) <
+      mean(first_10)`. Runtime budget 75s is SOFT — warns
+      (`UserWarning`) but does not fail if exceeded (Pitfall B10
+      3-6x slowdown estimate). Closes MODEL-04 bilinear SVI
+      convergence acceptance gate.
+- Commits: `23a5591` `feat(15-01): extend task_dcm_model with
+  bilinear B path`; `cd405d2` `test(15-01): bilinear structure
+  tests for task_dcm_model`; `807fb46` `test(15-01): bilinear SVI
+  smoke test (3-region J=1, 40 steps, L2 init_scale)`.
+- Verification: `tests/test_task_dcm_model.py` 19/19 in 74.16s (10
+  pre-existing + 8 TestBilinearStructure + 1 TestBilinearSVI); Phase
+  13+14 regression 51/51 in 298.50s
+  (`test_linear_invariance.py`, `test_coupled_system_bilinear.py`,
+  `test_bilinear_utils.py`, `test_bilinear_simulator.py`,
+  `test_stimulus_utils.py`). Ruff clean on all new code
+  (pre-existing I001 import-sort in both files + F401 unused
+  `pyro.distributions` in test file confirmed via `git stash`
+  round-trip; not touched per Phase 14 precedent). Mypy not run
+  (not invoked by pre-existing CI in this environment; pytest-timeout
+  plugin also unavailable, so `--timeout=...` flags silently ignored).
+- **Grep sentinels** (all met within acceptable ranges):
+  Source file: `B_PRIOR_VARIANCE` 5 (within 3-5 acceptable —
+  1 const def + 3 docstring + 1 sqrt literal), `f"B_free_{j}"` 2
+  (docstring + literal sample call), `merge_piecewise_inputs` 2
+  (import + call), `pyro.deterministic("B"` 3 (2 docstring + 1
+  call), `CoupledDCMSystem(A, C, stimulus)` 1 (linear short-circuit),
+  `CoupledDCMSystem(` 2 (linear + bilinear), `_validate_bilinear_args`
+  2 (def + call), `torch.isnan(predicted_bold)` 1.
+  Test file: `B_PRIOR_VARIANCE` 7, `B_free_0` 7,
+  `test_linear_reduction_when_b_masks` 2,
+  `pytest.raises(ValueError, match="stim_mod is required")` 1,
+  `test_bilinear_deprecation_warning_on_stacked_nonzero_diag` 2
+  (docstring + def), `pytest.warns(DeprecationWarning` 1,
+  `init_scale=0.005` 3 (1 literal call + 2 docstring),
+  `_silence_stability_logger` 1,
+  `test_bilinear_svi_smoke_3region_converges` 1,
+  `class TestBilinearStructure` 1, `class TestBilinearSVI` 1,
+  `pyro_dcm.stability` 2.
+- **L1 applied** (from plan frontmatter): `B_free_j` sampled as
+  full `(N, N)` `Normal(0, 1.0).to_event(2)` — NOT a flat vector of
+  free entries. Required for AutoLowRankMultivariateNormal's
+  single-vector concatenation compatibility in Plan 15-02
+  (`AutoContinuous._unpack_latent` reshapes by site-event-dim).
+- **L2 applied** (from plan frontmatter): `init_scale=0.005` for
+  the bilinear SVI smoke test (half the linear default `0.01`),
+  passed **explicitly** to `AutoNormal`. `create_guide` factory
+  was NOT changed (additive-discipline). Downstream Phase 16
+  recovery benchmark callers will pass `init_scale=0.005`
+  explicitly.
+- **L3 applied** (from plan frontmatter): `pyro.deterministic("B",
+  B_stacked)` emitted ONLY inside the bilinear branch (guarded
+  by `if b_masks is not None:`). Linear-mode trace has NO `"B"`
+  site — verified by `test_linear_reduction_when_b_masks_none`
+  via exact set-equality `site_names == {A_free, C, noise_prec,
+  obs, A, predicted_bold}`. Preserves the pre-Phase-15
+  `test_model_trace_has_expected_sites` assertion byte-for-byte.
+- **Deviations:** None — plan executed exactly as written; no
+  auto-fix rules triggered. Minor sentinel variances documented
+  in 15-01-SUMMARY.md (all within acceptable ranges; docstring
+  references count toward literal-pattern greps):
+  `B_PRIOR_VARIANCE` count 5 (plan target 4, acceptable 3-5);
+  `init_scale=0.005` count 3 (plan target 1; 1 literal call + 2
+  docstring references). Pre-existing ruff I001 + F401 not fixed
+  (Phase 14 precedent: don't touch pre-existing lint in additive
+  plans).
+- Requirements closed: MODEL-01, MODEL-02, MODEL-03 (BOTH halves:
+  Phase 13 `(N, N)` source-side at `test_bilinear_utils.py` +
+  Plan 15-01 stacked `(J, N, N)` call-site at
+  `test_bilinear_deprecation_warning_on_stacked_nonzero_diag`),
+  MODEL-04. Phase 15 now 4/7 requirements closed (MODEL-05,
+  MODEL-06, MODEL-07 pending in Plans 15-02 and 15-03).
 
 ---
 
