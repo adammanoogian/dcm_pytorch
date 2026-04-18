@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-04-17)
 ## Current Position
 
 **Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
-**Phase:** Phase 13 -- Bilinear Neural State & Stability Monitor (COMPLETE, verified 2026-04-17, 18/18 must-haves)
-**Plan:** --
-**Status:** Phase 13 verified against codebase. BILIN-01..07 all Complete in REQUIREMENTS.md traceability. Next: Phase 14 Stimulus Utilities & Bilinear Simulator (SIM-01..05). Branch: run `/gsd:discuss-phase 14` (recommended) or `/gsd:plan-phase 14`.
-**Last activity:** 2026-04-17 -- Phase 13 verification passed; VERIFICATION.md at `.planning/phases/13-bilinear-neural-state/13-VERIFICATION.md`.
+**Phase:** Phase 14 -- Stimulus Utilities & Bilinear Simulator (IN PROGRESS, 1/2 plans complete)
+**Plan:** Plan 14-01 complete (stimulus utilities); Plan 14-02 pending (bilinear `simulate_task_dcm` extension)
+**Status:** Plan 14-01 shipped: `make_event_stimulus`, `make_epoch_stimulus`, `merge_piecewise_inputs` + 25-test file. SIM-01 and SIM-02 closed. Next: Plan 14-02 (SIM-03/04/05). Branch: `gsd/phase-14-stimulus-and-bilinear-simulator` carries 2 Phase-14 commits (5900146 feat, c82a961 test).
+**Last activity:** 2026-04-18 -- Plan 14-01 complete; SUMMARY at `.planning/phases/14-stimulus-utilities-and-bilinear-simulator/14-01-SUMMARY.md`.
 
-Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [██▌░░░░░░░] 1/4 phases (Phase 13 complete; 14-16 pending)
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [███▏░░░░░░] Phase 13 complete + 1/2 Phase 14 plans (2/4 phases in flight; 15-16 pending)
 
 ## Decisions
 
@@ -84,19 +84,75 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-04-17
-Stopped at: Phase 13 complete + verified (18/18 must-haves against codebase).
-All four plans (13-01..13-04) shipped with 34 new tests + 44-test downstream
-regression sweep both green. BILIN-01..07 all Complete in REQUIREMENTS.md
-traceability. Branch `gsd/phase-13-bilinear-neural-state` carries 12
-Phase-13 commits. VERIFICATION.md at
-`.planning/phases/13-bilinear-neural-state/13-VERIFICATION.md`.
-Next: Phase 14 Stimulus Utilities & Bilinear Simulator (SIM-01..05).
-Recommended: `/gsd:discuss-phase 14` for implementation decisions, then
-`/gsd:plan-phase 14`.
+Last session: 2026-04-18
+Stopped at: Plan 14-01 complete. Stimulus utilities (`make_event_stimulus`,
+`make_epoch_stimulus`, `merge_piecewise_inputs`) shipped with 25 new tests
+in `tests/test_stimulus_utils.py` (all green). SIM-01 and SIM-02 closed;
+SIM-03..05 remain for Plan 14-02. Branch
+`gsd/phase-14-stimulus-and-bilinear-simulator` carries 2 Phase-14 commits
+(5900146 `feat(14-01): add stimulus utilities`; c82a961
+`test(14-01): unit tests for stimulus utilities`) on top of Phase 13 tip.
+Next: Plan 14-02 (bilinear `simulate_task_dcm` extension).
 Resume file: None
 
 ---
+
+### 2026-04-18 -- Plan 14-01 complete
+
+- `src/pyro_dcm/simulators/task_simulator.py`:
+  - New `make_event_stimulus(event_times, event_amplitudes, duration, dt,
+    n_inputs=None, dtype=torch.float64)` implements SIM-01: variable-amplitude
+    stick-function stimuli via quantized breakpoint construction. Normalizes
+    scalar / 1-D / 2-D amplitudes, sorts unsorted inputs, quantizes onsets
+    via `round(t/dt)*dt`, raises `ValueError` on same-grid-index collisions
+    (14-RESEARCH §3 R2), emits one-shot `UserWarning` on tail truncation.
+    Docstring cites Pitfall B12 and steers modulator callers to
+    `make_epoch_stimulus`.
+  - New `make_epoch_stimulus(event_times, event_durations, event_amplitudes,
+    duration, dt, n_inputs=None, dtype=torch.float64)` implements SIM-02:
+    boxcar-shaped modulatory inputs via delta-amp sweep. Quantizes on/off
+    times, clips at `duration` with one-shot `UserWarning`, SUMS overlapping
+    epochs + emits one-shot `UserWarning("Overlapping epochs detected; ...")`
+    per L1 locked decision.
+  - `import warnings` added at module top.
+- `src/pyro_dcm/utils/ode_integrator.py`:
+  - New `merge_piecewise_inputs(drive, mod) -> PiecewiseConstantInput` at
+    end of file. Takes `torch.unique(sorted=True)` of breakpoint times,
+    evaluates `drive(t_k)` and `mod(t_k)` per-breakpoint, concatenates into
+    `(K, M+J)` widened values. Raises `ValueError` on dtype/device mismatch
+    (no silent cast) per 14-RESEARCH §10.2 R3. Public helper per L2 locked
+    decision so Phase 15's Pyro model can import from `pyro_dcm.utils`
+    without crossing a simulators/ boundary.
+- `src/pyro_dcm/simulators/__init__.py`: `make_event_stimulus`,
+  `make_epoch_stimulus` re-exported in the Phase-1 section of `__all__`
+  (alphabetized).
+- `src/pyro_dcm/utils/__init__.py`: `merge_piecewise_inputs` re-exported.
+- `tests/test_stimulus_utils.py` (new): 25 passing tests across three classes
+  -- `TestMakeEventStimulus` (13 incl. 4 parametrize), `TestMakeEpochStimulus`
+  (8 incl. 3 parametrize), `TestMergePiecewiseInputs` (4). Explicit
+  `pytest.warns(UserWarning, match="Overlapping epochs")` asserts the L1
+  contract on overlapping epochs. `test_values_at_breakpoints_concat_correctly`
+  verifies `merged(t*) = cat(drive(t*), mod(t*))` at 6 query points covering
+  before-events, inside-block, in-rest, inside-mod, post-mod, and at an
+  exact breakpoint.
+- Commits: 5900146 `feat(14-01): add stimulus utilities (make_event_stimulus,
+  make_epoch_stimulus, merge_piecewise_inputs)`; c82a961 `test(14-01): unit
+  tests for stimulus utilities`.
+- Verification subsets all green: `test_stimulus_utils + test_task_simulator
+  + test_ode_integrator` 59/59 in 108s; Phase 13 regression subset
+  (`test_linear_invariance + test_coupled_system_bilinear + test_bilinear_utils
+  + test_neural_state + test_stability_monitor`) 34/34 in 18s;
+  `test_task_dcm_model` 10/10 in 40s. Full-suite collection: 454 tests
+  discoverable, no import errors. Ruff clean on all modified files.
+- Grep sentinels: `def make_event_stimulus` ×1, `def make_epoch_stimulus` ×1,
+  `def merge_piecewise_inputs` ×1, `Pitfall B12` ×3 in docstrings,
+  `Overlapping epochs` ×2 (docstring + warning), 6 overlap refs in test file.
+- **Decisions applied (both locked, no new decisions made):** L1 (overlap
+  sum + UserWarning); L2 (`merge_piecewise_inputs` in `utils/ode_integrator.py`).
+- Requirements closed: SIM-01, SIM-02. SIM-03..05 remain for Plan 14-02.
+- Pre-existing ruff E501 at `task_simulator.py:847` (in `make_random_stable_A`)
+  is unrelated to this plan, verified pre-existing via `git stash` round-trip,
+  and left untouched. Candidate for a future chore commit.
 
 ### 2026-04-17 -- Plan 13-01 complete
 
@@ -220,4 +276,4 @@ Resume file: None
   structurally (literal short-circuit) AND empirically (atol=1e-10 fixtures).
 
 ---
-*Last updated: 2026-04-17 after Phase 13 verification passed (18/18 must-haves; BILIN-01..07 Complete)*
+*Last updated: 2026-04-18 after Plan 14-01 complete (SIM-01, SIM-02 closed; 25 new tests green)*

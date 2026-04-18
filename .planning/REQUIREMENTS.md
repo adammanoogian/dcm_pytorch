@@ -32,8 +32,8 @@ Requirements for Bilinear DCM Extension. Each maps to a roadmap phase.
 
 ### Simulator & Stimulus Utilities
 
-- [ ] **SIM-01**: `make_event_stimulus(event_times, event_amplitudes, duration, dt) -> (T, J)` constructs variable-amplitude stick-function stimuli via piecewise-constant interpolation.
-- [ ] **SIM-02**: `make_epoch_stimulus(event_times, event_durations, event_amplitudes, duration, dt) -> (T, J)` constructs boxcar-shaped modulatory inputs for sustained-amplitude regimes. Documented as preferred primitive for modulators (stick functions are blurred by rk4 mid-steps; see Pitfall B12).
+- [x] **SIM-01**: `make_event_stimulus(event_times, event_amplitudes, duration, dt) -> (T, J)` constructs variable-amplitude stick-function stimuli via piecewise-constant interpolation.
+- [x] **SIM-02**: `make_epoch_stimulus(event_times, event_durations, event_amplitudes, duration, dt) -> (T, J)` constructs boxcar-shaped modulatory inputs for sustained-amplitude regimes. Documented as preferred primitive for modulators (stick functions are blurred by rk4 mid-steps; see Pitfall B12).
 - [ ] **SIM-03**: `simulate_task_dcm(..., B_list=None, stimulus_mod=None, ...)` accepts optional bilinear arguments. When `B_list=None`, output is exactly the current linear simulator output (regression test required).
 - [ ] **SIM-04**: Simulator return dict gains `B_list` and `stimulus_mod` keys (set to `None` in linear mode for forward compatibility).
 - [ ] **SIM-05**: `dt`-invariance test for stimulus utilities: ODE integration at `dt=0.01` and `dt=0.005` produce equivalent BOLD within `atol=1e-4` under a fixed bilinear ground truth.
@@ -105,8 +105,8 @@ Explicitly excluded from v0.3.0 (and often permanently).
 | BILIN-05 | Phase 13 | Complete |
 | BILIN-06 | Phase 13 | Complete |
 | BILIN-07 | Phase 13 | Complete |
-| SIM-01 | Phase 14 | Pending |
-| SIM-02 | Phase 14 | Pending |
+| SIM-01 | Phase 14 | Complete |
+| SIM-02 | Phase 14 | Complete |
 | SIM-03 | Phase 14 | Pending |
 | SIM-04 | Phase 14 | Pending |
 | SIM-05 | Phase 14 | Pending |
