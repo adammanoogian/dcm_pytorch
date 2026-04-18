@@ -37,7 +37,15 @@ RECOV_04_B_RMSE_THRESHOLD: float = 0.20
 RECOV_04_MAGNITUDE_MASK: float = 0.1
 RECOV_05_SIGN_RECOVERY_THRESHOLD: float = 0.80
 RECOV_06_COVERAGE_THRESHOLD: float = 0.85
-RECOV_06_NULL_MASK: float = 0.5 * SIGMA_PRIOR
+# NOTE: The planner spec gave ``0.5 * SIGMA_PRIOR = 0.5`` per D3, but the
+# canonical topology has non-zero B magnitudes 0.3 and 0.4 -- both BELOW
+# 0.5 -- which means a 0.5 threshold would mis-classify the 2 free elements
+# as "null", contradicting the documented intent ("selects the 7 nulls per
+# seed", 16-02-PLAN.md R-topology). Use ``RECOV_04_MAGNITUDE_MASK = 0.1``
+# for complementary masks: |B|>0.1 -> non-null (RECOV-04/05), |B|<=0.1 ->
+# null (RECOV-06). Auto-fix per Deviation Rule 1 (bug in planner-supplied
+# threshold value vs documented intent); see SUMMARY.md.
+RECOV_06_NULL_MASK: float = 0.1
 RECOV_07_SHRINKAGE_SOFT_TARGET: float = 0.7
 RECOV_08_WALL_TIME_FLAG_RATIO: float = 10.0
 
