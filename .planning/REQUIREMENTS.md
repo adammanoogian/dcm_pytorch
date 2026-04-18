@@ -40,13 +40,13 @@ Requirements for Bilinear DCM Extension. Each maps to a roadmap phase.
 
 ### Pyro Generative Model
 
-- [ ] **MODEL-01**: `task_dcm_model(..., b_masks=None, stim_mod=None, ...)` samples `B_free_j ~ Normal(0, 1.0)` per modulator via per-modulator loop (`pyro.sample(f"B_free_{j}", ...)`) with site-specific `b_mask` application. Rationale: matches rDCM precedent; preserves per-modulator model comparison.
-- [ ] **MODEL-02**: B-prior variance is parameterized as a module-level constant `B_PRIOR_VARIANCE = 1.0` with docstring citing D1 decision; unit-tested to match documented value.
-- [ ] **MODEL-03**: `b_masks[j]` default shape `(N,N)` with diagonal zeroed; explicit non-zero diagonal triggers a `DeprecationWarning` with rationale (Pitfall B5).
-- [ ] **MODEL-04**: API edge cases handled: `b_masks=None` (reduces to linear), `b_masks=[]` (J=0; equivalent to None), `stim_mod` shape `(T_fine, J)` validated against `len(b_masks)`.
-- [ ] **MODEL-05**: `extract_posterior_params` returns per-modulator `B_j` medians alongside existing `A`, `C`, `noise_prec`.
-- [ ] **MODEL-06**: Pyro guide factory (`create_guide`) auto-discovers new `B_free_j` sample sites via `AutoGuide._setup_prototype` without factory changes; verified by trace test on `AutoNormal`, `AutoLowRankMVN`, and `AutoIAFNormal`.
-- [ ] **MODEL-07**: Documentation note in `amortized_wrappers.py` and `TaskDCMPacker`: bilinear support is out of scope for v0.3.0; packer refuses bilinear sample sites with a clear error message referencing v0.3.1.
+- [x] **MODEL-01**: `task_dcm_model(..., b_masks=None, stim_mod=None, ...)` samples `B_free_j ~ Normal(0, 1.0)` per modulator via per-modulator loop (`pyro.sample(f"B_free_{j}", ...)`) with site-specific `b_mask` application. Rationale: matches rDCM precedent; preserves per-modulator model comparison.
+- [x] **MODEL-02**: B-prior variance is parameterized as a module-level constant `B_PRIOR_VARIANCE = 1.0` with docstring citing D1 decision; unit-tested to match documented value.
+- [x] **MODEL-03**: `b_masks[j]` default shape `(N,N)` with diagonal zeroed; explicit non-zero diagonal triggers a `DeprecationWarning` with rationale (Pitfall B5).
+- [x] **MODEL-04**: API edge cases handled: `b_masks=None` (reduces to linear), `b_masks=[]` (J=0; equivalent to None), `stim_mod` shape `(T_fine, J)` validated against `len(b_masks)`.
+- [x] **MODEL-05**: `extract_posterior_params` returns per-modulator `B_j` medians alongside existing `A`, `C`, `noise_prec`.
+- [x] **MODEL-06**: Pyro guide factory (`create_guide`) auto-discovers new `B_free_j` sample sites via `AutoGuide._setup_prototype` without factory changes; verified by trace test on `AutoNormal`, `AutoLowRankMVN`, and `AutoIAFNormal`.
+- [x] **MODEL-07**: Documentation note in `amortized_wrappers.py` and `TaskDCMPacker`: bilinear support is out of scope for v0.3.0; packer refuses bilinear sample sites with a clear error message referencing v0.3.1.
 
 ### Recovery Benchmark
 
@@ -110,13 +110,13 @@ Explicitly excluded from v0.3.0 (and often permanently).
 | SIM-03 | Phase 14 | Complete |
 | SIM-04 | Phase 14 | Complete |
 | SIM-05 | Phase 14 | Complete |
-| MODEL-01 | Phase 15 | Pending |
-| MODEL-02 | Phase 15 | Pending |
-| MODEL-03 | Phase 15 | Pending |
-| MODEL-04 | Phase 15 | Pending |
-| MODEL-05 | Phase 15 | Pending |
-| MODEL-06 | Phase 15 | Pending |
-| MODEL-07 | Phase 15 | Pending |
+| MODEL-01 | Phase 15 | Complete |
+| MODEL-02 | Phase 15 | Complete |
+| MODEL-03 | Phase 15 | Complete |
+| MODEL-04 | Phase 15 | Complete |
+| MODEL-05 | Phase 15 | Complete |
+| MODEL-06 | Phase 15 | Complete |
+| MODEL-07 | Phase 15 | Complete |
 | RECOV-01 | Phase 16 | Pending |
 | RECOV-02 | Phase 16 | Pending |
 | RECOV-03 | Phase 16 | Pending |
@@ -139,4 +139,4 @@ Explicitly excluded from v0.3.0 (and often permanently).
 
 ---
 *Requirements defined: 2026-04-17*
-*Last updated: 2026-04-17 after roadmap creation (Phases 13-16 mapped, coverage 27/27)*
+*Last updated: 2026-04-18 after Phase 15 verification passed (MODEL-01..07 Complete; 19/27 v0.3.0 reqs done; Phase 16 RECOV-01..08 pending)*

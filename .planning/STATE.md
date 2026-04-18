@@ -5,15 +5,15 @@
 See: .planning/PROJECT.md (updated 2026-04-17)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.3.0 Bilinear DCM Extension -- Phase 15 COMPLETE (all 3 plans); Phase 16 pending
+**Current focus:** v0.3.0 Bilinear DCM Extension -- Phase 15 COMPLETE AND VERIFIED PASSED (14/14 must-haves); Phase 16 recovery benchmark is next
 
 ## Current Position
 
 **Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
-**Phase:** Phase 15 -- Pyro Generative Model with B Priors and Masks (COMPLETE 2026-04-18)
-**Plan:** 15-01 + 15-02 + 15-03 COMPLETE. Phase 15 closes all 7 MODEL requirements (MODEL-01..07).
-**Status:** Plan 15-03 closes MODEL-05 (extract_posterior_params returns per-modulator B_j medians) and MODEL-07 (amortized refusal with v0.3.1 deferral message per D5). Defense-in-depth refusal at BOTH surfaces: `TaskDCMPacker.pack` raises `NotImplementedError` (v0.3.1 literal) on any `B_free_*` key; `amortized_task_dcm_model` signature gains keyword-only `b_masks`/`stim_mod` kwargs after `*` sentinel with refusal guard fired BEFORE any other work (linear None/[] passes through unchanged -- API symmetry with `task_dcm_model`). `extract_posterior_params` docstring gains Notes paragraph + Examples block documenting `B_free_0..B_free_{J-1}` and `B` (shape `(J, N, N)`) keys with explicit cross-Pyro-version `return_sites` portability note (function body code-unchanged; site-agnostic via `samples.items()`). 5 new tests: 2 in `test_amortized_task_dcm.py::TestAmortizedRefusesBilinear` + 2 in `test_parameter_packing.py::TestTaskDCMPackerBilinearRefusal` + 1 in `test_posterior_extraction.py::TestExtractPosteriorBilinear` (20-step bilinear SVI via bare loop + `Predictive` with explicit `return_sites=['A_free','C','noise_prec','B_free_0','B']` for portable assertion on both stochastic `B_free_0` shape `(N, N)` and deterministic `B` shape `(J, N, N)`; supplementary `extract_posterior_params` default-return_sites check on always-present `B_free_0`). 81/81 Phase-15 suite green (19 test_task_dcm_model + 30 test_guide_factory + 14 test_posterior_extraction + 7 test_amortized_task_dcm non-slow + 11 test_parameter_packing); 51/51 Phase 13+14 regression green. SpectralDCMPacker + amortized_spectral_dcm_model UNMODIFIED. Next: Phase 16 recovery benchmark (RECOV-01..08).
-**Last activity:** 2026-04-18 -- Plan 15-03 complete; 3 atomic commits on `gsd/phase-15-pyro-bilinear-model` (6c68b10, 66cab62, b9928c2). Phase 15 complete across Plans 15-01 (23a5591, cd405d2, 807fb46, 86cdb76), 15-02 (9b796c0, e1d986b), 15-03.
+**Phase:** Phase 15 -- Pyro Generative Model with B Priors and Masks (COMPLETE + VERIFIED 2026-04-18, 14/14 must-haves passed)
+**Plan:** -- (all 3 plans + verifier done)
+**Status:** Phase 15 verification passed 14/14 must-haves after one orchestrator gap-closure commit (75343a8). Verifier's initial pass found 1 gap: `test_amortized_wrapper_linear_mode_unchanged` failed in full-session pytest with NaN-scale ValueError. Root cause (verifier misdiagnosed as missing `pyro.clear_param_store`): the test ran `pyro.poutine.trace` on the full amortized forward model, which samples `_latent` from the prior and runs the ODE. Accumulated global RNG state across the pytest session produced ODE divergence on some draws -> NaN predicted_bold -> NaN scale in `dist.Normal` -> ValueError (which the test's NotImplementedError-only try/except did not catch). Source code was correct; test was over-scoped relative to its MODEL-07 refusal purpose. Orchestrator auto-fix: refactored test to monkeypatch `_run_task_forward_model` with a sentinel raise -- if guard wrongly rejects linear mode we see NotImplementedError; if guard allows linear through we see sentinel. Test-only change (zero source changes). After fix: 8/8 test_amortized_task_dcm.py green; 82/82 full Phase-15 suite green (19 test_task_dcm_model + 30 test_guide_factory + 14 test_posterior_extraction + 8 test_amortized_task_dcm + 11 test_parameter_packing). All 7 MODEL requirements closed (MODEL-01..07). Next: Phase 16 recovery benchmark (RECOV-01..08).
+**Last activity:** 2026-04-18 -- Phase 15 verified passed at `.planning/phases/15-pyro-bilinear-model/15-VERIFICATION.md`. 12 commits on `gsd/phase-15-pyro-bilinear-model`: 15-01 (23a5591, cd405d2, 807fb46, 86cdb76), 15-02 (9b796c0, 680e3f7, 49cc81b), 15-03 (6c68b10, 66cab62, b9928c2, 37755b2), orchestrator gap-closure (75343a8).
 
 Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [████████░░] Phases 13 + 14 + 15 complete (Phase 16 pending)
 
@@ -916,4 +916,46 @@ Resume file: None
   structurally (literal short-circuit) AND empirically (atol=1e-10 fixtures).
 
 ---
-*Last updated: 2026-04-18 after Plan 15-03 complete (MODEL-05 + MODEL-07 closed via defense-in-depth bilinear refusal + extract_posterior docstring + 5 new tests; Phase 15 now 7/7 COMPLETE)*
+*Last updated: 2026-04-18 after Phase 15 verification passed (14/14 must-haves; MODEL-01..07 Complete; orchestrator gap-closure commit 75343a8 decouples test_amortized_wrapper_linear_mode_unchanged from forward-model RNG via monkeypatch sentinel)*
+
+---
+
+### 2026-04-18 -- Phase 15 verification passed
+
+- Verifier (gsd-verifier, sonnet) initially reported `gaps_found` (13/14) on
+  `test_amortized_wrapper_linear_mode_unchanged` failing in full-session pytest
+  with NaN-scale ValueError.
+- Verifier diagnosis ("missing `pyro.clear_param_store()` before Case 2") was
+  incorrect: line 520 already had the call.
+- True root cause: test ran `pyro.poutine.trace` on the full amortized forward
+  model, which samples `_latent` from prior and runs the ODE. Global RNG state
+  accumulated across the pytest session caused some draws to produce ODE
+  divergence -> NaN predicted_bold -> NaN scale in `dist.Normal(predicted_bold,
+  noise_std).to_event(2)` -> ValueError. Test's try/except caught only
+  `NotImplementedError`, so `ValueError` propagated uncaught. Source code was
+  fully correct; test was over-scoped for its MODEL-07 refusal purpose.
+- Orchestrator auto-fix (Rule 1): refactored test to monkeypatch
+  `_run_task_forward_model` with a `_Sentinel(RuntimeError)` raise. If guard
+  wrongly rejects linear mode we see `NotImplementedError`; if guard allows
+  linear through we see the sentinel. This is exactly what MODEL-07 requires.
+  Test only (zero source changes). Decoupled from forward-model numerics /
+  RNG state / standardization quirks.
+- Commit: `75343a8` `fix(15-03): decouple amortized linear-mode regression
+  test from forward-model RNG` (1 file, +38/-56).
+- Re-verification: `pytest tests/test_amortized_task_dcm.py` 8/8 green in
+  80.86s after fix. Full Phase-15 suite
+  (test_task_dcm_model + test_guide_factory + test_amortized_task_dcm +
+  test_parameter_packing + test_posterior_extraction) 82/82 green in 207.75s.
+- VERIFICATION.md frontmatter updated: `status: passed`, `score: 14/14`, with
+  gap_closures section documenting the misdiagnosis correction + fix commit
+  + re-verification run.
+- Phase 15 outcomes:
+  - Total new commits on branch: 12
+    (23a5591, cd405d2, 807fb46, 86cdb76, 9b796c0, 680e3f7, 49cc81b, 6c68b10,
+    66cab62, b9928c2, 37755b2, 75343a8)
+  - All 7 MODEL requirements closed (MODEL-01..07); REQUIREMENTS.md traceability
+    table updated.
+  - 27 v0.3.0 requirements: 19/27 Complete (BILIN-01..07 Phase 13, SIM-01..05
+    Phase 14, MODEL-01..07 Phase 15); 8/27 Pending (RECOV-01..08 Phase 16).
+  - Branch `gsd/phase-15-pyro-bilinear-model` ready for merge to main at user
+    discretion; Phase 16 benchmark plan-phase workflow next.

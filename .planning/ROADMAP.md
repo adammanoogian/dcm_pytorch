@@ -126,9 +126,9 @@ any guide-factory changes.
 **Requirements:** MODEL-01, MODEL-02, MODEL-03, MODEL-04, MODEL-05, MODEL-06, MODEL-07
 **Plans:** 3 plans (2 waves)
 Plans:
-- [ ] 15-01-PLAN.md — `task_dcm_model` bilinear extension + `B_PRIOR_VARIANCE`=1.0 constant + `_validate_bilinear_args` helper + NaN-safe predicted_bold guard + bilinear SVI smoke (MODEL-01, MODEL-02, MODEL-03 model-side, MODEL-04)
-- [ ] 15-02-PLAN.md — `create_guide` auto-discovery verification across AutoNormal, AutoLowRankMVN, AutoIAFNormal (MODEL-06; test-only, zero src changes)
-- [ ] 15-03-PLAN.md — `TaskDCMPacker.pack` + `amortized_task_dcm_model` bilinear refusal (v0.3.1 deferral per D5) + `extract_posterior_params` docstring extension + bilinear posterior-extraction test (MODEL-05, MODEL-07)
+- [x] 15-01-PLAN.md — `task_dcm_model` bilinear extension + `B_PRIOR_VARIANCE`=1.0 constant + `_validate_bilinear_args` helper + NaN-safe predicted_bold guard + bilinear SVI smoke (MODEL-01, MODEL-02, MODEL-03 model-side, MODEL-04)
+- [x] 15-02-PLAN.md — `create_guide` auto-discovery verification across AutoNormal, AutoLowRankMVN, AutoIAFNormal (MODEL-06; test-only, zero src changes)
+- [x] 15-03-PLAN.md — `TaskDCMPacker.pack` + `amortized_task_dcm_model` bilinear refusal (v0.3.1 deferral per D5) + `extract_posterior_params` docstring extension + bilinear posterior-extraction test (MODEL-05, MODEL-07)
 
 **Success Criteria** (what must be TRUE):
 
@@ -190,7 +190,7 @@ RECOV-08
 |-------|----------------|--------|-----------|
 | 13. Bilinear Neural State & Stability Monitor | 4/4 | Complete | 2026-04-17 |
 | 14. Stimulus Utilities & Bilinear Simulator | 2/2 | Complete | 2026-04-18 |
-| 15. Pyro Generative Model with B Priors and Masks | 0/3 | Pending | -- |
+| 15. Pyro Generative Model with B Priors and Masks | 3/3 | Complete | 2026-04-18 |
 | 16. 3-Region Bilinear Recovery Benchmark | 0/TBD | Pending | -- |
 
 ---
@@ -206,9 +206,9 @@ RECOV-08
 | 12. Documentation | v0.2.0 | 2/2 | Complete | 2026-04-13 |
 | 13. Bilinear Neural State & Stability Monitor | v0.3.0 | 4/4 | Complete | 2026-04-17 |
 | 14. Stimulus Utilities & Bilinear Simulator | v0.3.0 | 2/2 | Complete | 2026-04-18 |
-| 15. Pyro Generative Model with B Priors and Masks | v0.3.0 | 0/3 | Pending | -- |
+| 15. Pyro Generative Model with B Priors and Masks | v0.3.0 | 3/3 | Complete | 2026-04-18 |
 | 16. 3-Region Bilinear Recovery Benchmark | v0.3.0 | 0/TBD | Pending | -- |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-04-18 after Phase 15 plans drafted (3 plans, 2 waves; L1/L2/L3 locked in 15-01 frontmatter)*
+*Last updated: 2026-04-18 after Phase 15 completion (3/3 plans; 14/14 must-haves verified passed; MODEL-01..07 Complete; 12 new commits on branch gsd/phase-15-pyro-bilinear-model)*
