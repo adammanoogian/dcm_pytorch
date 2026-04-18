@@ -11,6 +11,8 @@ from pyro_dcm.simulators.spectral_simulator import (
 )
 from pyro_dcm.simulators.task_simulator import (
     make_block_stimulus,
+    make_epoch_stimulus,
+    make_event_stimulus,
     make_random_stable_A,
     simulate_task_dcm,
 )
@@ -18,6 +20,8 @@ from pyro_dcm.simulators.task_simulator import (
 __all__ = [
     # Phase 1: Task-based DCM simulator
     "make_block_stimulus",
+    "make_event_stimulus",        # Phase 14 (SIM-01)
+    "make_epoch_stimulus",        # Phase 14 (SIM-02)
     "make_random_stable_A",
     "simulate_task_dcm",
     # Phase 2: Spectral DCM simulator

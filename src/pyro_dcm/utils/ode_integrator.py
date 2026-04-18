@@ -239,3 +239,109 @@ def make_initial_state(
     >>> y0.shape  # (15,) for 3 regions, 5 states each
     """
     return torch.zeros(5 * n_regions, dtype=dtype, device=device)
+
+
+def merge_piecewise_inputs(
+    drive: PiecewiseConstantInput,
+    mod: PiecewiseConstantInput,
+) -> PiecewiseConstantInput:
+    """Combine two piecewise-constant inputs into one widened input.
+
+    Returns a new :class:`PiecewiseConstantInput` whose values at any
+    query time ``t`` equal ``torch.cat([drive(t), mod(t)])`` along the
+    column axis. The merged breakpoint set is the sorted union of the
+    two input breakpoint sets (deduplicated via
+    :func:`torch.unique`).
+
+    This helper lives in :mod:`pyro_dcm.utils.ode_integrator` (next to
+    :class:`PiecewiseConstantInput`) so both the simulator
+    (:func:`pyro_dcm.simulators.task_simulator.simulate_task_dcm`) and
+    the Pyro generative model (Phase 15) can construct the widened
+    ``(M_drive + J_mod)``-column input that
+    :class:`pyro_dcm.forward_models.coupled_system.CoupledDCMSystem`
+    expects in its bilinear path.
+
+    Parameters
+    ----------
+    drive : PiecewiseConstantInput
+        Driving-input stimulus, with ``times`` shape ``(K1,)`` and
+        ``values`` shape ``(K1, M)``.
+    mod : PiecewiseConstantInput
+        Modulatory-input stimulus, with ``times`` shape ``(K2,)`` and
+        ``values`` shape ``(K2, J)``.
+
+    Returns
+    -------
+    PiecewiseConstantInput
+        Widened input with ``times`` shape ``(K,)`` (sorted unique
+        union) and ``values`` shape ``(K, M + J)``. The first ``M``
+        columns are ``drive``; the remaining ``J`` columns are ``mod``.
+
+    Raises
+    ------
+    ValueError
+        If ``drive.values.dtype != mod.values.dtype`` or
+        ``drive.values.device != mod.values.device``. Dtype/device are
+        NOT silently auto-cast; callers must align them beforehand.
+
+    Notes
+    -----
+    **Correctness.** At any query time ``t*``, the merged input
+    returns ``[drive(t*), mod(t*)]`` concatenated along the column
+    axis. Because the merged breakpoint set contains every
+    discontinuity of both inputs and
+    :meth:`PiecewiseConstantInput.__call__` is left-closed, the merged
+    breakpoint values at ``t_k`` equal ``drive(t_k)`` concatenated with
+    ``mod(t_k)``.
+
+    **Complexity.** ``O(K log K)`` where ``K = len(merged_times)``.
+    For typical DCM runs (``K1 ~ 20`` driving blocks, ``K2 ~ 40``
+    modulator events), this completes in microseconds.
+
+    Examples
+    --------
+    >>> import torch
+    >>> t_drive = torch.tensor([0.0, 10.0, 20.0], dtype=torch.float64)
+    >>> v_drive = torch.tensor([[0.0], [1.0], [0.0]], dtype=torch.float64)
+    >>> drive = PiecewiseConstantInput(t_drive, v_drive)
+    >>> t_mod = torch.tensor([0.0, 5.0, 15.0], dtype=torch.float64)
+    >>> v_mod = torch.tensor([[0.0], [1.0], [0.0]], dtype=torch.float64)
+    >>> mod = PiecewiseConstantInput(t_mod, v_mod)
+    >>> merged = merge_piecewise_inputs(drive, mod)
+    >>> merged.values.shape[1]  # 1 drive column + 1 mod column
+    2
+    """
+    t_drive = drive.times
+    t_mod = mod.times
+    v_drive = drive.values
+    v_mod = mod.values
+    dtype = v_drive.dtype
+    device = v_drive.device
+
+    # --- 1. Validate dtype / device match (no silent cast) ---
+    if v_mod.dtype != dtype:
+        raise ValueError(
+            f"drive.values.dtype={dtype} != mod.values.dtype={v_mod.dtype}; "
+            f"align dtypes before merging (no silent cast)"
+        )
+    if v_mod.device != device:
+        raise ValueError(
+            f"drive.values.device={device} != mod.values.device="
+            f"{v_mod.device}; align devices before merging (no silent cast)"
+        )
+
+    # --- 2. Sorted unique union of breakpoint times ---
+    all_times = torch.cat([t_drive, t_mod])
+    merged_times = torch.unique(all_times, sorted=True)
+
+    # --- 3. Evaluate drive(t_k) and mod(t_k) at each breakpoint ---
+    M = v_drive.shape[1]
+    J = v_mod.shape[1]
+    K = merged_times.shape[0]
+    merged_values = torch.empty((K, M + J), dtype=dtype, device=device)
+    for k in range(K):
+        t_k = merged_times[k]
+        merged_values[k, :M] = drive(t_k.detach())
+        merged_values[k, M:] = mod(t_k.detach())
+
+    return PiecewiseConstantInput(merged_times, merged_values)
