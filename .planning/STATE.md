@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-04-17)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.3.0 Bilinear DCM Extension -- Phase 15 Plans 15-01 + 15-02 complete; 15-03 pending (parallel execution)
+**Current focus:** v0.3.0 Bilinear DCM Extension -- Phase 15 COMPLETE (all 3 plans); Phase 16 pending
 
 ## Current Position
 
 **Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
-**Phase:** Phase 15 -- Pyro Generative Model with B Priors and Masks (IN PROGRESS; Plans 15-01 + 15-02 complete 2026-04-18)
-**Plan:** 15-01 + 15-02 COMPLETE; 15-03 (packer refusal + extract_posterior bilinear keys) in parallel execution on same branch
-**Status:** Plan 15-02 closes MODEL-06 (passive auto-discovery gate). New TestBilinearDiscovery class in `tests/test_guide_factory.py` with 6 parametrized tests (2 assertion shapes x 3 AutoGuide variants: auto_normal, auto_lowrank_mvn, auto_iaf). First shape forces `AutoGuide._setup_prototype` via one `guide()` call and asserts `B_free_0` in `guide.prototype_trace.nodes`; second shape runs 20 SVI steps per variant and asserts param store references B_free_j. Zero source changes. Module-scoped fixture `task_bilinear_guide_data` mirrors 15-01's fixture pattern (duplicated test-side to avoid cross-file imports). Helper `_guide_kwargs_for(guide_type)` injects `hidden_dim=64` for auto_iaf (Rule 3 blocker fix: AutoRegressiveNN requires `min(hidden_dims) >= input_dim`; bilinear latent = 22 > create_guide default [20]). 30/30 tests green in `test_guide_factory.py` (24 pre-existing + 6 new) in 26.41s. Phase 13+14+15-01 regression subset 113/113 green in 6:32. Phase 15 now 5/7 requirements closed (MODEL-01, MODEL-02, MODEL-03 both halves, MODEL-04 from 15-01; MODEL-06 from 15-02). MODEL-05, MODEL-07 pending in Plan 15-03.
-**Last activity:** 2026-04-18 -- Plan 15-02 complete; 1 atomic test commit on `gsd/phase-15-pyro-bilinear-model` (9b796c0). Plan 15-03 committed `6c68b10` on same branch in parallel (file-level non-overlap confirmed: 15-02 touches only tests/test_guide_factory.py).
+**Phase:** Phase 15 -- Pyro Generative Model with B Priors and Masks (COMPLETE 2026-04-18)
+**Plan:** 15-01 + 15-02 + 15-03 COMPLETE. Phase 15 closes all 7 MODEL requirements (MODEL-01..07).
+**Status:** Plan 15-03 closes MODEL-05 (extract_posterior_params returns per-modulator B_j medians) and MODEL-07 (amortized refusal with v0.3.1 deferral message per D5). Defense-in-depth refusal at BOTH surfaces: `TaskDCMPacker.pack` raises `NotImplementedError` (v0.3.1 literal) on any `B_free_*` key; `amortized_task_dcm_model` signature gains keyword-only `b_masks`/`stim_mod` kwargs after `*` sentinel with refusal guard fired BEFORE any other work (linear None/[] passes through unchanged -- API symmetry with `task_dcm_model`). `extract_posterior_params` docstring gains Notes paragraph + Examples block documenting `B_free_0..B_free_{J-1}` and `B` (shape `(J, N, N)`) keys with explicit cross-Pyro-version `return_sites` portability note (function body code-unchanged; site-agnostic via `samples.items()`). 5 new tests: 2 in `test_amortized_task_dcm.py::TestAmortizedRefusesBilinear` + 2 in `test_parameter_packing.py::TestTaskDCMPackerBilinearRefusal` + 1 in `test_posterior_extraction.py::TestExtractPosteriorBilinear` (20-step bilinear SVI via bare loop + `Predictive` with explicit `return_sites=['A_free','C','noise_prec','B_free_0','B']` for portable assertion on both stochastic `B_free_0` shape `(N, N)` and deterministic `B` shape `(J, N, N)`; supplementary `extract_posterior_params` default-return_sites check on always-present `B_free_0`). 81/81 Phase-15 suite green (19 test_task_dcm_model + 30 test_guide_factory + 14 test_posterior_extraction + 7 test_amortized_task_dcm non-slow + 11 test_parameter_packing); 51/51 Phase 13+14 regression green. SpectralDCMPacker + amortized_spectral_dcm_model UNMODIFIED. Next: Phase 16 recovery benchmark (RECOV-01..08).
+**Last activity:** 2026-04-18 -- Plan 15-03 complete; 3 atomic commits on `gsd/phase-15-pyro-bilinear-model` (6c68b10, 66cab62, b9928c2). Phase 15 complete across Plans 15-01 (23a5591, cd405d2, 807fb46, 86cdb76), 15-02 (9b796c0, e1d986b), 15-03.
 
-Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [██████░░░░] Phases 13 + 14 complete + Phase 15 Plans 15-01 + 15-02 complete (15-03, Phase 16 pending)
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [████████░░] Phases 13 + 14 + 15 complete (Phase 16 pending)
 
 ## Decisions
 
@@ -85,26 +85,222 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-18
-Stopped at: Plan 15-02 complete. `tests/test_guide_factory.py`
-extended with `TestBilinearDiscovery` class (6 parametrized tests
-across auto_normal / auto_lowrank_mvn / auto_iaf): 3 discovery tests
-force `AutoGuide._setup_prototype` via one `guide()` call and assert
-`B_free_0` in `guide.prototype_trace.nodes`; 3 SVI-smoke tests run
-20-step Trace_ELBO + ClippedAdam loops asserting finite losses and
-param-store references to B_free_j sites. Module-scoped
-`task_bilinear_guide_data` fixture (3-region J=1 matching 15-01's
-fixture pattern, duplicated rather than imported per plan truth-3).
-Helper `_guide_kwargs_for(guide_type)` injects `hidden_dim=64` for
-auto_iaf to clear AutoRegressiveNN's `min(hidden_dims) >= input_dim`
-floor (bilinear latent dim = 22 > create_guide default [20]). Zero
-source-code changes (MODEL-06 passive). 30/30 tests in
-test_guide_factory.py green in 26.41s. Phase 13+14+15-01 regression
-113/113 green in 6:32. Branch `gsd/phase-15-pyro-bilinear-model`
-now carries 4 Plan-15-0x commits (23a5591, cd405d2, 807fb46 from
-15-01; 9b796c0 from 15-02) plus 6c68b10 from Plan 15-03 (parallel).
-Next: monitor 15-03 completion (MODEL-05 + MODEL-07) then Phase 16
-recovery benchmark (RECOV-01..08).
+Stopped at: Plan 15-03 complete -- Phase 15 COMPLETE. Defense-in-
+depth bilinear refusal at BOTH user surfaces
+(`TaskDCMPacker.pack` + `amortized_task_dcm_model`) raising
+`NotImplementedError` with literal `v0.3.1` per D5.
+`amortized_task_dcm_model` signature gains `*, b_masks=None,
+stim_mod=None` kwargs with guard firing BEFORE
+`_sample_latent_and_unpack`; linear None/[] pass through for API
+symmetry with `task_dcm_model`. `extract_posterior_params`
+docstring-only edit documents `B_free_0..B_free_{J-1}` raw keys +
+`B` (J,N,N) deterministic key with explicit cross-Pyro-version
+`return_sites` portability note; no code change (function was
+already site-agnostic via `samples.items()`). 5 new tests (2
+TestAmortizedRefusesBilinear + 2 TestTaskDCMPackerBilinearRefusal
++ 1 TestExtractPosteriorBilinear). TestExtractPosteriorBilinear
+runs 20 SVI steps on bilinear task_dcm_model via bare SVI loop
+(NOT run_svi -- run_svi's positional model_args cannot forward
+task_dcm_model's keyword-only b_masks/stim_mod; F401 hygiene via
+local imports omitting run_svi) then calls `Predictive` with
+explicit `return_sites=['A_free','C','noise_prec','B_free_0','B']`
+for portable assertion across Pyro 1.9+ patch versions;
+supplementary `extract_posterior_params` default-return_sites
+check asserts only always-present `B_free_0`. 81/81 Phase-15
+suite green (19 test_task_dcm_model + 30 test_guide_factory + 14
+test_posterior_extraction + 7 test_amortized_task_dcm non-slow +
+11 test_parameter_packing); 51/51 Phase 13+14 regression green.
+SpectralDCMPacker + amortized_spectral_dcm_model UNMODIFIED
+(bilinear = task-only). Branch `gsd/phase-15-pyro-bilinear-model`
+now carries 9 Phase-15 commits: 23a5591, cd405d2, 807fb46,
+86cdb76 (15-01); 9b796c0, e1d986b (15-02); 6c68b10, 66cab62,
+b9928c2 (15-03).
+Next: Phase 16 recovery benchmark (RECOV-01..08).
 Resume file: None
+
+---
+
+### 2026-04-18 -- Plan 15-03 complete
+
+- `src/pyro_dcm/guides/parameter_packing.py`:
+  - `TaskDCMPacker.pack` gains a 15-line bilinear refusal guard
+    (3-line comment + 3-line scan + 8-line raise) at the very top
+    of the method body, BEFORE the existing `a_flat = ...` line.
+    `bilinear_keys = [k for k in params if k.startswith("B_free_")]`
+    collects bilinear keys; non-empty list raises
+    `NotImplementedError` with message literal including `v0.3.1`,
+    `sorted(bilinear_keys)` for diagnostic, and path forward
+    (`create_guide(task_dcm_model)`). Method body otherwise
+    byte-identical; docstring unchanged (describes linear
+    behavior, still what the method does when no bilinear keys).
+  - `SpectralDCMPacker` UNMODIFIED (spectral DCM is not in
+    MODEL-07 scope per plan).
+- `src/pyro_dcm/models/amortized_wrappers.py`:
+  - `amortized_task_dcm_model` signature extended with keyword-
+    only `b_masks: list[torch.Tensor] | None = None` and
+    `stim_mod: object | None = None` after new `*` sentinel. All
+    8 pre-existing positional parameters untouched. Pre-existing
+    pre-15-03 callers (which never pass these kwargs) continue to
+    work unchanged.
+  - 11-line refusal guard (3-line comment + 2-line gate + 8-line
+    raise) at method entry, BEFORE
+    `params = _sample_latent_and_unpack(packer)`. Guard fires ONLY
+    when `b_masks is not None and len(b_masks) > 0` (None and []
+    both pass through to linear body -- API symmetry with
+    `task_dcm_model`). `del stim_mod` added to mark the kwarg
+    intentionally unused in linear mode.
+  - Docstring expanded: 2 new Parameters entries (`b_masks`,
+    `stim_mod`), new "Bilinear support" Notes paragraph
+    explaining v0.3.1 deferral per D5 with path forward
+    (`create_guide(task_dcm_model) + run_svi`) and Pitfall B3
+    citation. Docstring mentions `v0.3.1` 4 times (Parameters +
+    Notes + existing placeholder sections); raise mentions once.
+    Total 5 `v0.3.1` refs in the file.
+  - `_run_task_forward_model`, `_sample_latent_and_unpack`, and
+    `amortized_spectral_dcm_model` UNMODIFIED.
+- `src/pyro_dcm/models/guides.py`:
+  - `extract_posterior_params` docstring gains 17-line Notes
+    paragraph ("Bilinear task DCM sites (v0.3.0+):") and 8-line
+    Examples block showing `posterior['B_free_0']` (always
+    available; shape `(N, N)`) and conditional
+    `posterior['B']` access (shape `(J, N, N)`). Notes paragraph
+    explicitly cites MODEL-05 and documents cross-Pyro-version
+    `return_sites` portability for deterministic sites.
+  - NO code change in function body (body was already
+    site-agnostic via `samples.items()` iteration per 08-05
+    design).
+- `tests/test_amortized_task_dcm.py`:
+  - New `TestAmortizedRefusesBilinear` class appended with 2
+    tests:
+    - `test_amortized_wrapper_refuses_bilinear_kwargs` -- non-empty
+      `b_masks=[b_mask_0]` + `stim_mod=PiecewiseConstantInput(...)`
+      kwargs trip the guard; `pytest.raises(NotImplementedError,
+      match=r"v0\.3\.1")`. Uses `make_epoch_stimulus` (Pitfall B12
+      boxcar primitive) for `stim_mod` fixture.
+    - `test_amortized_wrapper_linear_mode_unchanged` -- MODEL-07
+      regression gate: `b_masks=None` (default) AND `b_masks=[]`
+      both pass through `pyro.poutine.trace(...).get_trace(...)`
+      without raising. Uses `make_random_stable_A` +
+      `simulate_task_dcm` to produce a valid 20s 3-region linear
+      BOLD series; trivial single-item `fit_standardization`
+      (emits `UserWarning: std(): degrees of freedom is <= 0` --
+      benign, std clamps to 1e-6).
+  - All 6 pre-existing tests (5 non-slow + 1 slow) UNCHANGED.
+- `tests/test_parameter_packing.py`:
+  - New `TestTaskDCMPackerBilinearRefusal` class appended with 2
+    tests:
+    - `test_packer_refuses_bilinear_keys` -- params dict with
+      added `B_free_0` key raises `NotImplementedError` matching
+      `r"v0\.3\.1"`.
+    - `test_packer_accepts_linear_keys_after_bilinear_guard` --
+      regression gate: after the guard is added, linear
+      pack/unpack still produces correct 13-element packed vector
+      and correct `(3, 3)` / `(3, 1)` unpacked shapes.
+  - All 9 pre-existing tests UNCHANGED.
+- `tests/test_posterior_extraction.py`:
+  - New `TestExtractPosteriorBilinear` class appended with 1 test:
+    - `test_extract_posterior_includes_bilinear_sites` -- 20 SVI
+      steps on bilinear `task_dcm_model` via a bare SVI loop
+      (`SVI(task_dcm_model, guide, ClippedAdam, Trace_ELBO())` +
+      `svi.step(**model_kwargs)` to forward keyword-only
+      `b_masks`/`stim_mod`). `create_guide(task_dcm_model,
+      init_scale=0.005)` (L2 from 15-01 propagation). Then
+      `Predictive(partial(task_dcm_model, b_masks=b_masks,
+      stim_mod=stim_mod), guide=guide, num_samples=10,
+      return_sites=['A_free','C','noise_prec','B_free_0','B'])`
+      (explicit list for cross-Pyro-version portability -- Plan
+      15-03 checker Blocker 2 resolution). Asserts
+      `samples['B_free_0'].shape[-2:] == (N, N)` AND
+      `samples['B'].shape[-3:] == (J, N, N)`. Supplementary
+      assertion on `extract_posterior_params(guide, model_args,
+      model=bilinear_model, num_samples=10)` requires only
+      `B_free_0` (always a pyro.sample site; not Pyro-version
+      coupled) with shape `(N, N)`; also asserts linear sites
+      `A_free`, `C`, `noise_prec` present (regression check) and
+      `B_free_0` in `posterior["median"]` (backward compat).
+    - `run_svi` INTENTIONALLY NOT imported in the new test block
+      (F401 hygiene -- Plan 15-03 checker Major 3 resolution).
+      Pre-existing file-level `run_svi` import remains for
+      `_train_guide` helper used by other tests.
+    - `caplog.set_level(logging.ERROR, logger='pyro_dcm.stability')`
+      autouse fixture silences stability monitor WARN spam (D4 +
+      R6 pattern from 15-01).
+  - All 13 pre-existing tests UNCHANGED.
+- Commits: `6c68b10` `feat(15-03): refuse bilinear sites in
+  TaskDCMPacker + amortized_task_dcm_model`; `66cab62`
+  `docs(15-03): document bilinear posterior keys in
+  extract_posterior_params`; `b9928c2` `test(15-03): bilinear
+  refusal + posterior-extraction tests`.
+- Verification: 5 new tests green individually;
+  `tests/test_amortized_task_dcm.py + tests/test_parameter_packing.py +
+  tests/test_posterior_extraction.py` non-slow 32/32 in 50.53s;
+  `tests/test_task_dcm_model.py` 19/19 in 31.39s (Phase 15-01
+  regression); Phase 13+14 regression
+  (`test_linear_invariance + test_coupled_system_bilinear +
+  test_bilinear_utils + test_bilinear_simulator + test_stimulus_utils`)
+  51/51 green in 232.90s (0:03:52); full Phase-15 suite
+  (`test_task_dcm_model + test_guide_factory +
+  test_posterior_extraction + test_amortized_task_dcm +
+  test_parameter_packing` non-slow) 81/81 green in 92.91s
+  (0:01:32). Defense-in-depth verification passes
+  (`OK defense in depth` inline script).
+- **Grep sentinels** (all met):
+  - `parameter_packing.py`: `v0\.3\.1` ×2 (comment + raise
+    message), `NotImplementedError` ×1 (raise), `bilinear_keys`
+    ×2 (scan + if-check).
+  - `amortized_wrappers.py`: `v0\.3\.1` ×5 (raise message +
+    docstring expansions), `NotImplementedError` ×3 (1 raise + 2
+    docstring refs; plan target "exactly 1" was for the raise
+    only -- docstring references are acceptable variance per
+    15-01 precedent), `b_masks` ×8 (signature + gate + del +
+    docstring entries + Notes).
+  - `guides.py`: `Bilinear task DCM` ×1 (Notes paragraph header),
+    `B_free_0` ×4 (docstring + examples), `(J, N, N)` ×3
+    (docstring + examples), `MODEL-05` ×1 (requirement tag),
+    `return_sites` ×2 (Notes + Examples).
+  - `test_amortized_task_dcm.py`: `TestAmortizedRefusesBilinear`
+    ×1, `v0\\.3\\.1` ×1, `B_free_` ×3 (fixture + match + comment).
+  - `test_parameter_packing.py`: `test_packer_refuses_bilinear_keys`
+    ×1, `v0\\.3\\.1` ×1, `B_free_` ×3.
+  - `test_posterior_extraction.py`:
+    `test_extract_posterior_includes_bilinear_sites` ×1,
+    `B_free_0` ×23 (fixture + return_sites + shape asserts +
+    posterior indexing + comments), `return_sites` ×14 (list def
+    + Predictive kwarg + docstring + portability commentary),
+    `run_svi` ×4 (3 pre-existing + 1 new comment block
+    explaining why NOT imported; 0 new imports).
+- **Ruff status:** 6 pre-existing errors in the 3 modified test
+  files (I001 ×3, F401 ×1, B007 ×1, E741 ×1), 3 pre-existing in
+  `guides.py` (I001, UP035, F401), 1 pre-existing in
+  `amortized_wrappers.py` (I001). All verified pre-existing via
+  `git stash` round-trip. Plan 15-03 adds ZERO new ruff errors.
+  Pre-existing lint not fixed per Phase 14-02 / Plan 15-01
+  additive-plan precedent.
+- **D5 applied** (from STATE.md Decisions + plan frontmatter):
+  Amortized bilinear inference deferred to v0.3.1 per D5. BOTH
+  refusal surfaces (packer + wrapper) reference literal `v0.3.1`
+  in error messages. DCM.V1 acceptance (Phase 16) uses SVI paths
+  only.
+- **L1 applied** (inherited from 15-01 via plan frontmatter):
+  `posterior['B_free_0']['mean'].shape == (N, N)` assertion in
+  `test_extract_posterior_includes_bilinear_sites` relies on 15-01
+  sampling `B_free_j` as full `(N, N)` `Normal(0, 1.0).to_event(2)`
+  (NOT a flat vector of free entries). Test passed, confirming
+  L1 from 15-01 is stable.
+- **L3 applied** (inherited from 15-01 via plan frontmatter):
+  `samples['B'].shape[-3:] == (J, N, N)` assertion relies on
+  15-01 emitting `pyro.deterministic('B', B_stacked)` in the
+  bilinear branch. Test passed with explicit `return_sites`
+  including `'B'`, confirming L3 from 15-01 is stable and
+  `Predictive` honors `return_sites` for deterministic sites.
+- **Deviations:** None -- plan executed exactly as written; no
+  auto-fix rules triggered. Minor sentinel variances documented
+  (all within acceptable ranges per 15-01 precedent; docstring
+  references count toward literal-pattern greps).
+- Requirements closed: MODEL-05 (docs + executable gate),
+  MODEL-07 (defense-in-depth refusal at both packer and wrapper
+  surfaces). Phase 15 now 7/7 requirements closed. Phase 15
+  COMPLETE.
 
 ---
 
@@ -720,4 +916,4 @@ Resume file: None
   structurally (literal short-circuit) AND empirically (atol=1e-10 fixtures).
 
 ---
-*Last updated: 2026-04-18 after Plan 15-02 complete (MODEL-06 passive auto-discovery gate closed; Phase 15 now 5/7)*
+*Last updated: 2026-04-18 after Plan 15-03 complete (MODEL-05 + MODEL-07 closed via defense-in-depth bilinear refusal + extract_posterior docstring + 5 new tests; Phase 15 now 7/7 COMPLETE)*
