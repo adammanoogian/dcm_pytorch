@@ -706,3 +706,101 @@ class TestBilinearStructure:
                 b_masks=[bad_b_mask],
                 stim_mod=task_bilinear_data["stim_mod"],
             )
+
+
+# ---------------------------------------------------------------------------
+# Bilinear SVI smoke test (Phase 15 Plan 15-01)
+# ---------------------------------------------------------------------------
+
+
+class TestBilinearSVI:
+    """SVI smoke test for the bilinear branch (MODEL-04 convergence gate).
+
+    Uses ``init_scale=0.005`` (L2 locked; half the linear default of 0.01)
+    because bilinear B tails can push ``max Re(eig(A_eff))`` positive
+    under ``N(0, 1.0)`` prior draws (Gershgorin analysis in
+    ``15-RESEARCH.md`` Section 9). The NaN-safe ``predicted_bold`` guard
+    in ``task_dcm_model`` + smaller ``init_scale`` together keep the SVI
+    loop finite across 40 steps at N=3, J=1.
+
+    Pyro stability logger is silenced via ``caplog`` autouse fixture
+    because D4 = log-warn only; the monitor fires frequently in bilinear
+    SVI early iterations but does NOT raise
+    (``15-RESEARCH.md`` Section 9 R6).
+
+    Runtime budget: target <75s at N=3, J=1, 40 SVI steps. Not a fail
+    condition if exceeded -- test asserts convergence direction only.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _silence_stability_logger(self, caplog) -> None:
+        """Silence ``pyro_dcm.stability`` WARNING spam during bilinear SVI."""
+        import logging
+        caplog.set_level(logging.ERROR, logger="pyro_dcm.stability")
+
+    def test_bilinear_svi_smoke_3region_converges(
+        self, task_bilinear_data: dict,
+    ) -> None:
+        """40 SVI steps on 3-region J=1: finite losses + convergence direction.
+
+        Closes MODEL-04 bilinear SVI acceptance gate. Uses AutoNormal
+        with ``init_scale=0.005`` (L2). Does NOT assert a specific final
+        loss value -- only the direction (end < start) and that no step
+        produced NaN/Inf.
+        """
+        import time
+        pyro.clear_param_store()
+
+        guide = AutoNormal(task_dcm_model, init_scale=0.005)  # L2
+        optimizer = pyro.optim.ClippedAdam(
+            {"lr": 0.01, "clip_norm": 10.0}
+        )
+        svi = SVI(task_dcm_model, guide, optimizer, loss=Trace_ELBO())
+
+        model_kwargs = dict(
+            observed_bold=task_bilinear_data["observed_bold"],
+            stimulus=task_bilinear_data["stimulus"],
+            a_mask=task_bilinear_data["a_mask"],
+            c_mask=task_bilinear_data["c_mask"],
+            t_eval=task_bilinear_data["t_eval"],
+            TR=task_bilinear_data["TR"],
+            dt=task_bilinear_data["dt"],
+            b_masks=task_bilinear_data["b_masks"],
+            stim_mod=task_bilinear_data["stim_mod"],
+        )
+
+        num_steps = 40
+        losses: list[float] = []
+        start = time.perf_counter()
+        for _ in range(num_steps):
+            loss = svi.step(**model_kwargs)
+            losses.append(float(loss))
+        elapsed = time.perf_counter() - start
+
+        # Finite losses at every step (NaN-safe guard + L2 init_scale).
+        for i, loss in enumerate(losses):
+            assert torch.isfinite(torch.tensor(loss)).item(), (
+                f"Non-finite loss at step {i}: {loss}"
+            )
+
+        # Convergence direction: mean of last 10 < mean of first 10.
+        first_mean = sum(losses[:10]) / 10
+        last_mean = sum(losses[-10:]) / 10
+        assert last_mean < first_mean, (
+            f"SVI did not decrease: first_10_mean={first_mean:.2f}, "
+            f"last_10_mean={last_mean:.2f} (losses={losses})"
+        )
+
+        # Runtime budget is soft -- issue a warning (not fail) if
+        # exceeded. D4 + Pitfall B10 3-6x slowdown estimate -> 75s upper
+        # bound at N=3, J=1.
+        if elapsed > 75.0:
+            import warnings
+            warnings.warn(
+                f"bilinear SVI smoke test exceeded 75s budget: "
+                f"{elapsed:.1f}s (Pitfall B10 3-6x slowdown assumption "
+                f"may be too optimistic; update 15-RESEARCH.md Section "
+                f"8 budget if this persists).",
+                UserWarning,
+                stacklevel=1,
+            )
