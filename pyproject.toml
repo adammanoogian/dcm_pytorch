@@ -2,6 +2,14 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# Explicit package target — required because the project has both a top-level
+# `models/` directory (generated artifacts, NOT a Python package) and
+# `src/pyro_dcm/models/` (the real subpackage). Without this, hatchling's
+# auto-discovery ships a wheel missing `src/pyro_dcm/models/`, which breaks
+# `from pyro_dcm.models import …` in `src/pyro_dcm/__init__.py`.
+[tool.hatch.build.targets.wheel]
+packages = ["src/pyro_dcm"]
+
 [project]
 name = "pyro-dcm"
 version = "0.1.0"
