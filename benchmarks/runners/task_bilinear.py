@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from functools import partial
 from typing import Any
 
@@ -64,6 +65,87 @@ _C_00 = 0.5
 _DRIVING_N_BLOCKS = 5
 _DRIVING_BLOCK_DURATION = 20.0
 _DRIVING_REST_DURATION = 20.0
+
+
+# ---------------------------------------------------------------------------
+# HGF forward-compat factory hook (16-CONTEXT.md lock-in)
+# ---------------------------------------------------------------------------
+
+# Type alias for the factory contract (Plan 16-03 L9).
+# Factories accept a seed (int) and return a breakpoint dict with 'times' (K,)
+# and 'values' (K, J) tensors. v0.3.1 HGF factories will use the same shape;
+# the factory is injected at runtime at the runner's call site, not stored in
+# BenchmarkConfig (keeps .npz reproducibility path clean per research Section
+# 5.3).
+StimulusModFactory = Callable[[int], dict[str, torch.Tensor]]
+
+
+def make_sinusoid_mod_factory(
+    duration: float = 200.0,
+    dt: float = 0.01,
+    frequency: float = 0.05,
+    amplitude: float = 0.5,
+) -> StimulusModFactory:
+    """Build a mock sinusoidal stimulus-modulator factory (Phase 16 placeholder).
+
+    Returns a closure that accepts a seed and produces a deterministic
+    sinusoidal modulator breakpoint dict. **Not physiologically meaningful.**
+    Used exclusively to exercise the factory-hook plumbing in Phase 16 tests
+    (16-CONTEXT.md: "exercised by a placeholder mock factory... the
+    indirection is proven wired, not a theoretical API").
+
+    v0.3.1 will add an HGF-trajectory factory that uses the SAME signature;
+    the runner does not need changes because the factory contract is fixed
+    by :data:`StimulusModFactory`.
+
+    Parameters
+    ----------
+    duration : float, optional
+        Total simulation duration. Default 200.0 (matches Phase 16 locked
+        value).
+    dt : float, optional
+        Simulation time step. Default 0.01.
+    frequency : float, optional
+        Sinusoid frequency in Hz. Default 0.05 (period = 20s; roughly one
+        "epoch-equivalent" per cycle).
+    amplitude : float, optional
+        Sinusoid amplitude. Default 0.5 (< 1.0 to keep Gershgorin bound safe
+        per plan 16-01 L2 rationale).
+
+    Returns
+    -------
+    Callable[[int], dict[str, torch.Tensor]]
+        Factory closure. Calling with any int seed returns::
+
+            {
+                "times":  torch.Tensor of shape (K,),   # float64
+                "values": torch.Tensor of shape (K, 1), # float64; J=1
+            }
+
+    Notes
+    -----
+    The factory is deterministic given ``duration``, ``dt``, ``frequency``,
+    ``amplitude``; the ``seed`` input is ignored numerically but retained in
+    the closure signature to match the v0.3.1 HGF factory, which WILL use
+    the seed to sample belief-trajectory random draws.
+
+    References
+    ----------
+    .planning/phases/16-bilinear-recovery-benchmark/16-CONTEXT.md HGF hook
+    lock-in.
+    .planning/phases/16-bilinear-recovery-benchmark/16-RESEARCH.md Section
+    5.2.
+    """
+    def _factory(seed: int) -> dict[str, torch.Tensor]:
+        # Seed discipline preserved for future noisy-factory variants.
+        torch.manual_seed(seed)
+        times = torch.arange(0, duration, dt, dtype=torch.float64)
+        values = (
+            amplitude
+            * torch.sin(2.0 * torch.pi * frequency * times)
+        ).unsqueeze(-1)
+        return {"times": times, "values": values}
+    return _factory
 
 
 def _make_bilinear_ground_truth(
@@ -111,6 +193,93 @@ def _make_bilinear_ground_truth(
         dt=_DT_SIM,
         n_inputs=1,
     )
+    stim_mod = PiecewiseConstantInput(
+        stim_mod_dict["times"], stim_mod_dict["values"],
+    )
+    sim = simulate_task_dcm(
+        A_true, C, stim,
+        duration=_DURATION, dt=_DT_SIM, TR=_TR, SNR=_SNR,
+        seed=seed_i, solver="rk4",
+        B_list=[B_true[0]],
+        stimulus_mod=stim_mod,
+    )
+    return {
+        "A_true": A_true,
+        "C": C,
+        "B_true": B_true,
+        "b_mask_0": b_mask_0,
+        "stim": stim,
+        "stimulus": sim["stimulus"],
+        "stim_mod": stim_mod,
+        "bold": sim["bold"],
+    }
+
+
+def _make_bilinear_ground_truth_with_factory(
+    n_regions: int,
+    seed_i: int,
+    stim_mod_factory: StimulusModFactory,
+) -> dict[str, Any]:
+    """Ground-truth builder using a custom stim_mod factory (Plan 16-03 L10).
+
+    Identical to :func:`_make_bilinear_ground_truth` except the stim_mod
+    breakpoint dict comes from the provided factory instead of
+    :func:`make_epoch_stimulus`. ``A`` / ``C`` / ``B`` / ``b_mask`` /
+    driving stimulus remain seed-deterministic per Phase 16 ground-truth
+    constants (plan 16-01).
+
+    Parameters
+    ----------
+    n_regions : int
+        Number of brain regions.
+    seed_i : int
+        Per-seed index; drives ``torch.manual_seed`` and ``A`` random
+        generation.
+    stim_mod_factory : StimulusModFactory
+        Custom factory injected by the caller. Called as
+        ``factory(seed=seed_i)``.
+
+    Returns
+    -------
+    dict
+        Same keys as :func:`_make_bilinear_ground_truth`: ``A_true``,
+        ``C``, ``B_true``, ``b_mask_0``, ``stim`` (block-design dict),
+        ``stimulus`` (PiecewiseConstantInput), ``stim_mod``
+        (PiecewiseConstantInput built from factory output), ``bold``.
+    """
+    torch.manual_seed(seed_i)
+    A_true = make_random_stable_A(n_regions, density=0.5, seed=seed_i)
+    C = torch.zeros(n_regions, 1, dtype=torch.float64)
+    C[0, 0] = _C_00
+    b_mask_0 = torch.zeros(n_regions, n_regions, dtype=torch.float64)
+    b_mask_0[1, 0] = 1.0
+    b_mask_0[2, 1] = 1.0
+    B_true = torch.zeros(1, n_regions, n_regions, dtype=torch.float64)
+    B_true[0, 1, 0] = _B_10
+    B_true[0, 2, 1] = _B_21
+    stim = make_block_stimulus(
+        n_blocks=_DRIVING_N_BLOCKS,
+        block_duration=_DRIVING_BLOCK_DURATION,
+        rest_duration=_DRIVING_REST_DURATION,
+        n_inputs=1,
+    )
+    # Factory-generated stim_mod (L10: custom factory bypasses fixture cache).
+    stim_mod_dict = stim_mod_factory(seed=seed_i)
+    if (
+        not isinstance(stim_mod_dict, dict)
+        or "times" not in stim_mod_dict
+        or "values" not in stim_mod_dict
+    ):
+        keys = (
+            list(stim_mod_dict.keys())
+            if isinstance(stim_mod_dict, dict)
+            else "N/A"
+        )
+        raise TypeError(
+            f"stimulus_mod_factory must return dict with 'times' and "
+            f"'values' keys; got {type(stim_mod_dict).__name__} with keys "
+            f"{keys}"
+        )
     stim_mod = PiecewiseConstantInput(
         stim_mod_dict["times"], stim_mod_dict["values"],
     )
@@ -300,7 +469,11 @@ def _posterior_to_numpy(
     return out
 
 
-def run_task_bilinear_svi(config: BenchmarkConfig) -> dict[str, Any]:
+def run_task_bilinear_svi(
+    config: BenchmarkConfig,
+    *,
+    stimulus_mod_factory: StimulusModFactory | None = None,
+) -> dict[str, Any]:
     """Run task-bilinear DCM SVI recovery benchmark.
 
     For each dataset: (1) generate or load bilinear fixture; (2) fit bilinear
@@ -318,6 +491,17 @@ def run_task_bilinear_svi(config: BenchmarkConfig) -> dict[str, Any]:
     config : BenchmarkConfig
         Benchmark configuration. Uses n_datasets, n_svi_steps, seed,
         n_regions, quick, fixtures_dir, elbo_type.
+    stimulus_mod_factory : StimulusModFactory or None, optional
+        Custom stim_mod breakpoint-dict factory (Plan 16-03 L9). Default
+        ``None`` -> Phase 16 default 4x12s epoch schedule via
+        :func:`make_epoch_stimulus`. Non-None: the runner calls
+        ``factory(seed=seed_i)`` per seed and substitutes the result into
+        the bilinear fit (``A`` / ``C`` / ``B`` ground truth still
+        seed-deterministic). When factory is non-None, the runner
+        BYPASSES the ``config.fixtures_dir`` cache for stim_mod
+        specifically (Plan 16-03 L10): factories are test/sweep artifacts
+        and do NOT participate in .npz reproducibility. v0.3.1 HGF
+        factories (``make_hgf_factory``) will plug in here unchanged.
 
     Returns
     -------
@@ -334,7 +518,10 @@ def run_task_bilinear_svi(config: BenchmarkConfig) -> dict[str, Any]:
         - ``a_true_list``, ``a_inferred_bilinear_list``,
           ``a_inferred_linear_list`` : list[list[float]]
         - ``n_success``, ``n_failed`` : int
-        - ``metadata`` : dict with variant, method, n_regions, duration, etc.
+        - ``metadata`` : dict with variant, method, n_regions, duration,
+          etc. ``metadata['stimulus_mod_factory']`` records either
+          ``'default_epochs'`` (when ``stimulus_mod_factory`` is None) or
+          ``'custom'``.
 
     Notes
     -----
@@ -376,7 +563,16 @@ def run_task_bilinear_svi(config: BenchmarkConfig) -> dict[str, Any]:
                 pyro.set_rng_seed(seed_i)
                 pyro.enable_validation(False)
 
-                data = _load_or_make_fixture(i, config)
+                # Plan 16-03 L10: factory-hook dispatch.
+                if stimulus_mod_factory is not None:
+                    # Custom factory -> bypass fixture cache for stim_mod;
+                    # always generate inline with the seed.
+                    data = _make_bilinear_ground_truth_with_factory(
+                        config.n_regions, seed_i, stimulus_mod_factory,
+                    )
+                else:
+                    # Default path: plan 16-01 fixture-or-inline dispatch.
+                    data = _load_or_make_fixture(i, config)
 
                 # Model args (positional, shared between bilinear and linear).
                 a_mask = torch.ones(N, N, dtype=torch.float64)
@@ -485,5 +681,9 @@ def run_task_bilinear_svi(config: BenchmarkConfig) -> dict[str, Any]:
                 "event_times": _EPOCH_TIMES,
                 "event_durations": _EPOCH_DURATIONS,
             },
+            "stimulus_mod_factory": (
+                "custom" if stimulus_mod_factory is not None
+                else "default_epochs"
+            ),
         },
     }
