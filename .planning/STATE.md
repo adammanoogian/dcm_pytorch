@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-04-17)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.3.0 Bilinear DCM Extension -- Phase 15 Plan 15-01 complete; Plans 15-02, 15-03 pending
+**Current focus:** v0.3.0 Bilinear DCM Extension -- Phase 15 Plans 15-01 + 15-02 complete; 15-03 pending (parallel execution)
 
 ## Current Position
 
 **Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
-**Phase:** Phase 15 -- Pyro Generative Model with B Priors and Masks (IN PROGRESS; Plan 15-01 complete 2026-04-18)
-**Plan:** 15-01 COMPLETE; 15-02 (guide auto-discovery) + 15-03 (packer refusal + extract_posterior bilinear keys) pending
-**Status:** Plan 15-01 closes MODEL-01, MODEL-02, MODEL-03 (BOTH halves), MODEL-04. `task_dcm_model` extended with keyword-only `b_masks` + `stim_mod` kwargs behind structural linear short-circuit (no `B=` kwarg to CoupledDCMSystem when b_masks is None/[]); per-modulator `B_free_j ~ Normal(0, 1.0).to_event(2)` loop + stacked `parameterize_B` + `pyro.deterministic("B", B_stacked)` guarded in bilinear branch (L3). Module-level `B_PRIOR_VARIANCE = 1.0` (D1). NaN-safe predicted_bold guard ported from amortized_wrappers.py:143-145. 19/19 tests green in `test_task_dcm_model.py` (10 pre-existing + 8 TestBilinearStructure + 1 TestBilinearSVI). Phase 13+14 regression 51/51 green. Next: Plan 15-02 (guide factory + auto-discovery tests for AutoNormal / AutoLowRankMVN / AutoIAFNormal).
-**Last activity:** 2026-04-18 -- Plan 15-01 complete; 3 atomic commits on `gsd/phase-15-pyro-bilinear-model` (23a5591, cd405d2, 807fb46).
+**Phase:** Phase 15 -- Pyro Generative Model with B Priors and Masks (IN PROGRESS; Plans 15-01 + 15-02 complete 2026-04-18)
+**Plan:** 15-01 + 15-02 COMPLETE; 15-03 (packer refusal + extract_posterior bilinear keys) in parallel execution on same branch
+**Status:** Plan 15-02 closes MODEL-06 (passive auto-discovery gate). New TestBilinearDiscovery class in `tests/test_guide_factory.py` with 6 parametrized tests (2 assertion shapes x 3 AutoGuide variants: auto_normal, auto_lowrank_mvn, auto_iaf). First shape forces `AutoGuide._setup_prototype` via one `guide()` call and asserts `B_free_0` in `guide.prototype_trace.nodes`; second shape runs 20 SVI steps per variant and asserts param store references B_free_j. Zero source changes. Module-scoped fixture `task_bilinear_guide_data` mirrors 15-01's fixture pattern (duplicated test-side to avoid cross-file imports). Helper `_guide_kwargs_for(guide_type)` injects `hidden_dim=64` for auto_iaf (Rule 3 blocker fix: AutoRegressiveNN requires `min(hidden_dims) >= input_dim`; bilinear latent = 22 > create_guide default [20]). 30/30 tests green in `test_guide_factory.py` (24 pre-existing + 6 new) in 26.41s. Phase 13+14+15-01 regression subset 113/113 green in 6:32. Phase 15 now 5/7 requirements closed (MODEL-01, MODEL-02, MODEL-03 both halves, MODEL-04 from 15-01; MODEL-06 from 15-02). MODEL-05, MODEL-07 pending in Plan 15-03.
+**Last activity:** 2026-04-18 -- Plan 15-02 complete; 1 atomic test commit on `gsd/phase-15-pyro-bilinear-model` (9b796c0). Plan 15-03 committed `6c68b10` on same branch in parallel (file-level non-overlap confirmed: 15-02 touches only tests/test_guide_factory.py).
 
-Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [██████░░░░] Phases 13 + 14 complete + Phase 15 Plan 15-01 complete (15-02, 15-03, Phase 16 pending)
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [██████░░░░] Phases 13 + 14 complete + Phase 15 Plans 15-01 + 15-02 complete (15-03, Phase 16 pending)
 
 ## Decisions
 
@@ -85,25 +85,169 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-18
-Stopped at: Plan 15-01 complete. `task_dcm_model` extended with
-keyword-only `b_masks`, `stim_mod` kwargs behind structural linear
-short-circuit (`CoupledDCMSystem(A, C, stimulus)` with NO `B=` kwarg
-when `b_masks is None` or `[]` -- inherits Phase 13
-`coupled_system.py:287-291` gate). Bilinear branch: per-modulator
-`pyro.sample(f"B_free_{j}", Normal(0, 1.0).to_event(2))` Python loop
-(NO pyro.plate) + `torch.stack` + single `parameterize_B` call +
-`pyro.deterministic("B", B_stacked)` (L3-guarded). Module-level
-`B_PRIOR_VARIANCE = 1.0` (D1). NaN-safe `predicted_bold` guard ported
-from `amortized_wrappers.py:143-145`. 9 new tests in
-`tests/test_task_dcm_model.py` (8 TestBilinearStructure + 1
-TestBilinearSVI) close MODEL-01, MODEL-02, MODEL-03 (BOTH halves),
-MODEL-04. All 10 pre-Phase-15 tests unchanged and green. Branch
-`gsd/phase-15-pyro-bilinear-model` carries 3 Plan-15-01 commits
-(23a5591, cd405d2, 807fb46) on top of existing Phase 15 planning
-commits.
-Next: Plan 15-02 (guide factory + auto-discovery across AutoNormal /
-AutoLowRankMVN / AutoIAFNormal for the new `B_free_j` sites).
+Stopped at: Plan 15-02 complete. `tests/test_guide_factory.py`
+extended with `TestBilinearDiscovery` class (6 parametrized tests
+across auto_normal / auto_lowrank_mvn / auto_iaf): 3 discovery tests
+force `AutoGuide._setup_prototype` via one `guide()` call and assert
+`B_free_0` in `guide.prototype_trace.nodes`; 3 SVI-smoke tests run
+20-step Trace_ELBO + ClippedAdam loops asserting finite losses and
+param-store references to B_free_j sites. Module-scoped
+`task_bilinear_guide_data` fixture (3-region J=1 matching 15-01's
+fixture pattern, duplicated rather than imported per plan truth-3).
+Helper `_guide_kwargs_for(guide_type)` injects `hidden_dim=64` for
+auto_iaf to clear AutoRegressiveNN's `min(hidden_dims) >= input_dim`
+floor (bilinear latent dim = 22 > create_guide default [20]). Zero
+source-code changes (MODEL-06 passive). 30/30 tests in
+test_guide_factory.py green in 26.41s. Phase 13+14+15-01 regression
+113/113 green in 6:32. Branch `gsd/phase-15-pyro-bilinear-model`
+now carries 4 Plan-15-0x commits (23a5591, cd405d2, 807fb46 from
+15-01; 9b796c0 from 15-02) plus 6c68b10 from Plan 15-03 (parallel).
+Next: monitor 15-03 completion (MODEL-05 + MODEL-07) then Phase 16
+recovery benchmark (RECOV-01..08).
 Resume file: None
+
+---
+
+### 2026-04-18 -- Plan 15-02 complete
+
+- `tests/test_guide_factory.py`:
+  - Import block widened: `from pyro_dcm.models.task_dcm_model import
+    task_dcm_model`; `from pyro_dcm.simulators.task_simulator import
+    (make_block_stimulus, make_epoch_stimulus, make_random_stable_A,
+    simulate_task_dcm)`; `from pyro_dcm.utils.ode_integrator import
+    PiecewiseConstantInput` — alphabetized within each `from ... import
+    (...)` block.
+  - New module-scoped fixture `task_bilinear_guide_data()` (3-region,
+    J=1, 30s simulation): mirrors the structure of
+    `tests/test_task_dcm_model.py::task_bilinear_data` by
+    duplication (plan truth-3 preference: test-local fixture over
+    fragile cross-test-file import). `A = make_random_stable_A(3,
+    density=0.5, seed=42)`; `C = [[0.25],[0.0],[0.0]]`;
+    `b_masks = [b_mask_0]` with `b_mask_0[1,0] = 1.0` (zero diagonal
+    per Pitfall B5); `stim_mod = PiecewiseConstantInput` from
+    `make_epoch_stimulus(event_times=[10.0], event_durations=[10.0],
+    event_amplitudes=[1.0], duration=30.0, dt=0.01, n_inputs=1)`
+    (Pitfall B12 preferred boxcar primitive). Returns dict with 12
+    keys including observed_bold, stimulus, a/c_mask, t_eval, TR,
+    dt, N, M, J, b_masks, stim_mod.
+  - New module-level constant `_BILINEAR_GUIDE_VARIANTS =
+    ["auto_normal", "auto_lowrank_mvn", "auto_iaf"]` with a multi-
+    paragraph docstring explaining per-variant AutoGuide discovery
+    mechanics (auto_normal deep_setattr vs auto_lowrank_mvn /
+    auto_iaf AutoContinuous _latent concatenation), init_scale
+    portability (source-cited `guides.py:54-58` + `guides.py:171-172`
+    guard), and the hidden_dim sizing rationale for auto_iaf.
+  - New module-private helper `_guide_kwargs_for(guide_type: str) ->
+    dict` returning `{"init_scale": 0.005}` for all variants AND
+    `{"hidden_dim": 64}` when `guide_type == "auto_iaf"`. Called
+    as `create_guide(task_dcm_model, guide_type=guide_type,
+    **_guide_kwargs_for(guide_type))` in both test methods.
+  - New `TestBilinearDiscovery` class with `autouse=True` fixture
+    `_silence_stability_logger` using
+    `caplog.set_level(logging.ERROR, logger="pyro_dcm.stability")`
+    per D4 + R6. Two parametrized methods across 3 variants (6
+    tests total):
+    - `test_b_free_sites_in_prototype_trace[auto_normal |
+      auto_lowrank_mvn | auto_iaf]` — `pyro.clear_param_store()`;
+      build guide via `create_guide`; call `guide(**model_kwargs)`
+      under `torch.no_grad()` to trigger lazy `_setup_prototype`;
+      assert `f"B_free_{j}" in guide.prototype_trace.nodes` for
+      each j in range(J); also assert pre-Phase-15 sites A_free + C
+      still present (sanity).
+    - `test_b_free_sites_in_param_store_after_svi[auto_normal |
+      auto_lowrank_mvn | auto_iaf]` — `pyro.clear_param_store()`;
+      build `SVI(task_dcm_model, guide, ClippedAdam({lr: 0.01,
+      clip_norm: 10.0}), loss=Trace_ELBO())`; run 20 steps asserting
+      `math.isfinite(loss)` at every step; for auto_normal assert
+      at least one `pyro.get_param_store()` key contains
+      f"B_free_{j}" substring; for auto_lowrank_mvn / auto_iaf
+      assert `B_free_{j}` still in `guide.prototype_trace.nodes`
+      post-SVI AND `len(param_names) > 0`.
+- Commits: `9b796c0` `test(15-02): bilinear guide auto-discovery
+  across 3 autoguide variants`.
+- Verification: `tests/test_guide_factory.py::TestBilinearDiscovery`
+  6/6 in 25.55s (budget <90s — 71% under); full
+  `tests/test_guide_factory.py` 30/30 in 26.41s (24 pre-existing +
+  6 new; zero pre-existing regressed); Phase 15-01 regression
+  `tests/test_task_dcm_model.py` 19/19 in 43.33s; Phase 13+14+15-01
+  full subset (test_task_dcm_model + test_guide_factory +
+  test_linear_invariance + test_coupled_system_bilinear +
+  test_bilinear_utils + test_bilinear_simulator +
+  test_stimulus_utils + test_neural_state + test_stability_monitor)
+  113/113 in 392.97s (6:32). Ruff on new code clean; pre-existing
+  I001 (line 9-32 import sort) + D403 (line 245
+  `test_kwargs_passthrough_lowrank` docstring) confirmed via
+  `git stash` round-trip, not touched per Phase 14 precedent.
+- **Grep sentinels** (all met, all above plan thresholds):
+  `class TestBilinearDiscovery` 1 (plan target exactly 1),
+  `_BILINEAR_GUIDE_VARIANTS` 3 (plan target >=2),
+  `prototype_trace` 11 (plan target >=3),
+  `pyro_dcm.stability` 2 (plan target >=1),
+  `B_free_` 19 (plan target >=4),
+  `init_scale=0.005` 3 (plan target >=2),
+  `task_bilinear_guide_data` 24 (plan target >=3),
+  `auto_normal` 10, `auto_lowrank_mvn` 9, `auto_iaf` 16 (plan
+  targets each >=2). `_guide_kwargs_for` 4 (def + 2 call sites +
+  docstring).
+- **L1 inherited from 15-01 (active):** tests rely on 15-01's full
+  `(N, N) .to_event(2)` B-site shape — if 15-01 had used flat-vector
+  alternative, `AutoGuide._setup_prototype` would still register
+  the site but its event dim would differ and the prototype_trace
+  assertion would still pass structurally (so L1 is NOT directly
+  verified by this plan — but the SVI smoke IS sensitive to
+  event-dim shape and passes cleanly, which is indirect evidence
+  that L1 holds).
+- **L2 inherited from 15-01 (applied):** `init_scale=0.005` passed
+  explicitly to `create_guide` for all three variants via
+  `_guide_kwargs_for`. For auto_normal + auto_lowrank_mvn it flows
+  through to the AutoGuide ctor (per `_INIT_SCALE_GUIDES` guard at
+  `guides.py:54-58`); for auto_iaf it is silently dropped inside
+  `create_guide` at `guides.py:171-172` (no TypeError; verified by
+  green test). Plan truth-6 portability claim confirmed in practice.
+- **L3 inherited from 15-01 (indirect):** `pyro.deterministic("B",
+  ...)` continues to be guarded to the bilinear branch — 15-01's
+  `test_linear_reduction_when_b_masks_none` continues to assert
+  this via exact set-equality. Not re-verified by 15-02 tests.
+- **Deviations (Rule 3 blocking fix):**
+  - `_guide_kwargs_for` helper added to supply `hidden_dim=64` for
+    auto_iaf. `AutoIAFNormal` wraps `pyro.nn.AutoRegressiveNN` which
+    raises `ValueError: Hidden dimension must not be less than input
+    dimension.` at `auto_reg_nn.py:206` when `min(hidden_dims) <
+    input_dim`. Bilinear `task_dcm_model` has latent dim 22 (A_free=9
+    + C=3 + noise_prec=1 + B_free_0=9) which exceeds `create_guide`
+    default `hidden_dim=[20]` (set at `guides.py:181`). The plan's
+    truth-7 init_scale portability claim is CORRECT but did not
+    anticipate this orthogonal constructor-arg failure. Fix is
+    TEST-SIDE-ONLY: helper function + 2 call-site replacements +
+    one docstring sentence. `create_guide` source unchanged; plan
+    truth-5 ("Zero edits to `src/pyro_dcm/models/guides.py`")
+    remains satisfied. `hidden_dim=64` gives 2.9x margin over the
+    22-dim floor — no tuning sensitivity expected for Phase 16
+    (3-8 regions; worst-case latent ~20 + J*N*N for moderate J).
+- **Parallel-execution coordination:** Plan 15-03 committed
+  `6c68b10 feat(15-03): refuse bilinear sites in TaskDCMPacker +
+  amortized_task_dcm_model` on the same branch during this plan's
+  execution window. Verified file-level non-overlap: 15-03 touches
+  `src/pyro_dcm/guides/parameter_packing.py`,
+  `src/pyro_dcm/models/amortized_wrappers.py`, and test files
+  (test_amortized_task_dcm.py, test_parameter_packing.py,
+  test_posterior_extraction.py). 15-02 touches only
+  `tests/test_guide_factory.py`. Staged individually via `git add
+  tests/test_guide_factory.py` (no `git add .` or `-A`).
+- **Known follow-ups (out of scope for 15-02):**
+  1. `auto_mvn` docstring update in `src/pyro_dcm/models/guides.py`
+     noting bilinear J > 1 cost scaling (research R3) — deferred
+     per plan truth-7.
+  2. Consider auto-scaling `hidden_dim` default in `create_guide`
+     for `auto_iaf` based on estimated latent dim (heuristic:
+     `max(20, 2 * est_latent)`). Currently downstream callers for
+     models with >20 latent dims must pass `hidden_dim` explicitly;
+     `_guide_kwargs_for` is the reference pattern. Explicit
+     `create_guide(..., bilinear_mode=True)` auto-switch REJECTED
+     per 15-RESEARCH.md Section 14 Q1.
+- Requirements closed: MODEL-06. Phase 15 now 5/7 (MODEL-01..04
+  from 15-01, MODEL-06 from 15-02; MODEL-05 + MODEL-07 pending in
+  Plan 15-03).
 
 ---
 
@@ -576,4 +720,4 @@ Resume file: None
   structurally (literal short-circuit) AND empirically (atol=1e-10 fixtures).
 
 ---
-*Last updated: 2026-04-18 after Phase 14 verification passed (14/14 must-haves; SIM-01..05 Complete)*
+*Last updated: 2026-04-18 after Plan 15-02 complete (MODEL-06 passive auto-discovery gate closed; Phase 15 now 5/7)*
