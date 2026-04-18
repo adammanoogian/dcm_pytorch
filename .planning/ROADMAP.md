@@ -90,6 +90,11 @@ omitted.
 **Branch:** `gsd/phase-14-stimulus-and-bilinear-simulator`
 **Depends on:** Phase 13 (bilinear forward model and `compute_effective_A`).
 **Requirements:** SIM-01, SIM-02, SIM-03, SIM-04, SIM-05
+**Plans:** 2 plans (2 waves)
+Plans:
+- [ ] 14-01-PLAN.md — Stimulus utilities (`make_event_stimulus`, `make_epoch_stimulus`) + `merge_piecewise_inputs` helper + unit tests (SIM-01, SIM-02)
+- [ ] 14-02-PLAN.md — `simulate_task_dcm` bilinear extension + return-dict update + linear bit-exactness regression + bilinear-vs-linear distinguishability + dt-invariance (linear & bilinear) (SIM-03, SIM-04, SIM-05)
+
 **Success Criteria** (what must be TRUE):
 
   1. All existing `test_task_simulator.py` tests (40+) pass unchanged; calling
@@ -178,7 +183,7 @@ RECOV-08
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 13. Bilinear Neural State & Stability Monitor | 4/4 | Complete | 2026-04-17 |
-| 14. Stimulus Utilities & Bilinear Simulator | 0/TBD | Pending | -- |
+| 14. Stimulus Utilities & Bilinear Simulator | 0/2 | Pending | -- |
 | 15. Pyro Generative Model with B Priors and Masks | 0/TBD | Pending | -- |
 | 16. 3-Region Bilinear Recovery Benchmark | 0/TBD | Pending | -- |
 
@@ -194,10 +199,10 @@ RECOV-08
 | 11. Calibration Analysis | v0.2.0 | 3/3 | Complete | 2026-04-12 |
 | 12. Documentation | v0.2.0 | 2/2 | Complete | 2026-04-13 |
 | 13. Bilinear Neural State & Stability Monitor | v0.3.0 | 4/4 | Complete | 2026-04-17 |
-| 14. Stimulus Utilities & Bilinear Simulator | v0.3.0 | 0/TBD | Pending | -- |
+| 14. Stimulus Utilities & Bilinear Simulator | v0.3.0 | 0/2 | Pending | -- |
 | 15. Pyro Generative Model with B Priors and Masks | v0.3.0 | 0/TBD | Pending | -- |
 | 16. 3-Region Bilinear Recovery Benchmark | v0.3.0 | 0/TBD | Pending | -- |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-04-17 after Phase 13 verification passed (18/18 must-haves)*
+*Last updated: 2026-04-17 after Phase 14 plans created (2 plans, 2 waves)*
