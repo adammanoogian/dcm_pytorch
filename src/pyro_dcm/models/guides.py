@@ -408,6 +408,24 @@ def extract_posterior_params(
     For ``AutoDelta`` guides, all samples are identical point
     estimates, so ``std`` is exactly zero.
 
+    **Bilinear task DCM sites (v0.3.0+):** When the guide trains on
+    ``task_dcm_model`` in bilinear mode (non-empty ``b_masks``), per-
+    modulator parameters appear in the returned dict under keys
+    ``B_free_0``, ``B_free_1``, ..., ``B_free_{J-1}`` (raw free
+    parameters; ``mean`` is the per-modulator posterior median
+    approximation). The masked, parameterized stacked B matrix may
+    also appear under key ``B`` (shape ``(J, N, N)``; see
+    ``pyro_dcm.forward_models.neural_state.parameterize_B``) when the
+    underlying ``Predictive`` call returns deterministic sites.
+    Whether ``Predictive(return_sites=None)`` includes deterministic
+    sites depends on the Pyro version; pass
+    ``return_sites=[..., 'B']`` explicitly to guarantee the masked
+    tensor appears across versions. Compute per-modulator medians
+    either as ``posterior["B_free_j"]["mean"]`` (raw; always
+    available) or ``posterior["B"]["mean"][j]`` (masked; available
+    when B is requested or included by default). Closes MODEL-05
+    (``.planning/REQUIREMENTS.md``).
+
     Examples
     --------
     >>> from pyro_dcm.models import create_guide, run_svi, extract_posterior_params
@@ -416,6 +434,17 @@ def extract_posterior_params(
     >>> A_mean = posterior['A_free']['mean']
     >>> A_std = posterior['A_free']['std']
     >>> A_median_compat = posterior['median']['A_free']
+
+    Bilinear task DCM:
+
+    >>> # After SVI on task_dcm_model with b_masks=[mask_0], stim_mod=mod:
+    >>> posterior = extract_posterior_params(guide, model_args)
+    >>> B_raw = posterior['B_free_0']['mean']           # (N, N), always available
+    >>> # Masked (J, N, N) tensor: available when Predictive includes
+    >>> # deterministic sites (Pyro 1.9+ default) or via explicit return_sites.
+    >>> if 'B' in posterior:
+    ...     B_masked = posterior['B']['mean']               # (J, N, N)
+    ...     B_for_modulator_0 = posterior['B']['mean'][0]   # (N, N)
     """
     if model is None:
         model = guide.model
