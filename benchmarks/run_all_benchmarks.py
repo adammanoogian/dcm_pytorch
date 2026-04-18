@@ -58,6 +58,7 @@ from benchmarks.runners import RUNNER_REGISTRY
 VALID_COMBOS: list[tuple[str, str]] = [
     ("task", "svi"),
     ("task", "amortized"),
+    ("task_bilinear", "svi"),
     ("spectral", "svi"),
     ("spectral", "amortized"),
     ("rdcm_rigid", "vb"),
@@ -65,9 +66,12 @@ VALID_COMBOS: list[tuple[str, str]] = [
     ("spm", "reference"),
 ]
 
-# Mapping from user-facing variant to registry variants
+# Mapping from user-facing variant to registry variants.
+# NOTE: "task_bilinear" is EXPLICIT-ONLY -- it is NOT included in "all" to
+# prevent accidental 80-min default CI runs (research Section 9 Q10).
 VARIANT_EXPANSION: dict[str, list[str]] = {
     "task": ["task"],
+    "task_bilinear": ["task_bilinear"],
     "spectral": ["spectral"],
     "rdcm": ["rdcm_rigid", "rdcm_sparse"],
     "spm": ["spm"],
@@ -242,7 +246,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--variant",
-        choices=["task", "spectral", "rdcm", "all"],
+        choices=["task", "task_bilinear", "spectral", "rdcm", "all"],
         default="all",
         help="DCM variant to benchmark (default: all)",
     )

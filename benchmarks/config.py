@@ -91,6 +91,7 @@ class BenchmarkConfig:
         """
         defaults: dict[str, dict[str, int]] = {
             "task": {"n_datasets": 3, "n_svi_steps": 500},
+            "task_bilinear": {"n_datasets": 3, "n_svi_steps": 500},
             "spectral": {"n_datasets": 5, "n_svi_steps": 500},
             "rdcm": {"n_datasets": 5, "n_svi_steps": 500},
             "rdcm_rigid": {"n_datasets": 5, "n_svi_steps": 500},
@@ -129,6 +130,7 @@ class BenchmarkConfig:
         """
         defaults: dict[str, dict[str, int]] = {
             "task": {"n_datasets": 20, "n_svi_steps": 3000},
+            "task_bilinear": {"n_datasets": 10, "n_svi_steps": 1500},
             "spectral": {"n_datasets": 50, "n_svi_steps": 500},
             "rdcm": {"n_datasets": 50, "n_svi_steps": 500},
             "rdcm_rigid": {"n_datasets": 50, "n_svi_steps": 500},
