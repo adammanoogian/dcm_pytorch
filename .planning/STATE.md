@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-04-17)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.3.0 Bilinear DCM Extension -- Phase 16 recovery benchmark in progress; Plan 16-01 (runner infrastructure) COMPLETE 2026-04-18; plans 16-02 (metrics + figures + acceptance gates) and 16-03 (HGF factory hook) pending
+**Current focus:** v0.3.0 Bilinear DCM Extension -- Phase 16 recovery benchmark in progress; Plan 16-01 (runner infrastructure) COMPLETE 2026-04-18; Plan 16-03 (HGF factory hook) COMPLETE 2026-04-18; Plan 16-02 (metrics + figures + acceptance gates) running in parallel.
 
 ## Current Position
 
 **Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
 **Phase:** Phase 16 -- 3-Region Bilinear Recovery Benchmark (in progress)
-**Plan:** 16-01 COMPLETE 2026-04-18 (runner + fixtures + config + registry + CLI + smoke test); 16-02 and 16-03 pending
-**Status:** Plan 16-01 shipped all 4 feat/test tasks + metadata commit on branch `gsd/phase-16-bilinear-recovery-benchmark`. `run_svi` now supports keyword-only `model_kwargs` forwarding (L1; bit-exact backward compat for every existing caller). `generate_task_bilinear_fixtures` produces `.npz` ground truth with B[1,0]=0.4, B[2,1]=0.3, 4x12s epoch modulator at [20,65,110,155]s, SNR=3, duration=200s. `benchmarks/runners/task_bilinear.py::run_task_bilinear_svi` fits both bilinear and linear baseline on the same fixture per seed (L3), returning per-seed posterior_list (B_free_0 raw samples for RECOV-06) + a_rmse comparators (RECOV-03) + wall-time (RECOV-08). Registry + VALID_COMBOS + VARIANT_EXPANSION + argparse --variant wired; task_bilinear is EXPLICIT-ONLY in run_all_benchmarks.py (NOT in 'all'). BenchmarkConfig.quick_config/full_config defaults `n_datasets=3/10, n_svi_steps=500/1500` (L4). 13/13 TestRunSVIModelKwargs + TestRunSvi + existing SVI integration tests green (11 in test_svi_integration.py + 2 new). `@pytest.mark.slow`-gated smoke test in tests/test_task_bilinear_benchmark.py exists; collection + `-m "not slow"` deselect path verified (slow run itself takes >1h on CPU per 2-seed smoke extrapolation and was terminated during execution -- expected per plan). Phase 15 regression suite (74 tests) green post-change. Closes RECOV-01 + RECOV-02 structural. Next: Plan 16-02 (metrics + forest plot + acceptance-gate table).
-**Last activity:** 2026-04-18 -- Plan 16-01 complete. 5 commits on `gsd/phase-16-bilinear-recovery-benchmark`: 48c0c3c (run_svi model_kwargs + tests), e8d56bb (generate_task_bilinear_fixtures), 38c09a2 (task_bilinear runner + config + registry + CLI), 97bfaa9 (slow-gated smoke test), `<metadata-commit>` (plan completion).
+**Plan:** 16-01 COMPLETE 2026-04-18 (runner infrastructure); 16-03 COMPLETE 2026-04-18 (HGF factory hook + mock + wiring tests); 16-02 in flight in parallel (metrics + plotting + acceptance gates).
+**Status:** Plan 16-03 shipped all 2 feat/test tasks + metadata commit on branch `gsd/phase-16-bilinear-recovery-benchmark`. `run_task_bilinear_svi` now accepts `stimulus_mod_factory: StimulusModFactory | None = None` keyword-only parameter (L9: `Callable[[int], dict[str, torch.Tensor]]` returning `{'times': (K,) float64, 'values': (K, J) float64}`). Default `None` preserves plan 16-01 behavior bit-exactly. Non-None factory bypasses `_load_or_make_fixture` for stim_mod (L10) — A/B/C/b_mask/driving-stim still seed-deterministic; only stim_mod is factory-driven. Module-level `make_sinusoid_mod_factory(duration=200.0, dt=0.01, frequency=0.05, amplitude=0.5)` ships as a Phase 16 placeholder/mock; v0.3.1 SIM-06 HGF factories will share the L9 signature so the runner needs no further changes. `_make_bilinear_ground_truth_with_factory` mirrors plan 16-01's helper but substitutes the factory's stim_mod (with TypeError type-guard on malformed returns). `metadata['stimulus_mod_factory']` records `'default_epochs'` or `'custom'` on every return dict (no factory-hash tracking; factories are test/sweep artifacts). `tests/test_task_bilinear_factory.py::TestFactoryHookWiring` ships 3 tests: 1 fast `test_factory_signature_contract` (4.5s; closure surface only — shape, dtype, determinism, configurability) + 2 `@pytest.mark.slow` tests (default-path regression + custom-factory differs + metadata flip). Fast test passes alongside full plan 16-01 SVI integration suite (12 passed, 2 deselected slow, 194s total). Ruff clean on both modified files. File-ownership contract with parallel plan 16-02 respected: 16-03 only touched `benchmarks/runners/task_bilinear.py` + `tests/test_task_bilinear_factory.py`; 16-02 owns `benchmarks/bilinear_metrics.py`, `benchmarks/plotting.py`, `tests/test_bilinear_metrics.py`, `tests/test_task_bilinear_benchmark.py`. Closes 16-CONTEXT.md HGF trajectory forward-compatibility hook lock-in ("the indirection is proven wired, not a theoretical API"). Next: Plan 16-02 in flight (metrics + forest plot + acceptance-gate table); after 16-02 completes, Phase 16 will be DONE, closing v0.3.0 Bilinear DCM Extension milestone.
+**Last activity:** 2026-04-18 -- Plan 16-03 complete. 3 plan-16-03 commits on `gsd/phase-16-bilinear-recovery-benchmark`: 9fb391f (feat: factory hook + mock + helper), 7596aa8 (test: factory wiring tests), `<metadata-commit>` (plan completion). Plan 16-02 commits interleaved on same branch: b9aae53 (feat: bilinear_metrics module), 50a08fb (feat: forest plot + acceptance-gate table); 16-02 remains in flight.
 
-Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [████████▌░] Phases 13 + 14 + 15 complete + Plan 16-01 complete (Phase 16 plans 16-02, 16-03 pending)
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [█████████░] Phases 13 + 14 + 15 complete + Plan 16-01 + Plan 16-03 complete (Phase 16 plan 16-02 in flight)
 
 ## Decisions
 
@@ -64,6 +64,29 @@ Progress: v0.1.0 [██████████] 100% | v0.2.0 [█████
   does NOT include it).** Fixture generation (`benchmarks/generate_fixtures.py --variant
   all`) DOES include `task_bilinear` because fixture generation is cheap (seconds per
   fixture). Research Section 9 Q10 asymmetry.
+- **Plan 16-03 L9 - `stimulus_mod_factory` signature is `Callable[[int], dict[str, torch.Tensor]]`**
+  returning `{'times': (K,) float64, 'values': (K, J) float64}`. Closure captures
+  `duration`/`dt`/`n_inputs` at construction time (cleaner than threading them through
+  the factory signature because different factory types — epoch, sinusoid, HGF
+  trajectory — have different natural closure contexts). Factory returns a BREAKPOINT
+  DICT (not a `PiecewiseConstantInput` instance) so the runner can wrap at the call
+  site and so that .npz fixtures stay format-compatible.
+- **Plan 16-03 L10 - non-None factory bypasses fixture cache for stim_mod.** When
+  `stimulus_mod_factory is not None`, `run_task_bilinear_svi` skips `_load_or_make_fixture`
+  entirely and always inlines via `_make_bilinear_ground_truth_with_factory`. A/B/C
+  ground truth still seed-deterministic; only stim_mod is factory-driven. Rationale:
+  custom factories are test/sweep artifacts not reproducible-run artifacts; mixing
+  cached `.npz` `stim_mod_values` with a custom factory would produce a stim_mod /
+  B_true inconsistency.
+- **Plan 16-03 - factory NOT stored in BenchmarkConfig.** Per CONTEXT.md, the factory
+  is a runner-level kwarg (test/sweep injection point), NOT a config-level field —
+  keeps `.npz` reproducibility path clean and avoids dataclass schema churn.
+  `metadata['stimulus_mod_factory']` records only `'default_epochs'` or `'custom'`
+  (no factory-hash tracking; research Section 7.2 N5 option c).
+- **Plan 16-03 - mock sinusoid factory is Phase 16 placeholder, not physiologically
+  meaningful.** `make_sinusoid_mod_factory(0.05 Hz, amplitude 0.5)` exists exclusively
+  to exercise factory plumbing per CONTEXT.md "the indirection is proven wired, not
+  a theoretical API." v0.3.1 SIM-06 HGF factories share the L9 signature.
 
 See `.planning/milestones/v0.2.0-ROADMAP.md` and `.planning/milestones/v0.1.0-ROADMAP.md` for prior milestones.
 
@@ -107,6 +130,71 @@ None currently.
   needs both) -> 16 (benchmark integrates everything).
 
 ## Session Continuity
+
+Last session: 2026-04-18T21:08-21:21Z (Plan 16-03 execution)
+Stopped at: Plan 16-03 complete -- HGF factory hook +
+mock sinusoid factory + wiring tests shipped on branch
+`gsd/phase-16-bilinear-recovery-benchmark`. `run_task_bilinear_svi`
+gains keyword-only `stimulus_mod_factory: StimulusModFactory | None
+= None` parameter (L9: `Callable[[int], dict[str, torch.Tensor]]`
+returning `{'times': (K,), 'values': (K, J)}`). Default `None`
+preserves plan 16-01 behavior bit-exactly. Non-None factory
+bypasses `_load_or_make_fixture` for stim_mod (L10) — A/B/C/b_mask/
+driving-stim still seed-deterministic; only stim_mod is
+factory-driven. Module-level `make_sinusoid_mod_factory(duration=
+200.0, dt=0.01, frequency=0.05, amplitude=0.5)` ships as Phase 16
+placeholder/mock; v0.3.1 SIM-06 HGF factories will share the L9
+signature. `_make_bilinear_ground_truth_with_factory` mirrors plan
+16-01's helper but substitutes the factory's stim_mod (with
+TypeError type-guard on malformed returns).
+`metadata['stimulus_mod_factory']` records `'default_epochs'` or
+`'custom'` on every return dict (no factory-hash tracking).
+`tests/test_task_bilinear_factory.py::TestFactoryHookWiring` ships
+3 tests: 1 fast `test_factory_signature_contract` (4.5s; closure
+surface only — shape, dtype, determinism, configurability) + 2
+`@pytest.mark.slow` tests (default-path regression + custom-factory
+differs + metadata flip). Fast test passes alongside full
+plan 16-01 SVI integration suite (12 passed, 2 deselected slow,
+194s total). Ruff clean on both modified files. File-ownership
+contract with parallel plan 16-02 respected: 16-03 only touched
+`benchmarks/runners/task_bilinear.py` + new
+`tests/test_task_bilinear_factory.py`. Closes 16-CONTEXT.md HGF
+trajectory forward-compatibility hook lock-in. 3 plan-16-03
+commits on branch: 9fb391f (feat: factory hook + mock + helper),
+7596aa8 (test: factory wiring tests), `<metadata-commit>` (plan
+completion). Plan 16-02 commits interleaved in parallel:
+b9aae53 (feat: bilinear_metrics module), 50a08fb (feat: forest
+plot + acceptance-gate table); 16-02 remains in flight.
+
+### Deviations from Plan 16-03
+
+- Plan grep sentinel expected `grep -c "make_sinusoid_mod_factory"
+  benchmarks/runners/task_bilinear.py >= 2` (def + docstring), but
+  Python convention is for a docstring NOT to mention its own
+  function name; only the `def` line matches verbatim. Substantive
+  sentinels (`stimulus_mod_factory >= 4` got 10,
+  `_make_bilinear_ground_truth_with_factory >= 2` got 2,
+  `StimulusModFactory >= 2` got 7) all pass; functional
+  verification (factory shape + determinism + closure-config)
+  passes via Python smoke. Analogous to plan 16-01's
+  `model_kwargs >= 5` plan-inconsistency note.
+- Plan verify commands referenced `pytest --timeout=N`, but the
+  `pytest-timeout` plugin is not installed in the project
+  environment (pytest exits 4 on the flag). Verification ran
+  without `--timeout`; fast `test_factory_signature_contract`
+  completed in 4.5s. Tooling note for future plan-writers: the
+  Phase 8 / Phase 16 plans systematically reference
+  `--timeout=N` but the plugin is not in the dependency stack.
+
+Next: Plan 16-02 (metrics + forest plot + acceptance-gate table)
+finishes Phase 16, closing v0.3.0 Bilinear DCM Extension
+milestone. Plan 16-02 is in flight in parallel and writes its own
+SUMMARY + STATE entry on completion.
+Resume file: None
+
+---
+
+### 2026-04-18 -- Plan 16-01 complete (prior session)
 
 Last session: 2026-04-18 (Plan 16-01 execution)
 Stopped at: Plan 16-01 complete -- Phase 16 runner
