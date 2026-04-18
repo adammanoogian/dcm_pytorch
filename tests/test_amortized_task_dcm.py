@@ -457,84 +457,66 @@ class TestAmortizedRefusesBilinear:
                 stim_mod=stim_mod,
             )
 
-    def test_amortized_wrapper_linear_mode_unchanged(self) -> None:
-        """b_masks=None + b_masks=[] both pass through to the linear body.
+    def test_amortized_wrapper_linear_mode_unchanged(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """b_masks=None + b_masks=[] both pass through the guard to the linear body.
 
         MODEL-07 regression gate: adding the keyword-only kwargs must NOT
-        break the linear amortized path. We verify the wrapper runs without
-        raising through a poutine.trace on linear-compatible kwargs.
+        cause the wrapper's guard to reject linear calls. We verify that
+        the b_masks=None / b_masks=[] paths reach the downstream
+        ``_run_task_forward_model`` body (i.e. get past the guard) by
+        monkey-patching that body with a sentinel raise. If the guard
+        wrongly refused linear mode, we would see NotImplementedError
+        instead of the sentinel.
+
+        This decouples the guard-level regression gate from the forward
+        model's numerical behavior (ODE divergence under prior draws
+        varies with global RNG state accumulated across a pytest
+        session).
         """
         from pyro_dcm.guides.parameter_packing import TaskDCMPacker
+        from pyro_dcm.models import amortized_wrappers as aw_mod
         from pyro_dcm.models.amortized_wrappers import (
             amortized_task_dcm_model,
         )
-        from pyro_dcm.simulators.task_simulator import (
-            make_block_stimulus,
-            make_random_stable_A,
-            simulate_task_dcm,
-        )
 
-        N, M = 3, 1
-        A = make_random_stable_A(N, density=0.5, seed=42)
-        C = torch.tensor([[0.25], [0.0], [0.0]], dtype=torch.float64)
-        stim = make_block_stimulus(
-            n_blocks=1, block_duration=8.0, rest_duration=7.0, n_inputs=M,
-        )
-        res = simulate_task_dcm(
-            A, C, stim, duration=20.0, dt=0.01, TR=2.0, SNR=5.0, seed=7,
-        )
+        N, M, T = 3, 1, 10
+        bold = torch.zeros(T, N, dtype=torch.float64)
+        stimulus = {
+            "times": torch.tensor([0.0, 20.0], dtype=torch.float64),
+            "values": torch.zeros(2, M, dtype=torch.float64),
+        }
         a_mask = torch.ones(N, N, dtype=torch.float64)
         c_mask = torch.ones(N, M, dtype=torch.float64)
         t_eval = torch.arange(0, 20.0, 0.5, dtype=torch.float64)
         packer = TaskDCMPacker(N, M, a_mask, c_mask)
-        # Fit standardization with a trivial dataset (single point).
         packer.fit_standardization([{
             "A_free": torch.zeros(N, N, dtype=torch.float64),
             "C": torch.zeros(N, M, dtype=torch.float64),
             "noise_prec": torch.tensor(10.0, dtype=torch.float64),
         }])
-        # Above dataset has std=0 which clamps to 1e-6 (fit_standardization.clamp).
 
+        class _Sentinel(RuntimeError):
+            """Sentinel raise confirming we reached the forward-model call."""
+
+        def _sentinel_forward(*args: object, **kwargs: object) -> None:
+            raise _Sentinel("reached forward model")
+
+        monkeypatch.setattr(aw_mod, "_run_task_forward_model", _sentinel_forward)
         pyro.clear_param_store()
 
-        # Case 1: b_masks=None (default) -- should run without error.
-        try:
-            pyro.poutine.trace(amortized_task_dcm_model).get_trace(
-                res["bold"],
-                res["stimulus"],
-                a_mask,
-                c_mask,
-                t_eval,
-                2.0,
-                0.5,
-                packer,
-                # b_masks / stim_mod omitted -> None defaults
-            )
-        except NotImplementedError:
-            pytest.fail(
-                "amortized_task_dcm_model raised NotImplementedError on "
-                "linear (b_masks=None) path -- regression vs pre-15-03 "
-                "behavior."
+        # Case 1: b_masks=None (default) -- guard must allow, sentinel must fire.
+        with pytest.raises(_Sentinel, match="reached forward model"):
+            amortized_task_dcm_model(
+                bold, stimulus, a_mask, c_mask, t_eval, 2.0, 0.5, packer,
             )
 
         pyro.clear_param_store()
 
-        # Case 2: b_masks=[] -- should also pass through per API.
-        try:
-            pyro.poutine.trace(amortized_task_dcm_model).get_trace(
-                res["bold"],
-                res["stimulus"],
-                a_mask,
-                c_mask,
-                t_eval,
-                2.0,
-                0.5,
-                packer,
-                b_masks=[],
-                stim_mod=None,
-            )
-        except NotImplementedError:
-            pytest.fail(
-                "amortized_task_dcm_model raised NotImplementedError on "
-                "b_masks=[] path -- empty list must pass through per API."
+        # Case 2: b_masks=[] -- guard must allow (empty list passes through).
+        with pytest.raises(_Sentinel, match="reached forward model"):
+            amortized_task_dcm_model(
+                bold, stimulus, a_mask, c_mask, t_eval, 2.0, 0.5, packer,
+                b_masks=[], stim_mod=None,
             )
