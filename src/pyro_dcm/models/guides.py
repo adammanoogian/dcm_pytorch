@@ -200,6 +200,7 @@ def run_svi(
     num_particles: int = 1,
     elbo_type: str = "trace_elbo",
     guide_type: str | None = None,
+    model_kwargs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run SVI optimization for a Pyro model/guide pair.
 
@@ -237,6 +238,16 @@ def run_svi(
         validation: ``'tracemeanfield_elbo'`` requires a mean-field
         guide (``'auto_delta'`` or ``'auto_normal'``). Default None
         (no validation).
+    model_kwargs : dict[str, Any] or None, optional
+        Extra keyword arguments forwarded to ``svi.step(*model_args,
+        **model_kwargs)`` at every step and to
+        ``guide.laplace_approximation`` (if applicable). Required for
+        models that expose keyword-only parameters (e.g.,
+        ``task_dcm_model``'s ``b_masks`` and ``stim_mod`` kwargs in the
+        bilinear branch -- v0.3.0+). Default ``None`` -> empty dict ->
+        bit-exact equivalent to the pre-v0.3.0 signature for all linear
+        callers (``task_svi.py``, ``spectral_svi.py``, ``rdcm_vb.py``,
+        ``amortized_*.py``).
 
     Returns
     -------
@@ -327,9 +338,10 @@ def run_svi(
 
     svi = SVI(model, guide, optimizer, loss=elbo)
 
+    kw: dict[str, Any] = model_kwargs or {}
     losses: list[float] = []
     for step in range(num_steps):
-        loss = svi.step(*model_args)
+        loss = svi.step(*model_args, **kw)
         losses.append(loss)
 
         if math.isnan(loss):
@@ -339,7 +351,7 @@ def run_svi(
     # Post-process AutoLaplaceApproximation
     post_guide = None
     if guide_type == "auto_laplace":
-        post_guide = guide.laplace_approximation(*model_args)
+        post_guide = guide.laplace_approximation(*model_args, **kw)
 
     result: dict[str, Any] = {
         "losses": losses,
