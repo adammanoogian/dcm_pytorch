@@ -48,9 +48,11 @@ from pyro_dcm.simulators.spectral_simulator import (
 )
 from pyro_dcm.simulators.task_simulator import (
     make_block_stimulus,
+    make_epoch_stimulus,
     make_random_stable_A,
     simulate_task_dcm,
 )
+from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
 
 # ---------------------------------------------------------------------------
 # Task DCM fixtures
@@ -131,6 +133,163 @@ def generate_task_fixtures(
             fields_saved = list(save_dict.keys())
 
     _write_manifest(subdir, n_datasets, seed, n_regions, "task", fields_saved)
+
+
+# ---------------------------------------------------------------------------
+# Task Bilinear DCM fixtures (Phase 16)
+# ---------------------------------------------------------------------------
+
+
+def generate_task_bilinear_fixtures(
+    n_regions: int,
+    n_datasets: int,
+    seed: int,
+    output_dir: str,
+) -> None:
+    """Generate task-bilinear DCM fixtures for the v0.3.0 recovery benchmark.
+
+    3-region network (when ``n_regions=3``), 1 driving input, 1 modulator,
+    2 non-zero B elements at positions (1, 0) and (2, 1) forming an
+    asymmetric V1->V5->SPL hierarchy (16-CONTEXT.md topology lock). Driving
+    stimulus is a block design over 200s; modulator is 4 boxcar epochs of
+    12s each at [20, 65, 110, 155] s (SIM-02; blur-robust under rk4 per
+    Pitfall B12).
+
+    Ground-truth magnitudes (16-RESEARCH.md Section 3.2):
+
+    - ``B_true[0, 1, 0] = 0.4``, ``B_true[0, 2, 1] = 0.3``
+    - ``C[0, 0] = 0.5``
+    - Safe-eigenvalue anchor: Gershgorin bound row-sum < 1.0 sustained only
+      for 12s epochs -> ``exp(+2.4) ~ 11x`` amplification (safe; far below
+      Phase 13 BILIN-06 3-sigma anchor ~ 3e6).
+
+    Parameters
+    ----------
+    n_regions : int
+        Number of brain regions. Phase 16 acceptance locks ``N=3``; higher
+        N can be generated but the non-zero B positions remain at (1, 0)
+        and (2, 1).
+    n_datasets : int
+        Number of datasets to produce. RECOV floor is >= 10.
+    seed : int
+        Base random seed (incremented per dataset).
+    output_dir : str
+        Root output directory. Subdirectory named
+        ``task_bilinear_{n_regions}region``.
+
+    Notes
+    -----
+    SNR = 3.0 (REQUIREMENTS.md RECOV-03..06 floor); TR = 2.0; duration = 200s;
+    simulator ``dt = 0.01``. Each .npz carries the generic fields from
+    ``generate_task_fixtures`` plus the bilinear-specific fields:
+    ``B_true`` (shape ``(J, N, N)``), ``b_mask_0`` (shape ``(N, N)``;
+    one per modulator, indexed by j), ``stim_mod_times``,
+    ``stim_mod_values``, and ``J`` (scalar; number of modulators).
+
+    References
+    ----------
+    .planning/phases/16-bilinear-recovery-benchmark/16-CONTEXT.md (topology)
+    .planning/phases/16-bilinear-recovery-benchmark/16-RESEARCH.md Sec. 3
+    .planning/REQUIREMENTS.md RECOV-01, RECOV-02
+    """
+    subdir = Path(output_dir) / f"task_bilinear_{n_regions}region"
+    os.makedirs(subdir, exist_ok=True)
+    fields_saved: list[str] = []
+
+    J = 1
+    duration = 200.0
+    TR = 2.0
+    SNR = 3.0
+    dt_sim = 0.01
+
+    for i in range(n_datasets):
+        seed_i = seed + i
+        print(
+            f"  Generating task_bilinear_{n_regions}region: "
+            f"dataset {i + 1}/{n_datasets}..."
+        )
+
+        torch.manual_seed(seed_i)
+
+        # A_true: random stable connectivity (matches v0.2.0 task fixture
+        # family for RECOV-03 linear-baseline comparator).
+        A_true = make_random_stable_A(
+            n_regions, density=0.5, seed=seed_i,
+        )
+
+        # C: driving input on region 0 only, amplitude 0.5.
+        C = torch.zeros(n_regions, 1, dtype=torch.float64)
+        C[0, 0] = 0.5
+
+        # B_true: asymmetric hierarchy V1->V5->SPL.
+        B_true = torch.zeros(J, n_regions, n_regions, dtype=torch.float64)
+        B_true[0, 1, 0] = 0.4
+        B_true[0, 2, 1] = 0.3
+
+        # b_mask: 1 where B is free, 0 elsewhere. Zero-diagonal by design.
+        b_mask_0 = torch.zeros(n_regions, n_regions, dtype=torch.float64)
+        b_mask_0[1, 0] = 1.0
+        b_mask_0[2, 1] = 1.0
+
+        # Driving stimulus: 5 blocks of 20s ON + 20s OFF over 200s.
+        stim = make_block_stimulus(
+            n_blocks=5,
+            block_duration=20.0,
+            rest_duration=20.0,
+            n_inputs=1,
+        )
+
+        # Modulator: 4 epochs of 12s at [20, 65, 110, 155] s.
+        stim_mod_dict = make_epoch_stimulus(
+            event_times=[20.0, 65.0, 110.0, 155.0],
+            event_durations=[12.0] * 4,
+            event_amplitudes=[1.0] * 4,
+            duration=duration,
+            dt=dt_sim,
+            n_inputs=1,
+        )
+        stim_mod = PiecewiseConstantInput(
+            stim_mod_dict["times"], stim_mod_dict["values"],
+        )
+
+        sim = simulate_task_dcm(
+            A_true, C, stim,
+            duration=duration, dt=dt_sim, TR=TR, SNR=SNR,
+            seed=seed_i, solver="rk4",
+            B_list=[B_true[0]],
+            stimulus_mod=stim_mod,
+        )
+
+        save_dict = {
+            "A_true": A_true.numpy(),
+            "C": C.numpy(),
+            "bold": sim["bold"].detach().numpy(),
+            "bold_clean": sim["bold_clean"].detach().numpy(),
+            "stimulus_times": stim["times"].numpy(),
+            "stimulus_values": stim["values"].numpy(),
+            "B_true": B_true.numpy(),
+            "b_mask_0": b_mask_0.numpy(),
+            "stim_mod_times": stim_mod_dict["times"].numpy(),
+            "stim_mod_values": stim_mod_dict["values"].numpy(),
+            "J": np.array(J),
+            "TR": np.array(TR),
+            "SNR": np.array(SNR),
+            "duration": np.array(duration),
+            "seed": np.array(seed_i),
+        }
+
+        np.savez(
+            str(subdir / f"dataset_{i:03d}.npz"),
+            **save_dict,
+        )
+
+        if i == 0:
+            fields_saved = list(save_dict.keys())
+
+    _write_manifest(
+        subdir, n_datasets, seed, n_regions,
+        "task_bilinear", fields_saved,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -368,6 +527,7 @@ def _write_manifest(
 
 _GENERATORS = {
     "task": generate_task_fixtures,
+    "task_bilinear": generate_task_bilinear_fixtures,
     "spectral": generate_spectral_fixtures,
     "rdcm": generate_rdcm_fixtures,
 }
