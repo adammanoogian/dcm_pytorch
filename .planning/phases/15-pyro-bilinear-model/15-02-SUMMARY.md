@@ -65,7 +65,7 @@ completed: 2026-04-18
 
 1. **Task 1: Append TestBilinearDiscovery class + helpers + fixture to tests/test_guide_factory.py** — `9b796c0` (test)
 
-**Plan metadata:** `e1d986b` (docs: complete guide-factory bilinear auto-discovery plan)
+**Plan metadata:** `680e3f7` (docs: complete guide-factory bilinear auto-discovery plan; amended once to insert own hash)
 
 ## Test Inventory
 
