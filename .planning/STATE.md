@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-04-17)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.3.0 Bilinear DCM Extension -- Phase 13 complete and verified; ready for Phase 14
+**Current focus:** v0.3.0 Bilinear DCM Extension -- Phases 13 and 14 complete and verified; ready for Phase 15
 
 ## Current Position
 
 **Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
-**Phase:** Phase 14 -- Stimulus Utilities & Bilinear Simulator (IN PROGRESS, 1/2 plans complete)
-**Plan:** Plan 14-01 complete (stimulus utilities); Plan 14-02 pending (bilinear `simulate_task_dcm` extension)
-**Status:** Plan 14-01 shipped: `make_event_stimulus`, `make_epoch_stimulus`, `merge_piecewise_inputs` + 25-test file. SIM-01 and SIM-02 closed. Next: Plan 14-02 (SIM-03/04/05). Branch: `gsd/phase-14-stimulus-and-bilinear-simulator` carries 2 Phase-14 commits (5900146 feat, c82a961 test).
-**Last activity:** 2026-04-18 -- Plan 14-01 complete; SUMMARY at `.planning/phases/14-stimulus-utilities-and-bilinear-simulator/14-01-SUMMARY.md`.
+**Phase:** Phase 14 -- Stimulus Utilities & Bilinear Simulator (COMPLETE, 2/2 plans)
+**Plan:** Plan 14-01 complete (stimulus utilities); Plan 14-02 complete (bilinear `simulate_task_dcm` extension)
+**Status:** Plan 14-02 shipped: extended `simulate_task_dcm` with keyword-only `B_list`, `stimulus_mod`, `n_driving_inputs`; structural linear short-circuit (torch.equal bit-exact); new return-dict keys; 5-test `tests/test_bilinear_simulator.py` covers SIM-03 + SIM-04 + SIM-05. SIM-03, SIM-04, SIM-05 closed. Phase 14 5/5 requirements covered. Next: Phase 15 (Pyro generative model, `task_bilinear.py`, MODEL-01..07). Branch: `gsd/phase-14-stimulus-and-bilinear-simulator` carries 5 Phase-14 commits (5900146 feat, c82a961 test, f955d94 docs, abeb5d8 feat, 88cc1bb test, 22ee2f7 test).
+**Last activity:** 2026-04-18 -- Plan 14-02 complete; SUMMARY at `.planning/phases/14-stimulus-utilities-and-bilinear-simulator/14-02-SUMMARY.md`.
 
-Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [███▏░░░░░░] Phase 13 complete + 1/2 Phase 14 plans (2/4 phases in flight; 15-16 pending)
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [█████░░░░░] Phases 13 + 14 complete (2/4 phases done; 15-16 pending)
 
 ## Decisions
 
@@ -85,15 +85,113 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-04-18
-Stopped at: Plan 14-01 complete. Stimulus utilities (`make_event_stimulus`,
-`make_epoch_stimulus`, `merge_piecewise_inputs`) shipped with 25 new tests
-in `tests/test_stimulus_utils.py` (all green). SIM-01 and SIM-02 closed;
-SIM-03..05 remain for Plan 14-02. Branch
-`gsd/phase-14-stimulus-and-bilinear-simulator` carries 2 Phase-14 commits
-(5900146 `feat(14-01): add stimulus utilities`; c82a961
-`test(14-01): unit tests for stimulus utilities`) on top of Phase 13 tip.
-Next: Plan 14-02 (bilinear `simulate_task_dcm` extension).
+Stopped at: Plan 14-02 complete. `simulate_task_dcm` extended with
+keyword-only `B_list`, `stimulus_mod`, `n_driving_inputs` args; structural
+linear short-circuit inherits Phase 13's `coupled_system.py:287-291` gate
+(torch.equal bit-exact); return-dict gains `'B_list'` and `'stimulus_mod'`
+keys. 5 new tests in `tests/test_bilinear_simulator.py` close SIM-03 +
+SIM-04 + SIM-05. Phase 14 5/5 requirements closed. Branch
+`gsd/phase-14-stimulus-and-bilinear-simulator` carries 6 Phase-14 commits
+(5900146, c82a961, f955d94, abeb5d8, 88cc1bb, 22ee2f7).
+Next: Phase 15 (Pyro generative model; MODEL-01..07).
 Resume file: None
+
+---
+
+### 2026-04-18 -- Plan 14-02 complete
+
+- `src/pyro_dcm/simulators/task_simulator.py`:
+  - New module-private `_normalize_B_list(B_list, device, dtype) -> Tensor | None`
+    accepts `None | list[Tensor] | tuple[Tensor, ...] | Tensor(J,N,N)`. Empty
+    list and shape `(0,N,N)` collapse to `None` (linear mode). Raises
+    `TypeError` on invalid input types and `ValueError` on non-3-D tensors.
+  - New module-private `_normalize_stimulus_to_input_fn(stim, device, dtype)`
+    accepts a dict `{'times','values'}` or a `PiecewiseConstantInput`; returns
+    a `PiecewiseConstantInput`. Factored from the pre-existing inline
+    normalization at old line 143-149.
+  - `simulate_task_dcm` signature extended with three keyword-only args
+    after `*`: `B_list: Tensor | list[Tensor] | None = None`,
+    `stimulus_mod: dict | PiecewiseConstantInput | None = None`,
+    `n_driving_inputs: int | None = None`. All pre-Phase-14 positional
+    callers unchanged.
+  - Body branches on `B_stacked is None`. **Linear short-circuit (SIM-03
+    structural gate):** `CoupledDCMSystem(A_dev, C_dev, input_fn, hemo_params)`
+    is called with NO `B=` or `n_driving_inputs=` kwarg, inheriting the Phase
+    13 linear gate at `coupled_system.py:287-291`. **Bilinear branch:**
+    merges driving + modulatory inputs via `merge_piecewise_inputs`, validates
+    `stimulus_mod.values.shape[1] == B_list.shape[0]`, applies L3 default
+    `n_driving_inputs = C.shape[1]`, then calls `CoupledDCMSystem(A_dev,
+    C_dev, merged_input_fn, hemo_params, B=B_stacked, n_driving_inputs=n_driv)`.
+  - Return dict extended with two new keys: `'B_list'` (`None` or stacked
+    `(J,N,N)` tensor) and `'stimulus_mod'` (`None` or `PiecewiseConstantInput`).
+  - Import widened to include `merge_piecewise_inputs`.
+  - Docstring expanded with three Parameters entries, two Returns entries, a
+    "Linear short-circuit" note, and a References section citing Friston 2003.
+  - Validation gates: missing `stimulus_mod` in bilinear mode raises
+    `ValueError("stimulus_mod is required when B_list is non-None; ...")`;
+    `stimulus_mod` column-count mismatch with `B_list.shape[0]` raises
+    `ValueError`; explicit `n_driving_inputs != C.shape[1]` raises `ValueError`.
+- `tests/test_task_simulator.py`:
+  - Single additive edit (one line) to
+    `TestSimulatorOutputStructure::test_simulator_output_keys`: `expected_keys`
+    set augmented with `"B_list"` and `"stimulus_mod"`. All 17 other tests
+    untouched and green.
+- `tests/test_bilinear_simulator.py` (NEW): 5 tests, all green.
+  - `test_bilinear_arg_none_matches_no_kwarg` (SIM-03 primary): structural
+    bit-exactness via `torch.equal` on `bold_clean`, `bold`, `neural` between
+    no-kwarg and explicit-None-kwarg calls.
+  - `test_bilinear_output_distinguishable_from_linear` (SIM-03 secondary):
+    same A/C/stim/seed, bilinear BOLD differs from linear null by
+    `max|diff| > 0.01` (ample margin).
+  - `test_return_dict_has_bilinear_keys` (SIM-04): linear mode has both keys
+    `None`; bilinear mode has stacked `(1,3,3)` tensor and
+    `isinstance(..., PiecewiseConstantInput)`.
+  - `test_dt_invariance_bilinear` (SIM-05 primary): rk4 `dt=0.01` vs
+    `dt=0.005` on the same bilinear ground truth (A = parameterize_A(zeros),
+    B off-diagonal = 0.1 per L4, stimulus_mod at finer grid), atol=1e-4.
+  - `test_dt_invariance_linear` (SIM-05 L5 regression symmetry): mirror
+    without bilinear kwargs; same atol=1e-4.
+- Commits: `abeb5d8` `feat(14-02): extend simulate_task_dcm with bilinear
+  mode`; `88cc1bb` `test(14-02): update expected_keys for new bilinear
+  return-dict keys`; `22ee2f7` `test(14-02): bilinear simulator regression
+  and dt-invariance tests`.
+- Verification: `tests/test_bilinear_simulator.py` 5/5 in 306.11s;
+  `tests/test_task_simulator.py` 18/18 in 36.64s; full Phase 13 + Phase 14
+  + `test_task_dcm_model` regression subset 108/108 in ~5 minutes
+  cumulative. Ruff clean on all new code (pre-existing E501 in
+  `make_random_stable_A` and in 4 other `test_task_simulator.py` methods
+  confirmed via `git stash` round-trip, unchanged by this plan).
+- **Grep sentinels** (all met): `def simulate_task_dcm` ×1, `B_list` ×31
+  in task_simulator.py, `stimulus_mod` ×14 in task_simulator.py,
+  `merge_piecewise_inputs` ×2 in task_simulator.py (import + bilinear
+  branch call), `set(result.keys())` ×1 in test_task_simulator.py,
+  `torch.equal` ×4 in test_bilinear_simulator.py, `atol=1e-4` ×4 in
+  test_bilinear_simulator.py.
+- **L3 applied (from plan frontmatter):** `n_driving_inputs` defaults to
+  `C.shape[1]` at the simulator level (simulator has `C` in scope). This
+  diverges from `CoupledDCMSystem.__init__`'s raise-policy, which is
+  defensible because `CoupledDCMSystem` does NOT have `C` in scope. Since
+  `simulate_task_dcm` always passes an inferred-or-explicit value, the
+  `CoupledDCMSystem` raise branch is never triggered by the simulator path.
+- **L4 applied (from plan frontmatter):** SIM-05 dt-invariance fixture uses
+  B off-diagonal magnitude = 0.1 (not 0.3) to keep the Phase 13 stability
+  monitor silent.
+- **L5 applied (from plan frontmatter):** linear-path dt-invariance
+  regression test `test_dt_invariance_linear` added as symmetry with the
+  bilinear primary test; guards against silent future breakage of linear
+  rk4 reproducibility.
+- **Deviation (Rule 1, testbed bug):** Test fixture `C` matrix in Tests 1-3
+  changed from the plan's `torch.eye(3, 1)` (unit amplitude) to
+  `torch.tensor([[0.25], [0.0], [0.0]])` (task-DCM suite convention).
+  Discovered during execution: unit-amplitude drive + `make_random_stable_A(seed=42)`
+  causes dopri5 (the `simulate_task_dcm` default solver) adaptive step to
+  underflow to 0.0 at integration start (torchdiffeq assertion
+  `underflow in dt 0.0` in `rk_common.py:284`). The fix keeps the tests
+  faithful to their stated purpose while using fixtures consistent with the
+  existing 40+ green task-DCM tests. Tests 4 and 5 use `parameterize_A(zeros)`
+  + rk4 fixed-step so they were never at risk. No algorithmic change;
+  documented in 14-02-SUMMARY.md.
+- Requirements closed: SIM-03, SIM-04, SIM-05. Phase 14 now 5/5.
 
 ---
 
@@ -276,4 +374,4 @@ Resume file: None
   structurally (literal short-circuit) AND empirically (atol=1e-10 fixtures).
 
 ---
-*Last updated: 2026-04-18 after Plan 14-01 complete (SIM-01, SIM-02 closed; 25 new tests green)*
+*Last updated: 2026-04-18 after Plan 14-02 complete (SIM-03, SIM-04, SIM-05 closed; 5 new tests green; Phase 14 5/5 done)*
