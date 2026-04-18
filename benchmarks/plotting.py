@@ -21,6 +21,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+from benchmarks.bilinear_metrics import (
+    RECOV_07_SHRINKAGE_SOFT_TARGET,
+    compute_acceptance_gates,
+)
+
 # ---------------------------------------------------------------------------
 # Style configuration
 # ---------------------------------------------------------------------------
@@ -1610,6 +1615,243 @@ def plot_timing_breakdown(
     )
 
 
+def plot_bilinear_b_forest(
+    results: dict[str, Any],
+    output_dir: str,
+    *,
+    formats: tuple[str, ...] = ("png",),
+    ci_level: float = 0.95,
+) -> matplotlib.figure.Figure | None:
+    """Per-element forest plot of B recovery across seeds (Phase 16 headline).
+
+    Reads the ``('task_bilinear', 'svi')`` entry from the results JSON and
+    renders one row per B element (9 rows for 3-region J=1). Each row shows
+    (a) the per-seed posterior medians as small dots, (b) the cross-seed
+    median + IQR horizontal error bar (L6 aggregation), (c) the ground-truth
+    B value as a red reference dot, and (d) an inline shrinkage annotation
+    (std_post / sigma_prior mean across seeds) displayed right of the error
+    bar (RECOV-07 inline annotation per 16-CONTEXT.md).
+
+    Parameters
+    ----------
+    results : dict
+        Top-level results JSON with ``results[('task_bilinear', 'svi')]``
+        mapping to the runner output (plan 16-01 contract).
+    output_dir : str
+        Directory to write figure into.
+    formats : tuple of str, optional
+        Output formats. Default ``("png",)``. Pass ``("png", "pdf")`` for
+        vector.
+    ci_level : float, optional
+        Credible-interval level for per-element CI annotation. Default 0.95
+        (L7; matches RECOV-06 coverage_of_zero).
+
+    Returns
+    -------
+    matplotlib.figure.Figure or None
+        The rendered figure (for inline testing), or None if results lacks
+        a task_bilinear entry.
+
+    Notes
+    -----
+    Saves to ``{output_dir}/b_forest_recovery.{fmt}`` for each fmt.
+    """
+    _apply_style()
+    key = ("task_bilinear", "svi")
+    if str(key) not in results and key not in results:
+        return None
+    # Results JSON often stringifies tuple keys via json.dumps; support both.
+    rr = results.get(key) or results.get(str(key))
+    if rr is None or rr.get("status") == "insufficient_data":
+        return None
+
+    # Per-seed posterior medians for each of the 9 B elements: shape
+    # (n_seeds, J, N, N).
+    posteriors = rr["posterior_list"]
+    # (n_seeds, N, N)
+    b_means = np.array([np.array(p["B_free_0"]["mean"]) for p in posteriors])
+    # (n_seeds, N, N)
+    b_stds = np.array([np.array(p["B_free_0"]["std"]) for p in posteriors])
+    # B_true: all seeds share the same topology per plan 16-01
+    # _make_bilinear_ground_truth. (N, N)
+    b_true = np.array(posteriors[0]["B_true"]).reshape(b_means.shape[1:])
+
+    n_seeds, n_regions, _ = b_means.shape
+    n_elements = n_regions * n_regions
+
+    fig, ax = plt.subplots(figsize=(8, max(4, 0.6 * n_elements)))
+
+    row_labels = []
+    for i in range(n_regions):
+        for j in range(n_regions):
+            idx_flat = i * n_regions + j
+            row_labels.append(f"B[{i},{j}]")
+            per_seed_medians = b_means[:, i, j]
+            per_seed_stds = b_stds[:, i, j]
+            # Cross-seed aggregate (L6): median + IQR.
+            med = np.median(per_seed_medians)
+            q25 = np.percentile(per_seed_medians, 25)
+            q75 = np.percentile(per_seed_medians, 75)
+            # Shrinkage mean across seeds (RECOV-07 inline). sigma_prior=1.0.
+            shrinkage = np.mean(per_seed_stds)
+            # Color: green if non-null (|B_true|>0.1), gray if null.
+            color = "#2ca02c" if abs(b_true[i, j]) > 0.1 else "#7f7f7f"
+            # Per-seed small dots (jittered within the row y-band).
+            jitter = np.linspace(-0.15, 0.15, n_seeds)
+            ax.scatter(
+                per_seed_medians,
+                [idx_flat + jj for jj in jitter],
+                s=10, color=color, alpha=0.4, zorder=2,
+            )
+            # Cross-seed median + IQR error bar.
+            ax.errorbar(
+                med, idx_flat,
+                xerr=[[med - q25], [q75 - med]],
+                fmt="o", color=color, ecolor=color,
+                markersize=8, capsize=4, zorder=3,
+                label=None,
+            )
+            # Ground-truth reference dot.
+            ax.scatter(
+                [b_true[i, j]], [idx_flat],
+                marker="D", color="red", s=60, zorder=4,
+                label="B_true" if idx_flat == 0 else None,
+            )
+            # Inline shrinkage annotation (to the right of the row).
+            annot_color = (
+                "#2ca02c"
+                if shrinkage <= RECOV_07_SHRINKAGE_SOFT_TARGET
+                else "#d62728"
+            )
+            ax.text(
+                0.98, idx_flat,
+                f"$\\sigma_{{post}}/\\sigma_{{prior}}$={shrinkage:.2f}",
+                transform=ax.get_yaxis_transform(),
+                va="center", ha="right",
+                fontsize=8, color=annot_color,
+            )
+
+    ax.set_yticks(range(n_elements))
+    ax.set_yticklabels(row_labels)
+    ax.invert_yaxis()
+    ax.axvline(0, color="black", linestyle="--", linewidth=0.5, alpha=0.5)
+    ax.set_xlabel("B posterior median (per-seed medians + cross-seed IQR)")
+    ax.set_title(
+        f"Phase 16: Bilinear B Recovery Forest Plot (n_seeds={n_seeds}, "
+        f"CI={int(ci_level * 100)}%)"
+    )
+    ax.legend(loc="lower right", fontsize=9)
+    plt.tight_layout()
+
+    for fmt in formats:
+        out_path = os.path.join(output_dir, f"b_forest_recovery.{fmt}")
+        fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    return fig
+
+
+def plot_acceptance_gates_table(
+    results: dict[str, Any],
+    output_dir: str,
+    *,
+    formats: tuple[str, ...] = ("png",),
+) -> matplotlib.figure.Figure | None:
+    """Render RECOV-03..08 acceptance gates as a pass/fail table.
+
+    Consumes ``compute_acceptance_gates(runner_result)`` output and renders
+    a 6-row table (4 pass/fail gates + 2 info rows for RECOV-07 shrinkage
+    and RECOV-08 wall-time ratio). Matches ``/gsd:verify-work`` format per
+    16-CONTEXT.md.
+
+    Parameters
+    ----------
+    results : dict
+        Top-level results JSON; same shape as ``plot_bilinear_b_forest``.
+    output_dir : str
+        Directory to save figure.
+    formats : tuple of str, optional
+        Output formats. Default ``("png",)``.
+
+    Returns
+    -------
+    matplotlib.figure.Figure or None
+        Figure or None if task_bilinear not present or insufficient_data.
+    """
+    _apply_style()
+    key = ("task_bilinear", "svi")
+    rr = results.get(key) or results.get(str(key))
+    if rr is None or rr.get("status") == "insufficient_data":
+        return None
+    gates = compute_acceptance_gates(rr)
+
+    rows = []
+    # 4 pass/fail rows.
+    for tag in ("RECOV-03", "RECOV-04", "RECOV-05", "RECOV-06"):
+        g = gates[tag]
+        pass_str = "PASS" if g["pass"] else "FAIL"
+        # Prefer 'observed', fall back to 'ratio' (RECOV-03 uses ratio).
+        obs_val = g.get("observed", g.get("ratio"))
+        obs_str = (
+            f"{obs_val:.4f}" if isinstance(obs_val, (int, float)) else "NA"
+        )
+        thresh_str = f"{g['threshold']:.4f}"
+        rows.append((tag, obs_str, thresh_str, pass_str))
+    # RECOV-07 info row.
+    r07 = gates["RECOV-07"]
+    r07_nonnull = r07["shrinkage_nonnull"]
+    r07_str = (
+        f"non-null means: {[round(x, 3) for x in r07_nonnull]}; "
+        f"all<=soft({r07['soft_target']}): {r07['all_below_soft_target']}"
+    )
+    rows.append(
+        ("RECOV-07 (info)", r07_str, f"<= {r07['soft_target']}", "INFO"),
+    )
+    # RECOV-08 info row.
+    r08 = gates["RECOV-08"]
+    flag_str = "10x-FLAG" if r08["flag_over_10x"] else "OK"
+    r08_str = (
+        f"ratio={r08['ratio']:.2f}x "
+        f"(bi={r08['time_bilinear']:.1f}s / lin={r08['time_linear']:.1f}s)"
+    )
+    rows.append(("RECOV-08 (info)", r08_str, "<= 10x", flag_str))
+
+    fig, ax = plt.subplots(figsize=(12, 1.5 + 0.5 * len(rows)))
+    ax.axis("off")
+    col_labels = ["Criterion", "Observed", "Threshold", "Pass?"]
+    cell_colors = []
+    for row in rows:
+        pf = row[3]
+        if pf == "PASS":
+            rc = ["#d4f4d4"] * 4
+        elif pf == "FAIL":
+            rc = ["#f4d4d4"] * 4
+        elif pf == "10x-FLAG":
+            rc = ["#fff4d4"] * 4
+        else:
+            rc = ["#e4e4e4"] * 4
+        cell_colors.append(rc)
+    table = ax.table(
+        cellText=rows,
+        colLabels=col_labels,
+        cellColours=cell_colors,
+        loc="center", cellLoc="left",
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.scale(1, 1.5)
+    all_pass = gates["all_pass"]
+    ax.set_title(
+        f"Phase 16 Acceptance Gates "
+        f"({'ALL PASS' if all_pass else 'SOME FAIL'})",
+        fontsize=14, fontweight="bold",
+        color="#2ca02c" if all_pass else "#d62728",
+    )
+
+    for fmt in formats:
+        out_path = os.path.join(output_dir, f"acceptance_gates.{fmt}")
+        fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    return fig
+
+
 def generate_all_figures(
     results: dict,
     output_dir: str = "figures",
@@ -1693,6 +1935,25 @@ def generate_all_figures(
                     f"Warning: plot_scaling_study"
                     f"({m}) failed: {e}"
                 )
+
+    # Phase 16 bilinear dispatch (additive; supports both tuple and
+    # str-tuple keys for JSON-roundtrip compatibility).
+    bilinear_key = ("task_bilinear", "svi")
+    if bilinear_key in results or str(bilinear_key) in results:
+        try:
+            plot_bilinear_b_forest(
+                results, output_dir, formats=formats,
+            )
+            n_generated += 1
+        except Exception as e:
+            print(f"Warning: plot_bilinear_b_forest failed: {e}")
+        try:
+            plot_acceptance_gates_table(
+                results, output_dir, formats=formats,
+            )
+            n_generated += 1
+        except Exception as e:
+            print(f"Warning: plot_acceptance_gates_table failed: {e}")
 
     print(f"Generated {n_generated} figures in {output_dir}/")
 
