@@ -10,10 +10,10 @@ See: .planning/PROJECT.md (updated 2026-04-17)
 ## Current Position
 
 **Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
-**Phase:** Phase 14 -- Stimulus Utilities & Bilinear Simulator (COMPLETE, 2/2 plans)
-**Plan:** Plan 14-01 complete (stimulus utilities); Plan 14-02 complete (bilinear `simulate_task_dcm` extension)
-**Status:** Plan 14-02 shipped: extended `simulate_task_dcm` with keyword-only `B_list`, `stimulus_mod`, `n_driving_inputs`; structural linear short-circuit (torch.equal bit-exact); new return-dict keys; 5-test `tests/test_bilinear_simulator.py` covers SIM-03 + SIM-04 + SIM-05. SIM-03, SIM-04, SIM-05 closed. Phase 14 5/5 requirements covered. Next: Phase 15 (Pyro generative model, `task_bilinear.py`, MODEL-01..07). Branch: `gsd/phase-14-stimulus-and-bilinear-simulator` carries 5 Phase-14 commits (5900146 feat, c82a961 test, f955d94 docs, abeb5d8 feat, 88cc1bb test, 22ee2f7 test).
-**Last activity:** 2026-04-18 -- Plan 14-02 complete; SUMMARY at `.planning/phases/14-stimulus-utilities-and-bilinear-simulator/14-02-SUMMARY.md`.
+**Phase:** Phase 14 -- Stimulus Utilities & Bilinear Simulator (COMPLETE, verified 2026-04-18, 14/14 must-haves)
+**Plan:** --
+**Status:** Phase 14 verified against codebase. SIM-01..05 all Complete in REQUIREMENTS.md traceability. VERIFICATION.md passed (14/14 must-haves: five ROADMAP SCs + nine plan truths). Next: Phase 15 Pyro Generative Model with B Priors and Masks (MODEL-01..07). Branch: run `/gsd:discuss-phase 15` (recommended) or `/gsd:plan-phase 15`.
+**Last activity:** 2026-04-18 -- Phase 14 verification passed; VERIFICATION.md at `.planning/phases/14-stimulus-utilities-and-bilinear-simulator/14-VERIFICATION.md`.
 
 Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [█████░░░░░] Phases 13 + 14 complete (2/4 phases done; 15-16 pending)
 
@@ -374,4 +374,4 @@ Resume file: None
   structurally (literal short-circuit) AND empirically (atol=1e-10 fixtures).
 
 ---
-*Last updated: 2026-04-18 after Plan 14-02 complete (SIM-03, SIM-04, SIM-05 closed; 5 new tests green; Phase 14 5/5 done)*
+*Last updated: 2026-04-18 after Phase 14 verification passed (14/14 must-haves; SIM-01..05 Complete)*
