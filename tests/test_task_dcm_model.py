@@ -75,6 +75,52 @@ def task_data() -> dict:
 
 
 @pytest.fixture()
+def task_bilinear_data(task_data: dict) -> dict:
+    """Extend ``task_data`` with bilinear b_masks and stim_mod for J=1 modulator.
+
+    Mirrors ``task_data`` fixture parameters (3 regions, 1 driving input,
+    dt=0.5, 30s duration, TR=2.0) and adds:
+
+    - ``b_masks``: list with one ``(3, 3)`` mask (off-diagonal pattern,
+      zero diagonal per Pitfall B5 recommendation).
+    - ``stim_mod``: :class:`PiecewiseConstantInput` from
+      :func:`make_epoch_stimulus` (single 10s epoch at t=10s,
+      amplitude 1.0).
+
+    The returned dict is a superset of ``task_data`` so it can be passed
+    to :func:`task_dcm_model` via standard keyword unpacking.
+    """
+    from pyro_dcm.simulators.task_simulator import make_epoch_stimulus
+    from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
+
+    N = task_data["N"]
+    # Single-modulator mask: off-diagonal 1 -> 2 connection modulated.
+    b_mask_0 = torch.zeros(N, N, dtype=torch.float64)
+    b_mask_0[1, 0] = 1.0  # modulator gates the 1 <- 0 connection
+    b_masks = [b_mask_0]
+
+    # Single 10s epoch at t=10s, amplitude 1.0, over 30s total.
+    stim_mod_dict = make_epoch_stimulus(
+        event_times=[10.0],
+        event_durations=[10.0],
+        event_amplitudes=[1.0],
+        duration=30.0,
+        dt=0.01,
+        n_inputs=1,
+    )
+    stim_mod = PiecewiseConstantInput(
+        stim_mod_dict["times"], stim_mod_dict["values"],
+    )
+
+    return {
+        **task_data,
+        "b_masks": b_masks,
+        "stim_mod": stim_mod,
+        "J": 1,
+    }
+
+
+@pytest.fixture()
 def sparse_a_mask() -> torch.Tensor:
     """Sparse 3x3 structural mask with some absent connections."""
     return torch.tensor(
@@ -380,3 +426,283 @@ class TestSVI:
         assert any("C" in name for name in param_names), (
             f"No C guide params found in: {param_names}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Bilinear structure tests (Phase 15 Plan 15-01)
+# ---------------------------------------------------------------------------
+
+
+class TestBilinearStructure:
+    """Tests for the v0.3.0 bilinear branch of ``task_dcm_model`` (Phase 15).
+
+    Covers MODEL-01 (per-modulator ``B_free_j`` loop), MODEL-02
+    (``B_PRIOR_VARIANCE`` constant), MODEL-03 BOTH halves:
+
+    - Phase 13 half (source-side, ``(N, N)`` call): see
+      ``tests/test_bilinear_utils.py``.
+    - Phase 15 half (stacked ``(J, N, N)`` call at the ``task_dcm_model``
+      call-site):
+      :meth:`test_bilinear_deprecation_warning_on_stacked_nonzero_diag` --
+      closes the SC-4 coverage gap flagged by the Phase 15-01 checker.
+
+    Also covers MODEL-04 edge cases (``b_masks=None``, ``b_masks=[]``,
+    shape-mismatch errors).
+    """
+
+    def _run_bilinear_trace(
+        self, task_bilinear_data: dict,
+    ) -> pyro.poutine.trace_struct.Trace:
+        """Run ``task_dcm_model`` in bilinear mode under ``condition + trace``.
+
+        Conditions on small ``A_free``/``C``/``noise_prec`` and small
+        ``B_free_0`` for finite BOLD (same pattern as
+        :meth:`TestModelStructure._run_trace`).
+        """
+        N = task_bilinear_data["N"]
+        M = task_bilinear_data["M"]
+        conditioned = pyro.poutine.condition(
+            task_dcm_model,
+            data={
+                "A_free": 0.01 * torch.randn(N, N, dtype=torch.float64),
+                "C": 0.25 * torch.ones(N, M, dtype=torch.float64),
+                "noise_prec": torch.tensor(10.0, dtype=torch.float64),
+                "B_free_0": 0.05 * torch.randn(N, N, dtype=torch.float64),
+            },
+        )
+        trace = pyro.poutine.trace(conditioned).get_trace(
+            observed_bold=task_bilinear_data["observed_bold"],
+            stimulus=task_bilinear_data["stimulus"],
+            a_mask=task_bilinear_data["a_mask"],
+            c_mask=task_bilinear_data["c_mask"],
+            t_eval=task_bilinear_data["t_eval"],
+            TR=task_bilinear_data["TR"],
+            dt=task_bilinear_data["dt"],
+            b_masks=task_bilinear_data["b_masks"],
+            stim_mod=task_bilinear_data["stim_mod"],
+        )
+        return trace
+
+    def test_B_PRIOR_VARIANCE_constant(self) -> None:
+        """``B_PRIOR_VARIANCE`` must be exactly 1.0 (D1, MODEL-02)."""
+        from pyro_dcm.models.task_dcm_model import B_PRIOR_VARIANCE
+        assert B_PRIOR_VARIANCE == 1.0, (
+            f"B_PRIOR_VARIANCE must be 1.0 per D1 (SPM12 one-state match); "
+            f"got {B_PRIOR_VARIANCE}. If you intentionally changed this, "
+            f"update REQUIREMENTS.md MODEL-02 + STATE.md D1 first."
+        )
+
+    def test_linear_reduction_when_b_masks_none(
+        self, task_data: dict,
+    ) -> None:
+        """``b_masks=None`` -> trace MUST match the pre-Phase-15 linear set.
+
+        MODEL-04 acceptance: the set of sample + deterministic sites in
+        the trace (excluding ``_INPUT``/``_RETURN``) must NOT contain
+        ``'B'`` or any ``'B_free_*'`` site when ``b_masks`` is ``None``.
+        """
+        N = task_data["N"]
+        M = task_data["M"]
+        conditioned = pyro.poutine.condition(
+            task_dcm_model,
+            data={
+                "A_free": 0.01 * torch.randn(N, N, dtype=torch.float64),
+                "C": 0.25 * torch.ones(N, M, dtype=torch.float64),
+                "noise_prec": torch.tensor(10.0, dtype=torch.float64),
+            },
+        )
+        trace = pyro.poutine.trace(conditioned).get_trace(
+            observed_bold=task_data["observed_bold"],
+            stimulus=task_data["stimulus"],
+            a_mask=task_data["a_mask"],
+            c_mask=task_data["c_mask"],
+            t_eval=task_data["t_eval"],
+            TR=task_data["TR"],
+            dt=task_data["dt"],
+            b_masks=None,  # explicit None
+            stim_mod=None,
+        )
+        site_names = set(trace.nodes.keys()) - {"_INPUT", "_RETURN"}
+        expected = {"A_free", "C", "noise_prec", "obs", "A", "predicted_bold"}
+        assert site_names == expected, (
+            f"Linear-mode site set must equal {expected}; got {site_names}. "
+            f"Extra sites: {site_names - expected}; "
+            f"missing: {expected - site_names}."
+        )
+        # L3: no 'B' deterministic site in linear mode.
+        assert "B" not in site_names
+        assert not any(n.startswith("B_free_") for n in site_names)
+
+    def test_linear_reduction_when_b_masks_empty_list(
+        self, task_data: dict,
+    ) -> None:
+        """``b_masks=[]`` must normalize to None and take the linear path."""
+        N = task_data["N"]
+        M = task_data["M"]
+        conditioned = pyro.poutine.condition(
+            task_dcm_model,
+            data={
+                "A_free": 0.01 * torch.randn(N, N, dtype=torch.float64),
+                "C": 0.25 * torch.ones(N, M, dtype=torch.float64),
+                "noise_prec": torch.tensor(10.0, dtype=torch.float64),
+            },
+        )
+        trace = pyro.poutine.trace(conditioned).get_trace(
+            observed_bold=task_data["observed_bold"],
+            stimulus=task_data["stimulus"],
+            a_mask=task_data["a_mask"],
+            c_mask=task_data["c_mask"],
+            t_eval=task_data["t_eval"],
+            TR=task_data["TR"],
+            dt=task_data["dt"],
+            b_masks=[],  # empty list
+            stim_mod=None,
+        )
+        site_names = set(trace.nodes.keys()) - {"_INPUT", "_RETURN"}
+        assert "B" not in site_names
+        assert not any(n.startswith("B_free_") for n in site_names)
+
+    def test_bilinear_trace_has_B_free_sites(
+        self, task_bilinear_data: dict,
+    ) -> None:
+        """Bilinear J=1 trace must have ``B_free_0`` (not ``B_free``) and ``B``."""
+        trace = self._run_bilinear_trace(task_bilinear_data)
+        site_names = set(trace.nodes.keys()) - {"_INPUT", "_RETURN"}
+        N = task_bilinear_data["N"]
+
+        assert "B_free_0" in site_names, (
+            f"Missing bilinear sample site B_free_0; got {sorted(site_names)}"
+        )
+        # R1 (research note): bare 'B_free' must NOT exist (guard
+        # against silent collision with per-modulator-indexed sites).
+        assert "B_free" not in site_names
+
+        # Shape check: sample value is (N, N) per L1.
+        assert trace.nodes["B_free_0"]["value"].shape == (N, N)
+
+        # L3: deterministic 'B' site exists ONLY in bilinear mode,
+        # shape (J, N, N).
+        assert "B" in site_names
+        assert trace.nodes["B"]["value"].shape == (
+            task_bilinear_data["J"], N, N,
+        )
+
+    def test_bilinear_masking_applied(
+        self, task_bilinear_data: dict,
+    ) -> None:
+        """``B`` deterministic site must have ``b_mask`` applied (zeros preserved)."""
+        trace = self._run_bilinear_trace(task_bilinear_data)
+        B_det = trace.nodes["B"]["value"]  # shape (J, N, N)
+        b_mask_0 = task_bilinear_data["b_masks"][0]
+        # Zero-diagonal + off-diagonal pattern enforced: every index
+        # where b_mask == 0, B_det must be exactly zero.
+        for i in range(task_bilinear_data["N"]):
+            for k in range(task_bilinear_data["N"]):
+                if b_mask_0[i, k].item() == 0.0:
+                    assert B_det[0, i, k].item() == 0.0, (
+                        f"B[0,{i},{k}] must be 0 (b_mask=0) but is "
+                        f"{B_det[0, i, k].item()}"
+                    )
+
+    def test_bilinear_stim_mod_required_error(
+        self, task_bilinear_data: dict,
+    ) -> None:
+        """``b_masks`` non-empty + ``stim_mod=None`` -> ValueError."""
+        with pytest.raises(ValueError, match="stim_mod is required"):
+            # No pyro.sample conditioning needed -- validation happens
+            # before sampling. Use trace to exercise the call path.
+            pyro.poutine.trace(task_dcm_model).get_trace(
+                observed_bold=task_bilinear_data["observed_bold"],
+                stimulus=task_bilinear_data["stimulus"],
+                a_mask=task_bilinear_data["a_mask"],
+                c_mask=task_bilinear_data["c_mask"],
+                t_eval=task_bilinear_data["t_eval"],
+                TR=task_bilinear_data["TR"],
+                dt=task_bilinear_data["dt"],
+                b_masks=task_bilinear_data["b_masks"],
+                stim_mod=None,  # the trigger
+            )
+
+    def test_bilinear_stim_mod_shape_mismatch_error(
+        self, task_bilinear_data: dict,
+    ) -> None:
+        """``len(b_masks) != stim_mod.values.shape[1]`` -> ValueError."""
+        from pyro_dcm.simulators.task_simulator import make_epoch_stimulus
+        from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
+        # Build a 2-column mod but pass a 1-element b_masks (mismatch).
+        stim_dict = make_epoch_stimulus(
+            event_times=[5.0, 15.0],
+            event_durations=[5.0, 5.0],
+            event_amplitudes=[[1.0, 0.0], [0.0, 1.0]],  # 2 modulators
+            duration=30.0,
+            dt=0.01,
+            n_inputs=2,
+        )
+        stim_mod_wrong = PiecewiseConstantInput(
+            stim_dict["times"], stim_dict["values"],
+        )
+        with pytest.raises(ValueError, match=r"stim_mod\.values\.shape\[1\]=2"):
+            pyro.poutine.trace(task_dcm_model).get_trace(
+                observed_bold=task_bilinear_data["observed_bold"],
+                stimulus=task_bilinear_data["stimulus"],
+                a_mask=task_bilinear_data["a_mask"],
+                c_mask=task_bilinear_data["c_mask"],
+                t_eval=task_bilinear_data["t_eval"],
+                TR=task_bilinear_data["TR"],
+                dt=task_bilinear_data["dt"],
+                b_masks=task_bilinear_data["b_masks"],  # J=1
+                stim_mod=stim_mod_wrong,  # J=2
+            )
+
+    def test_bilinear_deprecation_warning_on_stacked_nonzero_diag(
+        self, task_bilinear_data: dict,
+    ) -> None:
+        """Stacked-path DeprecationWarning closure for MODEL-03 / SC-4.
+
+        Phase 13's ``tests/test_bilinear_utils.py`` exercises the
+        ``(N, N)`` call-shape of ``parameterize_B`` directly. This test
+        exercises the STACKED ``(J, N, N)`` call-path that Plan 15-01
+        introduces inside ``task_dcm_model``: when ``task_dcm_model``
+        is called with a ``b_masks`` list containing any non-zero
+        diagonal entry, the stacked ``parameterize_B`` invocation at
+        the end of the bilinear sampling loop must propagate the
+        ``DeprecationWarning`` through the Pyro trace stack.
+
+        Source of truth for the stacked path:
+        ``src/pyro_dcm/forward_models/neural_state.py:137-151`` --
+        after the ``ndim==3`` guard, the function constructs
+        ``diag_entries`` via ``b_mask[:, diag_idx, diag_idx]`` (shape
+        ``(J, N)``) and issues ONE ``DeprecationWarning`` if any entry
+        is non-zero. The warning fires once per ``parameterize_B`` call
+        regardless of ``J``, which is sufficient for the SC-4
+        acceptance claim ("explicit non-zero diagonal triggers
+        ``DeprecationWarning``") at the ``task_dcm_model`` call-site.
+        """
+        N = task_bilinear_data["N"]
+        M = task_bilinear_data["M"]
+        # Construct a b_masks with a non-zero diagonal entry (SC-4 trigger).
+        bad_b_mask = torch.zeros(N, N, dtype=torch.float64)
+        bad_b_mask[0, 0] = 1.0  # self-modulation on region 0
+        bad_b_mask[1, 0] = 1.0  # plus off-diagonal from the fixture
+
+        conditioned = pyro.poutine.condition(
+            task_dcm_model,
+            data={
+                "A_free": 0.01 * torch.randn(N, N, dtype=torch.float64),
+                "C": 0.25 * torch.ones(N, M, dtype=torch.float64),
+                "noise_prec": torch.tensor(10.0, dtype=torch.float64),
+                "B_free_0": 0.01 * torch.randn(N, N, dtype=torch.float64),
+            },
+        )
+        with pytest.warns(DeprecationWarning, match="non-zero diagonal"):
+            pyro.poutine.trace(conditioned).get_trace(
+                observed_bold=task_bilinear_data["observed_bold"],
+                stimulus=task_bilinear_data["stimulus"],
+                a_mask=task_bilinear_data["a_mask"],
+                c_mask=task_bilinear_data["c_mask"],
+                t_eval=task_bilinear_data["t_eval"],
+                TR=task_bilinear_data["TR"],
+                dt=task_bilinear_data["dt"],
+                b_masks=[bad_b_mask],
+                stim_mod=task_bilinear_data["stim_mod"],
+            )
