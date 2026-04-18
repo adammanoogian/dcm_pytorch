@@ -237,3 +237,175 @@ def test_extract_posterior_auto_laplace() -> None:
             f"AutoLaplace site {site!r} std should be >0, "
             f"got {std.item():.6f}"
         )
+
+
+# ------------------------------------------------------------------
+# Bilinear posterior extraction (MODEL-05, Phase 15-03)
+# ------------------------------------------------------------------
+
+
+class TestExtractPosteriorBilinear:
+    """MODEL-05: extract_posterior_params returns per-modulator B_j medians.
+
+    extract_posterior_params is already site-agnostic -- any new sample or
+    deterministic site (B_free_j, B) automatically appears in its output.
+    This test verifies the passive claim on a live bilinear SVI run.
+
+    Portability note (Plan 15-03 checker Blocker 2 resolution):
+    We call Predictive DIRECTLY with explicit return_sites=['A_free', 'C',
+    'noise_prec', 'B_free_0', 'B'] to make the 'B' deterministic-site
+    assertion portable across Pyro 1.9+ patch versions regardless of whether
+    Predictive(return_sites=None) default behavior includes deterministic
+    sites. We then also exercise extract_posterior_params with the default
+    return_sites=None to check the B_free_0 assertion (which holds across
+    all versions since B_free_0 is a pyro.sample site, always included).
+    """
+
+    @pytest.fixture(autouse=True)
+    def _silence_stability_logger(self, caplog) -> None:
+        """Silence pyro_dcm.stability WARNING spam during bilinear SVI."""
+        import logging
+        caplog.set_level(logging.ERROR, logger="pyro_dcm.stability")
+
+    def test_extract_posterior_includes_bilinear_sites(self) -> None:
+        """Posterior via explicit-return_sites Predictive contains B_free_0 and B.
+
+        Also exercises extract_posterior_params (default return_sites) for
+        the B_free_0 assertion, which holds across all Pyro versions since
+        B_free_0 is a stochastic pyro.sample site (always included).
+        """
+        from functools import partial
+
+        from pyro.infer import SVI, Predictive, Trace_ELBO
+
+        # IMPORTANT: do NOT import run_svi -- we use a bare SVI loop because
+        # run_svi takes a positional model_args tuple, which cannot forward
+        # task_dcm_model's keyword-only b_masks / stim_mod kwargs. Unused
+        # imports would fail ruff's F401 unused-import check.
+        from pyro_dcm.models.guides import create_guide
+        from pyro_dcm.models.task_dcm_model import task_dcm_model
+        from pyro_dcm.simulators.task_simulator import (
+            make_block_stimulus,
+            make_epoch_stimulus,
+            make_random_stable_A,
+            simulate_task_dcm,
+        )
+        from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
+
+        N, M, J = 3, 1, 1
+        A = make_random_stable_A(N, density=0.5, seed=42)
+        C = torch.tensor([[0.25], [0.0], [0.0]], dtype=torch.float64)
+        stim = make_block_stimulus(
+            n_blocks=2, block_duration=8.0, rest_duration=7.0, n_inputs=M,
+        )
+        res = simulate_task_dcm(
+            A, C, stim, duration=30.0, dt=0.01, TR=2.0, SNR=5.0, seed=7,
+        )
+        a_mask = torch.ones(N, N, dtype=torch.float64)
+        c_mask = torch.ones(N, M, dtype=torch.float64)
+        t_eval = torch.arange(0, 30.0, 0.5, dtype=torch.float64)
+        b_mask_0 = torch.zeros(N, N, dtype=torch.float64)
+        b_mask_0[1, 0] = 1.0
+        b_masks = [b_mask_0]
+        stim_mod_dict = make_epoch_stimulus(
+            event_times=[10.0], event_durations=[10.0],
+            event_amplitudes=[1.0],
+            duration=30.0, dt=0.01, n_inputs=1,
+        )
+        stim_mod = PiecewiseConstantInput(
+            stim_mod_dict["times"], stim_mod_dict["values"],
+        )
+
+        pyro.clear_param_store()
+        guide = create_guide(task_dcm_model, init_scale=0.005)  # L2
+
+        # 20 SVI steps via a bare loop. task_dcm_model takes keyword-only
+        # b_masks / stim_mod kwargs; svi.step(**kwargs) forwards them.
+        optimizer = pyro.optim.ClippedAdam(
+            {"lr": 0.01, "clip_norm": 10.0},
+        )
+        svi = SVI(task_dcm_model, guide, optimizer, loss=Trace_ELBO())
+        model_kwargs = dict(
+            observed_bold=res["bold"],
+            stimulus=res["stimulus"],
+            a_mask=a_mask,
+            c_mask=c_mask,
+            t_eval=t_eval,
+            TR=2.0,
+            dt=0.5,
+            b_masks=b_masks,
+            stim_mod=stim_mod,
+        )
+        for _ in range(20):
+            svi.step(**model_kwargs)
+
+        # --- Portable assertion path: direct Predictive call with explicit
+        # return_sites that include BOTH the stochastic site 'B_free_0' AND
+        # the deterministic site 'B'. This works across Pyro 1.9+ patch
+        # versions regardless of Predictive(return_sites=None) defaults.
+        # Predictive invokes the model as model(*args); partial supplies
+        # bilinear kwargs since Predictive does not accept model_kwargs.
+        bilinear_model = partial(
+            task_dcm_model, b_masks=b_masks, stim_mod=stim_mod,
+        )
+        model_args = (
+            res["bold"], res["stimulus"], a_mask, c_mask, t_eval, 2.0, 0.5,
+        )
+        return_sites = ["A_free", "C", "noise_prec", "B_free_0", "B"]
+        predictive = Predictive(
+            bilinear_model,
+            guide=guide,
+            num_samples=10,
+            return_sites=return_sites,
+        )
+        with torch.no_grad():
+            samples = predictive(*model_args)
+
+        # MODEL-05 gate (portable path): B_free_0 (raw) and B (deterministic,
+        # masked) are both present because we asked for them explicitly.
+        assert "B_free_0" in samples, (
+            f"Missing 'B_free_0' in explicit-return_sites Predictive "
+            f"output; keys: {sorted(samples.keys())}. MODEL-05 not "
+            f"satisfied."
+        )
+        # B_free_0 samples have shape (num_samples, N, N).
+        assert samples["B_free_0"].shape[-2:] == (N, N), (
+            f"B_free_0 shape tail: expected (..., {N}, {N}), got "
+            f"{tuple(samples['B_free_0'].shape)}"
+        )
+        assert "B" in samples, (
+            f"Missing 'B' deterministic in explicit-return_sites Predictive "
+            f"output; keys: {sorted(samples.keys())}. L3 guard may have "
+            f"failed in Plan 15-01, or Predictive failed to honor "
+            f"return_sites for deterministic sites."
+        )
+        # B samples have shape (num_samples, J, N, N).
+        assert samples["B"].shape[-3:] == (J, N, N), (
+            f"B shape tail: expected (..., {J}, {N}, {N}), got "
+            f"{tuple(samples['B'].shape)}"
+        )
+
+        # --- Supplementary assertion: exercise extract_posterior_params with
+        # its default (return_sites=None). B_free_0 is a stochastic
+        # pyro.sample site and is always included regardless of Pyro version.
+        # We do NOT require 'B' here to avoid Pyro-version coupling; that
+        # assertion is already covered via the explicit return_sites path
+        # above.
+        posterior = extract_posterior_params(
+            guide, model_args, model=bilinear_model, num_samples=10,
+        )
+        assert "B_free_0" in posterior, (
+            f"Missing 'B_free_0' in extract_posterior_params output; keys: "
+            f"{sorted(posterior.keys())}. MODEL-05 not satisfied for the "
+            f"site-agnostic posterior-extraction path."
+        )
+        assert posterior["B_free_0"]["mean"].shape == (N, N), (
+            f"B_free_0 posterior mean shape: expected ({N}, {N}), got "
+            f"{posterior['B_free_0']['mean'].shape}"
+        )
+        # Linear sites still present (regression check).
+        assert "A_free" in posterior
+        assert "C" in posterior
+        assert "noise_prec" in posterior
+        # Backward-compat median dict also contains B_free_0.
+        assert "B_free_0" in posterior["median"]

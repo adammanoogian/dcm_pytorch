@@ -390,3 +390,151 @@ class TestPosteriorSampling:
             f"Posterior sampling too slow: {elapsed:.3f}s > 1.0s"
         )
         assert samples["A_free"].shape[0] == 1000
+
+
+# ------------------------------------------------------------------
+# Bilinear refusal (MODEL-07, Phase 15-03)
+# ------------------------------------------------------------------
+
+
+class TestAmortizedRefusesBilinear:
+    """MODEL-07: amortized_task_dcm_model refuses bilinear kwargs per D5.
+
+    v0.3.0 defers bilinear amortized inference to v0.3.1. The wrapper raises
+    NotImplementedError with a message explicitly referencing 'v0.3.1' when
+    b_masks is non-empty. Linear behavior (b_masks=None or []) is unchanged.
+    """
+
+    def test_amortized_wrapper_refuses_bilinear_kwargs(self) -> None:
+        """Non-empty b_masks -> NotImplementedError with v0.3.1 in the message."""
+        from pyro_dcm.guides.parameter_packing import TaskDCMPacker
+        from pyro_dcm.models.amortized_wrappers import (
+            amortized_task_dcm_model,
+        )
+        from pyro_dcm.simulators.task_simulator import (
+            make_block_stimulus,
+            make_epoch_stimulus,
+        )
+        from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
+
+        N, M = 3, 1
+        a_mask = torch.ones(N, N, dtype=torch.float64)
+        c_mask = torch.ones(N, M, dtype=torch.float64)
+        packer = TaskDCMPacker(N, M, a_mask, c_mask)
+
+        # Minimal linear-compatible kwargs; the guard fires BEFORE any other work.
+        stim_dict = make_block_stimulus(
+            n_blocks=1, block_duration=8.0, rest_duration=7.0, n_inputs=M,
+        )
+        stimulus = PiecewiseConstantInput(
+            stim_dict["times"], stim_dict["values"],
+        )
+        t_eval = torch.arange(0, 20.0, 0.5, dtype=torch.float64)
+        observed_bold = torch.zeros(10, N, dtype=torch.float64)
+
+        # Bilinear kwargs that should trip the guard.
+        b_mask_0 = torch.zeros(N, N, dtype=torch.float64)
+        b_mask_0[1, 0] = 1.0
+        stim_mod_dict = make_epoch_stimulus(
+            event_times=[5.0], event_durations=[5.0], event_amplitudes=[1.0],
+            duration=20.0, dt=0.01, n_inputs=1,
+        )
+        stim_mod = PiecewiseConstantInput(
+            stim_mod_dict["times"], stim_mod_dict["values"],
+        )
+
+        with pytest.raises(NotImplementedError, match=r"v0\.3\.1"):
+            amortized_task_dcm_model(
+                observed_bold=observed_bold,
+                stimulus=stimulus,
+                a_mask=a_mask,
+                c_mask=c_mask,
+                t_eval=t_eval,
+                TR=2.0,
+                dt=0.5,
+                packer=packer,
+                b_masks=[b_mask_0],  # the trigger
+                stim_mod=stim_mod,
+            )
+
+    def test_amortized_wrapper_linear_mode_unchanged(self) -> None:
+        """b_masks=None + b_masks=[] both pass through to the linear body.
+
+        MODEL-07 regression gate: adding the keyword-only kwargs must NOT
+        break the linear amortized path. We verify the wrapper runs without
+        raising through a poutine.trace on linear-compatible kwargs.
+        """
+        from pyro_dcm.guides.parameter_packing import TaskDCMPacker
+        from pyro_dcm.models.amortized_wrappers import (
+            amortized_task_dcm_model,
+        )
+        from pyro_dcm.simulators.task_simulator import (
+            make_block_stimulus,
+            make_random_stable_A,
+            simulate_task_dcm,
+        )
+
+        N, M = 3, 1
+        A = make_random_stable_A(N, density=0.5, seed=42)
+        C = torch.tensor([[0.25], [0.0], [0.0]], dtype=torch.float64)
+        stim = make_block_stimulus(
+            n_blocks=1, block_duration=8.0, rest_duration=7.0, n_inputs=M,
+        )
+        res = simulate_task_dcm(
+            A, C, stim, duration=20.0, dt=0.01, TR=2.0, SNR=5.0, seed=7,
+        )
+        a_mask = torch.ones(N, N, dtype=torch.float64)
+        c_mask = torch.ones(N, M, dtype=torch.float64)
+        t_eval = torch.arange(0, 20.0, 0.5, dtype=torch.float64)
+        packer = TaskDCMPacker(N, M, a_mask, c_mask)
+        # Fit standardization with a trivial dataset (single point).
+        packer.fit_standardization([{
+            "A_free": torch.zeros(N, N, dtype=torch.float64),
+            "C": torch.zeros(N, M, dtype=torch.float64),
+            "noise_prec": torch.tensor(10.0, dtype=torch.float64),
+        }])
+        # Above dataset has std=0 which clamps to 1e-6 (fit_standardization.clamp).
+
+        pyro.clear_param_store()
+
+        # Case 1: b_masks=None (default) -- should run without error.
+        try:
+            pyro.poutine.trace(amortized_task_dcm_model).get_trace(
+                res["bold"],
+                res["stimulus"],
+                a_mask,
+                c_mask,
+                t_eval,
+                2.0,
+                0.5,
+                packer,
+                # b_masks / stim_mod omitted -> None defaults
+            )
+        except NotImplementedError:
+            pytest.fail(
+                "amortized_task_dcm_model raised NotImplementedError on "
+                "linear (b_masks=None) path -- regression vs pre-15-03 "
+                "behavior."
+            )
+
+        pyro.clear_param_store()
+
+        # Case 2: b_masks=[] -- should also pass through per API.
+        try:
+            pyro.poutine.trace(amortized_task_dcm_model).get_trace(
+                res["bold"],
+                res["stimulus"],
+                a_mask,
+                c_mask,
+                t_eval,
+                2.0,
+                0.5,
+                packer,
+                b_masks=[],
+                stim_mod=None,
+            )
+        except NotImplementedError:
+            pytest.fail(
+                "amortized_task_dcm_model raised NotImplementedError on "
+                "b_masks=[] path -- empty list must pass through per API."
+            )
