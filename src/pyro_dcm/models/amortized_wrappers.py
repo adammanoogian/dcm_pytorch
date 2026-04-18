@@ -161,6 +161,9 @@ def amortized_task_dcm_model(
     TR: float,
     dt: float,
     packer: TaskDCMPacker,
+    *,
+    b_masks: list[torch.Tensor] | None = None,
+    stim_mod: object | None = None,
 ) -> None:
     """Wrap task DCM for amortized inference via packed latent vector.
 
@@ -192,6 +195,14 @@ def amortized_task_dcm_model(
         ODE step size in seconds.
     packer : TaskDCMPacker
         Packer with fitted standardization.
+    b_masks : list of torch.Tensor or None, optional
+        Per-modulator binary structural masks, each shape ``(N, N)``.
+        Default ``None``. Present for API symmetry with
+        ``task_dcm_model``; non-empty ``b_masks`` raises
+        ``NotImplementedError`` (bilinear amortized inference deferred
+        to v0.3.1 per D5).
+    stim_mod : PiecewiseConstantInput or None, optional
+        Modulatory stimulus; ignored in linear mode. Default ``None``.
 
     Notes
     -----
@@ -200,12 +211,38 @@ def amortized_task_dcm_model(
     this approximately matches the actual parameter priors after the
     inverse transform.
 
+    **Bilinear support:** Not implemented in v0.3.0. Calling this
+    wrapper with non-empty ``b_masks`` raises ``NotImplementedError``
+    with a reference to v0.3.1 (per D5; see ``.planning/STATE.md``).
+    The packer's fixed ``n_features = N*N + N*M + 1`` cannot
+    accommodate ``J*N*N`` bilinear terms (see v0.3.0 PITFALLS.md B3).
+    Use ``create_guide(task_dcm_model) + run_svi`` for bilinear DCM.
+    The keyword-only ``b_masks`` and ``stim_mod`` arguments exist for
+    API symmetry with ``task_dcm_model`` and to make the v0.3.1
+    deferral message user-visible.
+
     References
     ----------
     [REF-001] Friston, Harrison & Penny (2003), Eq. 1.
     [REF-002] Stephan et al. (2007), Eq. 2-6.
     [REF-042] Radev et al. (2020). BayesFlow.
     """
+    # MODEL-07: amortized bilinear inference is deferred to v0.3.1 per D5.
+    # Refusal fires on b_masks with non-empty list; None and [] both pass
+    # through to the linear body (API symmetry with task_dcm_model).
+    if b_masks is not None and len(b_masks) > 0:
+        raise NotImplementedError(
+            "amortized_task_dcm_model does not support bilinear (B) sample "
+            "sites in v0.3.0 per D5 (.planning/STATE.md). Bilinear amortized "
+            "inference is deferred to v0.3.1; the packer's fixed n_features "
+            "= N*N + N*M + 1 cannot accommodate J*N*N bilinear terms (see "
+            "v0.3.0 PITFALLS.md B3). Use the SVI path via "
+            "create_guide(task_dcm_model) + run_svi for bilinear DCM."
+        )
+    # stim_mod is silently ignored in linear mode (API symmetry; no-op if
+    # b_masks is None).
+    del stim_mod  # mark intentionally unused in linear mode
+
     params = _sample_latent_and_unpack(packer)
 
     A_free = params["A_free"] * a_mask

@@ -114,6 +114,22 @@ class TaskDCMPacker:
         >>> z.shape
         torch.Size([13])
         """
+        # MODEL-07 defense-in-depth: refuse bilinear sample-site keys. The
+        # packer's n_features = N*N + N*M + 1 does not accommodate J*N*N
+        # bilinear terms; amortized bilinear inference is deferred to v0.3.1
+        # per D5 (.planning/STATE.md). The amortized_task_dcm_model wrapper
+        # is the primary user surface; this guard catches direct callers
+        # building bilinear params dicts for offline analysis (research
+        # Section 6 defense-in-depth rationale).
+        bilinear_keys = [k for k in params if k.startswith("B_free_")]
+        if bilinear_keys:
+            raise NotImplementedError(
+                f"TaskDCMPacker.pack refuses bilinear sample sites "
+                f"{sorted(bilinear_keys)}; amortized bilinear inference is "
+                f"deferred to v0.3.1 per D5 (.planning/STATE.md). Use the "
+                f"SVI path via create_guide(task_dcm_model) for bilinear DCM."
+            )
+
         a_flat = params["A_free"].flatten()
         c_flat = params["C"].flatten()
         # Log-space contract: store noise_prec in log-space
