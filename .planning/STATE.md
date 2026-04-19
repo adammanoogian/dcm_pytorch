@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-04-17)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.3.0 Bilinear DCM Extension -- Phase 16 recovery benchmark in progress; Plan 16-01 (runner infrastructure) COMPLETE 2026-04-18; Plan 16-03 (HGF factory hook) COMPLETE 2026-04-18; Plan 16-02 (metrics + figures + acceptance gates) running in parallel.
+**Current focus:** v0.3.0 Bilinear DCM Extension -- Phase 16 recovery benchmark IMPLEMENTATION COMPLETE 2026-04-19; all 4 plans (16-01/02/03) shipped on `gsd/phase-16-bilinear-recovery-benchmark`. Remaining gate: run the `@pytest.mark.slow`-gated `TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds` (~80 min estimated runtime) to CONFIRM the 4 RECOV gates pass on real 10-seed runner output; passing closes v0.3.0.
 
 ## Current Position
 
 **Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
-**Phase:** Phase 16 -- 3-Region Bilinear Recovery Benchmark (in progress)
-**Plan:** 16-01 COMPLETE 2026-04-18 (runner infrastructure); 16-03 COMPLETE 2026-04-18 (HGF factory hook + mock + wiring tests); 16-02 in flight in parallel (metrics + plotting + acceptance gates).
-**Status:** Plan 16-03 shipped all 2 feat/test tasks + metadata commit on branch `gsd/phase-16-bilinear-recovery-benchmark`. `run_task_bilinear_svi` now accepts `stimulus_mod_factory: StimulusModFactory | None = None` keyword-only parameter (L9: `Callable[[int], dict[str, torch.Tensor]]` returning `{'times': (K,) float64, 'values': (K, J) float64}`). Default `None` preserves plan 16-01 behavior bit-exactly. Non-None factory bypasses `_load_or_make_fixture` for stim_mod (L10) — A/B/C/b_mask/driving-stim still seed-deterministic; only stim_mod is factory-driven. Module-level `make_sinusoid_mod_factory(duration=200.0, dt=0.01, frequency=0.05, amplitude=0.5)` ships as a Phase 16 placeholder/mock; v0.3.1 SIM-06 HGF factories will share the L9 signature so the runner needs no further changes. `_make_bilinear_ground_truth_with_factory` mirrors plan 16-01's helper but substitutes the factory's stim_mod (with TypeError type-guard on malformed returns). `metadata['stimulus_mod_factory']` records `'default_epochs'` or `'custom'` on every return dict (no factory-hash tracking; factories are test/sweep artifacts). `tests/test_task_bilinear_factory.py::TestFactoryHookWiring` ships 3 tests: 1 fast `test_factory_signature_contract` (4.5s; closure surface only — shape, dtype, determinism, configurability) + 2 `@pytest.mark.slow` tests (default-path regression + custom-factory differs + metadata flip). Fast test passes alongside full plan 16-01 SVI integration suite (12 passed, 2 deselected slow, 194s total). Ruff clean on both modified files. File-ownership contract with parallel plan 16-02 respected: 16-03 only touched `benchmarks/runners/task_bilinear.py` + `tests/test_task_bilinear_factory.py`; 16-02 owns `benchmarks/bilinear_metrics.py`, `benchmarks/plotting.py`, `tests/test_bilinear_metrics.py`, `tests/test_task_bilinear_benchmark.py`. Closes 16-CONTEXT.md HGF trajectory forward-compatibility hook lock-in ("the indirection is proven wired, not a theoretical API"). Next: Plan 16-02 in flight (metrics + forest plot + acceptance-gate table); after 16-02 completes, Phase 16 will be DONE, closing v0.3.0 Bilinear DCM Extension milestone.
-**Last activity:** 2026-04-18 -- Plan 16-03 complete. 3 plan-16-03 commits on `gsd/phase-16-bilinear-recovery-benchmark`: 9fb391f (feat: factory hook + mock + helper), 7596aa8 (test: factory wiring tests), `<metadata-commit>` (plan completion). Plan 16-02 commits interleaved on same branch: b9aae53 (feat: bilinear_metrics module), 50a08fb (feat: forest plot + acceptance-gate table); 16-02 remains in flight.
+**Phase:** Phase 16 -- 3-Region Bilinear Recovery Benchmark (IMPLEMENTATION COMPLETE 2026-04-19; pending slow acceptance-gate test run before the phase is CLOSED)
+**Plan:** 16-01 COMPLETE 2026-04-18 (runner infrastructure); 16-03 COMPLETE 2026-04-18 (HGF factory hook + mock + wiring tests); 16-02 COMPLETE 2026-04-19 (metrics + plotting + acceptance gates).
+**Status:** All 4 Phase 16 plans shipped. Plan 16-02 finalization session wrote `.planning/phases/16-bilinear-recovery-benchmark/16-02-SUMMARY.md` + this STATE update + the Task 4 `docs(16-02): complete bilinear metrics and acceptance plan` metadata commit. `benchmarks/bilinear_metrics.py` ships 5 pure metric helpers (compute_b_rmse_magnitude, compute_sign_recovery_nonzero L5-pooled, compute_coverage_of_zero L5-pooled + L7 95% CI, compute_shrinkage, compute_a_rmse_relative) + `compute_acceptance_gates(runner_result)` as THE single-source-of-truth RECOV-03..08 pass/fail entry point consumed by both the slow acceptance test and the pass/fail table figure. `benchmarks/plotting.py` gains `plot_bilinear_b_forest` (9-row per-element forest with per-seed-median scatter + cross-seed median+IQR + B_true reference dot + inline shrinkage annotation per L6/L7; 95% CI) and `plot_acceptance_gates_table` (6-row pass/fail table with row-tinted PASS/FAIL/INFO/10x-FLAG cells); `generate_all_figures` dispatches to both when a `('task_bilinear', 'svi')` results entry is present (tuple + str-tuple keys). `tests/test_bilinear_metrics.py` has 11 unit tests (5 TestMetricHelpers + 6 TestAcceptanceGates including FIX-2 AND-combination regression gate and FIX-5 insufficient_data guard). `tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds` (@pytest.mark.slow) enforces FIX-1 `n_success >= 10` precondition before gate computation, runs `BenchmarkConfig.full_config('task_bilinear', 'svi')` with `n_svi_steps=500` override (L8), writes both figures to `tmp_path` as artifacts, and asserts all 4 RECOV gates pass with descriptive failure messages. Rule-1 auto-fix on `RECOV_06_NULL_MASK` (0.5 -> 0.1) prevents mis-classifying the 0.3/0.4 non-null elements as null; documented in the SUMMARY. File-ownership contract with parallel plan 16-03 respected: 16-02 only touched `benchmarks/bilinear_metrics.py` (NEW), `benchmarks/plotting.py`, `tests/test_bilinear_metrics.py` (NEW), `tests/test_task_bilinear_benchmark.py`; no modifications to `benchmarks/runners/task_bilinear.py`. Fast pytest regression (103 passed, 3 deselected slow, 0 failed) + ruff clean on the 3 16-02-authored files (pre-existing 3 B905/B007 errors in plotting.py at lines 239/461/1595 from commit 47e850e pre-date Phase 16 and are out of scope). Closes RECOV-03, RECOV-04, RECOV-05, RECOV-06 (acceptance + slow test), RECOV-07 (shrinkage + inline forest annotation), RECOV-08 (wall-time ratio + 10x flag). NEXT: run the slow acceptance gate `pytest tests/test_task_bilinear_benchmark.py -m slow -k acceptance` (~80 min estimated) to confirm RECOV gates pass on real runner output; passing closes Phase 16 and v0.3.0 Bilinear DCM Extension.
+**Last activity:** 2026-04-19 -- Plan 16-02 finalization complete. 4 plan-16-02 commits on `gsd/phase-16-bilinear-recovery-benchmark`: b9aae53 (feat: bilinear_metrics module), 50a08fb (feat: forest plot + acceptance-gate table), 4bddd8e (test: bilinear metrics unit tests + acceptance gate at 10 seeds), `<metadata-commit-2026-04-19>` (docs: complete bilinear metrics and acceptance plan, includes 16-02-SUMMARY.md + this STATE update).
 
-Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [█████████░] Phases 13 + 14 + 15 complete + Plan 16-01 + Plan 16-03 complete (Phase 16 plan 16-02 in flight)
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [██████████] Phases 13 + 14 + 15 complete + Phase 16 IMPLEMENTATION complete (slow acceptance-gate test pending for milestone closure)
 
 ## Decisions
 
@@ -130,6 +130,115 @@ None currently.
   needs both) -> 16 (benchmark integrates everything).
 
 ## Session Continuity
+
+Last session: 2026-04-19 (Plan 16-02 finalization)
+Stopped at: Plan 16-02 COMPLETE -- all 4 Phase 16 plans
+shipped on `gsd/phase-16-bilinear-recovery-benchmark`.
+Phase 16 implementation is DONE; only the `@pytest.mark.slow`-
+gated `TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds`
+remains to be RUN (not re-implemented) to confirm the 4 RECOV
+gates pass on real 10-seed runner output. This finalization
+session verified Tasks 1-3 against the plan's `<verify>` + 
+`<verification>` blocks (grep sentinels all pass their
+thresholds; ruff clean on the 3 files 16-02 authored/extended:
+bilinear_metrics.py / test_bilinear_metrics.py /
+test_task_bilinear_benchmark.py; fast pytest regression 103
+passed 3 deselected slow in 290.69s), then shipped Task 4
+(`docs(16-02): complete bilinear metrics and acceptance plan`
+metadata commit including `.planning/phases/16-bilinear-recovery-benchmark/16-02-SUMMARY.md`
++ this STATE update). `benchmarks/bilinear_metrics.py`
+provides 5 pure metric helpers + `compute_acceptance_gates`
+single-source RECOV-03..08 pass/fail entry point; L5 pooled
+aggregation in RECOV-05/06; L7 95% CI; SIGMA_PRIOR=1.0 +
+RECOV thresholds per REQUIREMENTS.md with ONE documented
+Rule-1 auto-fix (`RECOV_06_NULL_MASK`: 0.5 -> 0.1 to prevent
+mis-classifying the 0.3/0.4 non-null B elements as null;
+see 16-02-SUMMARY.md "Deviations from Plan" section 1).
+`benchmarks/plotting.py` adds `plot_bilinear_b_forest` (L6
+per-seed-median scatter + cross-seed median+IQR + B_true
+reference dot + inline shrinkage annotation; 9 rows for
+3-region J=1) and `plot_acceptance_gates_table` (6-row
+pass/fail table with row-tinted PASS/FAIL/INFO/10x-FLAG
+cells); `generate_all_figures` dispatches to both when a
+`('task_bilinear', 'svi')` entry is present (tuple +
+str-tuple keys). `tests/test_bilinear_metrics.py` has 11
+unit tests (5 TestMetricHelpers + 6 TestAcceptanceGates
+including FIX-2 AND-combination regression gate and FIX-5
+insufficient_data guard); all 11 green in 0.23s.
+`tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds`
+(@pytest.mark.slow) enforces FIX-1 `n_success >= 10`
+precondition before gate computation, runs
+`BenchmarkConfig.full_config('task_bilinear', 'svi')` with
+`n_svi_steps=500` override (L8 + FIX-4 convergence caveat),
+writes both figures to `tmp_path`, and asserts all 4 RECOV
+gates pass with descriptive failure messages pointing at
+likely root causes (Pitfall B13 A-RMSE inflation for
+RECOV-03; mean-field correlation underestimation per L9 for
+RECOV-06). Slow acceptance test was NOT run in this
+finalization session (~80 min research estimate). 4
+plan-16-02 commits on branch: b9aae53 (feat: bilinear_metrics
+module), 50a08fb (feat: forest plot + acceptance-gate
+table), 4bddd8e (test: unit tests + acceptance gate at 10
+seeds), `<metadata-commit-2026-04-19>` (docs: complete
+plan). File-ownership contract with plan 16-03 respected.
+
+### Deviations from Plan 16-02
+
+- **Rule 1 (bug fix):** `RECOV_06_NULL_MASK` hardcoded to
+  0.1 instead of planner-specified `0.5 * SIGMA_PRIOR = 0.5`.
+  Plan's 0.5 threshold would mis-classify the two non-null
+  B elements (0.3 and 0.4) as null since both have `|B| < 0.5`,
+  contaminating RECOV-06 coverage-of-zero with non-null
+  elements whose 95% CIs would sometimes cover zero, directly
+  contradicting the R-topology documented intent ("selects
+  the 7 nulls per seed"). Fix: 0.1 (complementary to the
+  0.1 non-null mask). Inline comment in
+  `benchmarks/bilinear_metrics.py` lines 40-47 explains the
+  deviation. Verified by all 11 unit tests green and
+  `test_coverage_of_zero_matches_ci_containment` passing on
+  all-zero `B_true`. Fix committed in `b9aae53`.
+
+- **Plan inconsistency (NOT a deviation):** plan's
+  `<verification>` block references
+  `tests/test_svi_runner.py` but the actual file is
+  `tests/test_svi_integration.py` (same inconsistency
+  hit + documented by plan 16-01). Finalization session
+  dropped the nonexistent filename from the regression
+  command; no code change.
+
+- **Plan inconsistency (NOT a deviation):** plan's verify
+  commands reference `pytest --timeout=N` but the
+  `pytest-timeout` plugin is not installed (same issue
+  documented in plans 16-01 and 16-03). Verification ran
+  without `--timeout`; no code change.
+
+- **Pre-existing ruff errors in plotting.py (NOT this
+  plan's):** full-file `ruff check benchmarks/plotting.py`
+  reports 3 B905/B007 errors at lines 239, 461, 1595
+  introduced by commit 47e850e (2026-04-03 "fix(benchmarks):
+  rewrite plotting.py...") long before Phase 16. Plan
+  16-02's additions at lines 1618+ are ruff-clean when
+  checked in isolation. Out of scope for this plan;
+  documented in the SUMMARY and deferred to a dedicated
+  follow-up commit.
+
+Next: RUN the `@pytest.mark.slow`-gated Phase 16 acceptance
+gate (`pytest tests/test_task_bilinear_benchmark.py -m
+slow -k acceptance`, ~80 min research estimate) to confirm
+RECOV-03..06 all pass on real 10-seed runner output.
+Passing closes Phase 16 and v0.3.0 Bilinear DCM Extension.
+Failing RECOV-06 is an EXPECTED failure path per L9 (mean-
+field posterior-correlation underestimation under AutoNormal;
+documented deferral to v0.3.1 AutoLowRankMVN fallback tier).
+Failing RECOV-04 or RECOV-05 -> first recovery action per
+L8/FIX-4 is to rerun with `n_svi_steps=1500` (the
+`full_config` default) BEFORE concluding the implementation
+is incorrect.
+Resume file: None
+
+---
+
+### 2026-04-18 -- Plan 16-03 complete (prior session)
 
 Last session: 2026-04-18T21:08-21:21Z (Plan 16-03 execution)
 Stopped at: Plan 16-03 complete -- HGF factory hook +
