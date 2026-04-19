@@ -94,6 +94,12 @@ See `.planning/milestones/v0.2.0-ROADMAP.md` and `.planning/milestones/v0.1.0-RO
 
 None currently.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 001 | Cluster sbatch infrastructure for Phase 16 acceptance-gate test (Monash M3; ds_env/rlwm_gpu fallback; autopush to results branch) | 2026-04-19 | 6bade20 | [001-cluster-sbatch-phase-16-acceptance](./quick/001-cluster-sbatch-phase-16-acceptance/) |
+
 ## Key Risks
 
 - **Identifiability** of B-matrix elements under sparse or low-amplitude modulatory inputs
