@@ -1,0 +1,13 @@
+============================================================
+Phase 16 v0.3.0 Bilinear Acceptance Gate -- SLURM Job
+============================================================
+Job ID:       54900993
+Node:         m3s117
+Project root: /fs04/fc37/adam/projects/dcm_pytorch
+Branch:       gsd/phase-16-bilinear-recovery-benchmark
+Commit:       d732096
+Start time:   2026-04-19T18:22:19+10:00
+============================================================
+Activated ds_env by name
+ERROR: torch/pyro import check failed in activated env (ds_env)
+Ensure torch and pyro are installed in the active environment.
