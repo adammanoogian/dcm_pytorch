@@ -49,24 +49,24 @@ import numpy as np
 import pandas as pd
 import torch
 
-from pyro_dcm.forward_models.neural_state import parameterize_A, parameterize_B
-from pyro_dcm.models import (
+from pyro_dcm import (
+    PiecewiseConstantInput,
     create_guide,
     extract_posterior_params,
-    run_svi,
-    task_dcm_model,
-)
-from pyro_dcm.simulators.task_simulator import (
     make_block_stimulus,
     make_event_stimulus,
+    parameterize_A,
+    parameterize_B,
+    run_svi,
     simulate_task_dcm,
+    task_dcm_model,
 )
-from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
 ```
 
-A few helpers are not re-exported at the top level of `pyro_dcm` yet — import
-them from their submodules as shown. This is deliberate for now; see
-§ Known gaps.
+All bilinear-path helpers are re-exported at the top level of `pyro_dcm`. The
+submodule paths (`pyro_dcm.forward_models.neural_state`,
+`pyro_dcm.simulators.task_simulator`, `pyro_dcm.utils.ode_integrator`) are
+still valid and stable — use whichever is more convenient.
 
 ### 2.2 Ground-truth circuit
 
@@ -208,13 +208,21 @@ print(f"B-RMSE (masked): {b_rmse:.3f}")
 print(f"B sign recovery: {b_sign_match:.2f}")
 ```
 
-Expected output on a CPU run of the demo script (seed 42):
+Expected output on a CPU run of the demo script at its default 50 SVI
+steps (seed 42, deliberately tiny — local-friendly):
 
 ```
-A-RMSE:          ~0.15-0.30
-B-RMSE (masked): ~0.10-0.25
-B sign recovery: 1.00
+A-RMSE:          ~0.10-0.20      # A picks up signal quickly
+B-RMSE (masked): ~0.30-0.40      # B barely moves off its zero prior
+B sign recovery: 0.00-0.50       # ~random at 50 steps
 ```
+
+At **300-600 SVI steps** the B posterior pulls meaningfully off zero:
+A-RMSE drops to ~0.05-0.15, B-RMSE to ~0.10-0.25, and B sign recovery
+reaches 1.00. At **1500 steps with 10 seeds** (Phase 16 full config), the
+acceptance gates in `benchmarks/bilinear_metrics.py` pass. The tiny demo
+is designed to verify wiring end-to-end, not to demonstrate recovery
+quality — for that, use the cluster runner.
 
 Exact numbers vary with seed, SVI step count, and `init_scale`. For
 production-quality recovery metrics, pull `benchmarks/bilinear_metrics.py`'s
@@ -279,11 +287,6 @@ fallback.
 
 ## 5. Known gaps (do not block local use)
 
-- **Top-level re-exports missing** — `make_event_stimulus`, `make_epoch_stimulus`,
-  `PiecewiseConstantInput`, `parameterize_B`, `compute_effective_A`,
-  `merge_piecewise_inputs` live in submodules only. Consumers must import
-  from the submodule paths shown in § 2.1. Fix is a one-line additive edit
-  to `src/pyro_dcm/__init__.py`; deferred until needed.
 - **Recovery metrics not installable** — `benchmarks/bilinear_metrics.py`
   lives outside `src/` and is not shipped as part of the `pyro-dcm` package.
   Consumers either copy the functions or reimplement until we move the

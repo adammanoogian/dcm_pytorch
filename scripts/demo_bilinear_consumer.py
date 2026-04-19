@@ -2,7 +2,7 @@
 
 Demonstrates the consumer workflow for projects that import pyro-dcm as a
 package (e.g. dcm_hgf_mixed_models). Mirrors the canonical example in
-docs/consumer_api/bilinear_task_dcm_quickstart.md so the doc stays
+docs/02_pipeline_guide/consumer_bilinear_quickstart.md so the doc stays
 executable.
 
 Runs in ~30-60 s on CPU. Produces a small, self-contained recovery report.
@@ -15,18 +15,18 @@ import numpy as np
 import pandas as pd
 import torch
 
-from pyro_dcm.forward_models.neural_state import parameterize_A, parameterize_B
-from pyro_dcm.models import (
+from pyro_dcm import (
+    PiecewiseConstantInput,
     create_guide,
     extract_posterior_params,
-    run_svi,
-    task_dcm_model,
-)
-from pyro_dcm.simulators.task_simulator import (
     make_block_stimulus,
     make_event_stimulus,
+    parameterize_A,
+    parameterize_B,
+    run_svi,
+    simulate_task_dcm,
+    task_dcm_model,
 )
-from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
 
 
 def main() -> None:
@@ -191,8 +191,6 @@ def simulate_bilinear_bold(
     snr: float,
 ) -> dict[str, torch.Tensor]:
     """Thin wrapper around simulate_task_dcm that enforces bilinear kwargs."""
-    from pyro_dcm.simulators.task_simulator import simulate_task_dcm
-
     return simulate_task_dcm(
         A=A_true,
         C=C_true,
