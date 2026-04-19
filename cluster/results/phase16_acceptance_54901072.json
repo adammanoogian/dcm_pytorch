@@ -1,0 +1,12 @@
+{
+  "slurm_job_id": "54901072",
+  "node": "m3s106",
+  "branch": "gsd/phase-16-bilinear-recovery-benchmark",
+  "commit_sha": "b902a70",
+  "env_name": "actinf-py-scripts (by name)",
+  "exit_code": 1,
+  "elapsed_seconds": 9415,
+  "start_time": "2026-04-19T19:31:20+10:00",
+  "end_time": "2026-04-19T22:09:07+10:00",
+  "pytest_log": "cluster/logs/pytest_phase16_54901072.log"
+}
