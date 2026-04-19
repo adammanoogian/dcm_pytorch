@@ -66,6 +66,17 @@ _DRIVING_N_BLOCKS = 5
 _DRIVING_BLOCK_DURATION = 20.0
 _DRIVING_REST_DURATION = 20.0
 
+# Bilinear init-scale retry policy.
+# Cluster job 54901072 observed 3/10 seeds NaN at SVI step 0 with
+# init_scale=0.005: the initial posterior sample + ground truth combine to
+# overflow the bilinear ODE forward model before any gradient update. A one-
+# shot retry at half the init_scale collapses the initial posterior tightly
+# enough around the prior mean to avoid the overflow on nearly all such seeds
+# (Pitfall B1/B6). The original scale is preferred when it works so that
+# retries do not bias the posterior-variance estimates that feed RECOV-06.
+_BILINEAR_INIT_SCALE = 0.005
+_BILINEAR_INIT_SCALE_RETRY = 0.001
+
 
 # ---------------------------------------------------------------------------
 # HGF forward-compat factory hook (16-CONTEXT.md lock-in)
@@ -469,6 +480,49 @@ def _posterior_to_numpy(
     return out
 
 
+def _fit_bilinear_with_retry(
+    model_args: tuple[Any, ...],
+    model_kwargs: dict[str, Any],
+    num_steps: int,
+    elbo_type: str,
+) -> tuple[dict[str, Any], float, float]:
+    """Fit the bilinear task-DCM SVI; retry once at halved init_scale on NaN.
+
+    Wraps :func:`_fit_and_extract` with a one-shot retry policy triggered by
+    ``run_svi``'s ``RuntimeError("NaN ELBO at step {step}")`` when the NaN
+    occurs at step 0. Non-zero-step NaNs are re-raised unchanged (they
+    indicate divergence after learning has started, which is a substantively
+    different failure mode than init-scale overflow).
+
+    Returns ``(posterior, elapsed_seconds, init_scale_used)`` so the runner
+    can record the retry decision per seed. ``init_scale_used`` is either
+    :data:`_BILINEAR_INIT_SCALE` (default) or
+    :data:`_BILINEAR_INIT_SCALE_RETRY` (retry taken).
+    """
+    try:
+        posterior, elapsed = _fit_and_extract(
+            model_args, model_kwargs,
+            guide_type="auto_normal",
+            init_scale=_BILINEAR_INIT_SCALE,
+            num_steps=num_steps, elbo_type=elbo_type,
+        )
+        return posterior, elapsed, _BILINEAR_INIT_SCALE
+    except RuntimeError as err:
+        if "NaN ELBO at step 0" not in str(err):
+            raise
+        print(
+            f"  NaN at step 0 with init_scale={_BILINEAR_INIT_SCALE}; "
+            f"retrying once with init_scale={_BILINEAR_INIT_SCALE_RETRY}"
+        )
+        posterior, elapsed = _fit_and_extract(
+            model_args, model_kwargs,
+            guide_type="auto_normal",
+            init_scale=_BILINEAR_INIT_SCALE_RETRY,
+            num_steps=num_steps, elbo_type=elbo_type,
+        )
+        return posterior, elapsed, _BILINEAR_INIT_SCALE_RETRY
+
+
 def run_task_bilinear_svi(
     config: BenchmarkConfig,
     *,
@@ -542,6 +596,7 @@ def run_task_bilinear_svi(
     a_true_list: list[list[float]] = []
     a_inferred_bilinear_list: list[list[float]] = []
     a_inferred_linear_list: list[list[float]] = []
+    init_scale_used_bilinear_list: list[float] = []
     n_failed = 0
 
     # Silence pyro_dcm.stability WARNING spam during bilinear early-SVI draws
@@ -587,14 +642,19 @@ def run_task_bilinear_svi(
                 )
 
                 # --- BILINEAR FIT (L2: auto_normal, init_scale=0.005) ---
+                # One-shot retry at _BILINEAR_INIT_SCALE_RETRY on NaN at step 0
+                # rescues cluster-observed init-scale overflow seeds
+                # (Pitfall B1/B6); init_scale_used_bi is recorded per seed so
+                # the SUMMARY can flag retries.
                 bilinear_kwargs = {
                     "b_masks": [data["b_mask_0"]],
                     "stim_mod": data["stim_mod"],
                 }
-                posterior_bi, t_bi = _fit_and_extract(
-                    model_args, bilinear_kwargs,
-                    guide_type="auto_normal", init_scale=0.005,
-                    num_steps=num_steps, elbo_type=config.elbo_type,
+                posterior_bi, t_bi, init_scale_used_bi = (
+                    _fit_bilinear_with_retry(
+                        model_args, bilinear_kwargs,
+                        num_steps=num_steps, elbo_type=config.elbo_type,
+                    )
                 )
                 A_bi = parameterize_A(posterior_bi["A_free"]["mean"])
                 a_rmse_bi = compute_rmse(data["A_true"], A_bi)
@@ -618,6 +678,7 @@ def run_task_bilinear_svi(
                 a_inferred_bilinear_list.append(A_bi.flatten().tolist())
                 a_inferred_linear_list.append(A_lin.flatten().tolist())
                 b_true_list.append(data["B_true"].flatten().tolist())
+                init_scale_used_bilinear_list.append(init_scale_used_bi)
                 posterior_list.append(
                     _posterior_to_numpy(posterior_bi, data["B_true"]),
                 )
@@ -625,7 +686,8 @@ def run_task_bilinear_svi(
                 print(
                     f"  a_rmse_bi={a_rmse_bi:.4f}, "
                     f"a_rmse_lin={a_rmse_lin:.4f}, "
-                    f"t_bi={t_bi:.1f}s, t_lin={t_lin:.1f}s"
+                    f"t_bi={t_bi:.1f}s, t_lin={t_lin:.1f}s, "
+                    f"init_scale_bi={init_scale_used_bi}"
                 )
             except (RuntimeError, ValueError, AssertionError) as e:
                 print(f"  FAILED: {e}")
@@ -654,6 +716,7 @@ def run_task_bilinear_svi(
         "a_true_list": a_true_list,
         "a_inferred_bilinear_list": a_inferred_bilinear_list,
         "a_inferred_linear_list": a_inferred_linear_list,
+        "init_scale_used_bilinear_list": init_scale_used_bilinear_list,
         "mean_a_rmse_bilinear": float(np.mean(a_rmse_bilinear_list)),
         "mean_a_rmse_linear": float(np.mean(a_rmse_linear_list)),
         "mean_time_bilinear": float(np.mean(time_bilinear_list)),
@@ -672,7 +735,14 @@ def run_task_bilinear_svi(
             "SNR": _SNR,
             "num_steps": num_steps,
             "guide_type": "auto_normal",
-            "init_scale_bilinear": 0.005,
+            "init_scale_bilinear": _BILINEAR_INIT_SCALE,
+            "init_scale_bilinear_retry": _BILINEAR_INIT_SCALE_RETRY,
+            "init_scale_bilinear_n_retries": int(
+                sum(
+                    1 for v in init_scale_used_bilinear_list
+                    if v == _BILINEAR_INIT_SCALE_RETRY
+                )
+            ),
             "init_scale_linear": 0.01,
             "quick": config.quick,
             "b_true_magnitudes": {"B[1,0]": _B_10, "B[2,1]": _B_21},
