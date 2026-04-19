@@ -1,0 +1,12 @@
+{
+  "slurm_job_id": "54902455",
+  "node": "m3j010",
+  "branch": "main",
+  "commit_sha": "9c50011",
+  "env_name": "actinf-py-scripts (by name)",
+  "exit_code": 1,
+  "elapsed_seconds": 10266,
+  "start_time": "2026-04-20T03:36:06+10:00",
+  "end_time": "2026-04-20T06:28:10+10:00",
+  "pytest_log": "cluster/logs/pytest_phase16_54902455.log"
+}
