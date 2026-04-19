@@ -1,6 +1,14 @@
 # Cluster -- Phase 16 Acceptance Test
 
-Run the v0.3.0 bilinear-recovery acceptance gate (`test_acceptance_gates_pass_at_10_seeds`, ~80-150 min CPU) on Monash M3. Uses an existing conda env (`ds_env` by default, `rlwm_gpu` as fallback) -- **do not create a new env**.
+Run the v0.3.0 bilinear-recovery acceptance gate (`test_acceptance_gates_pass_at_10_seeds`, ~80-150 min CPU) on Monash M3. Uses an existing conda env (`actinf-py-scripts` by default) -- **do not create a new env**.
+
+## Dependencies
+
+`pyproject.toml` is the single source of truth. The slurm script runs `pip install -e .[benchmark,dev]` against the activated env on every invocation, so missing project packages (`torch`, `torchdiffeq`, `pyro-ppl`, `zuko`, `scipy`, `numpy`, `matplotlib`, `pytest`) are auto-synced. Idempotent when everything is already present.
+
+**Prior failure note:** The first submission (job 54900993) picked up `ds_env`, which had no `torch`. The failure mode was the fail-fast import check, as intended. The script now defaults to `actinf-py-scripts` and auto-installs any missing deps.
+
+If the cluster env is missing `torch` entirely, the first pip install will pull ~2GB. All subsequent runs are no-op verification (~5s).
 
 ## 1. Clone via deploy key
 
@@ -53,28 +61,30 @@ This submits 2 jobs:
 
 ### Overrides
 
-| Variable       | Default   | Purpose                                                |
-|----------------|-----------|--------------------------------------------------------|
-| `ENV_NAME`     | `ds_env`  | Primary conda env name                                 |
-| `ENV_FALLBACK` | `rlwm_gpu`| Second try if `ENV_NAME` is missing                    |
-| `PROJECT`      | `fc37`    | Project code for `/scratch/${PROJECT}/${USER}/...`     |
-| `PUSH_TO_MAIN` | `false`   | See warning below                                      |
+| Variable       | Default              | Purpose                                                |
+|----------------|----------------------|--------------------------------------------------------|
+| `ENV_NAME`     | `actinf-py-scripts`  | Primary conda env name                                 |
+| `ENV_FALLBACK` | *(unset)*            | Second try if `ENV_NAME` can't satisfy project deps    |
+| `PROJECT`      | `fc37`               | Project code for `/scratch/${PROJECT}/${USER}/...`     |
+| `PUSH_TO_MAIN` | `false`              | See warning below                                      |
 
 Example overrides:
 
 ```bash
-# Use rlwm_gpu as primary env instead of ds_env
-ENV_NAME=rlwm_gpu bash cluster/submit_phase16.sh
+# Use a different env
+ENV_NAME=my_env bash cluster/submit_phase16.sh
 
 # Override scratch project code
 PROJECT=ft29 bash cluster/submit_phase16.sh
 ```
 
-> **Note:** `cluster/submit_phase16.sh` currently submits with the default env. To propagate `ENV_NAME`/`PROJECT` overrides through, either (a) pass them as shown above and rely on the sbatch `--export=ALL,...` chain on a cluster that inherits caller env vars, or (b) sbatch the scripts directly:
->
-> ```bash
-> sbatch --export=ALL,ENV_NAME=rlwm_gpu cluster/run_phase16_acceptance.slurm
-> ```
+The submit wrapper forwards `ENV_NAME`, `ENV_FALLBACK`, and `PROJECT` through `sbatch --export=ALL,...` automatically. You can also sbatch the slurm script directly:
+
+```bash
+sbatch --export=ALL,ENV_NAME=my_env cluster/run_phase16_acceptance.slurm
+```
+
+**Env fallback logic:** the script tries `ENV_NAME` first, and falls back to `ENV_FALLBACK` if either (a) conda activation fails, (b) `pip install -e .[benchmark,dev]` fails inside it, or (c) the import check fails after install. Prior versions only fell back on activation failure, letting a half-provisioned env pass activate and crash later — fixed.
 
 > **WARNING: `PUSH_TO_MAIN=true` is NOT recommended.** The push job defaults to creating a results branch so you can review before merging. Setting `PUSH_TO_MAIN=true` pushes directly to `main` via `git pull --rebase`, which **fails silently on merge conflicts** and leaves results un-pushed on the compute node -- see HPC template gotcha #4. Only use it if you're certain nobody else has pushed to `main` while the job was running.
 

@@ -10,9 +10,10 @@
 #   bash cluster/submit_phase16.sh
 #
 # Overrides (pass through sbatch --export):
-#   ENV_NAME=rlwm_gpu bash cluster/submit_phase16.sh
-#   PROJECT=ft29 bash cluster/submit_phase16.sh
-#   PUSH_TO_MAIN=true bash cluster/submit_phase16.sh   # NOT recommended
+#   ENV_NAME=my_env bash cluster/submit_phase16.sh       # primary conda env
+#   ENV_FALLBACK=other_env bash cluster/submit_phase16.sh # secondary env
+#   PROJECT=ft29 bash cluster/submit_phase16.sh           # /scratch project code
+#   PUSH_TO_MAIN=true bash cluster/submit_phase16.sh      # NOT recommended
 # =============================================================================
 
 set -u  # undefined vars are errors; no -e because we want to continue past
@@ -30,16 +31,22 @@ for f in cluster/run_phase16_acceptance.slurm cluster/99_push_phase16_results.sl
     fi
 done
 
-# --- 3. Submit main acceptance job ---------------------------------------
-echo "Submitting Phase 16 acceptance job..."
-JOB1=$(sbatch --parsable cluster/run_phase16_acceptance.slurm)
+# --- 3. Build --export args, forwarding any overrides the user set --------
+EXPORT_ARGS="ALL"
+[[ -n "${ENV_NAME:-}" ]]     && EXPORT_ARGS="${EXPORT_ARGS},ENV_NAME=${ENV_NAME}"
+[[ -n "${ENV_FALLBACK:-}" ]] && EXPORT_ARGS="${EXPORT_ARGS},ENV_FALLBACK=${ENV_FALLBACK}"
+[[ -n "${PROJECT:-}" ]]      && EXPORT_ARGS="${EXPORT_ARGS},PROJECT=${PROJECT}"
+
+# --- 4. Submit main acceptance job ---------------------------------------
+echo "Submitting Phase 16 acceptance job (--export=${EXPORT_ARGS})..."
+JOB1=$(sbatch --export="${EXPORT_ARGS}" --parsable cluster/run_phase16_acceptance.slurm)
 if [[ -z "$JOB1" ]]; then
     echo "ERROR: sbatch did not return a job ID for the acceptance job" >&2
     exit 1
 fi
 echo "  Acceptance job ID: $JOB1"
 
-# --- 4. Submit push job depending on acceptance ---------------------------
+# --- 5. Submit push job depending on acceptance ---------------------------
 echo "Submitting Phase 16 push job (depends on afterany:${JOB1})..."
 PUSH_JOB=$(sbatch --dependency=afterany:${JOB1} \
     --export=ALL,PARENT_JOBS="$JOB1" \
@@ -50,7 +57,7 @@ if [[ -z "$PUSH_JOB" ]]; then
 fi
 echo "  Push job ID: $PUSH_JOB"
 
-# --- 5. Report ------------------------------------------------------------
+# --- 6. Report ------------------------------------------------------------
 echo ""
 echo "============================================================"
 echo "Phase 16 acceptance dispatched"

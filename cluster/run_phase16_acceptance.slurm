@@ -11,17 +11,24 @@
 # Stack: PyTorch + Pyro only.
 #
 # Usage:
-#   # Default invocation (ds_env primary, rlwm_gpu fallback, project fc37):
+#   # Default invocation (actinf-py-scripts primary, no fallback, project fc37):
 #   sbatch cluster/run_phase16_acceptance.slurm
 #
 #   # Override primary env:
-#   sbatch --export=ENV_NAME=rlwm_gpu cluster/run_phase16_acceptance.slurm
+#   sbatch --export=ENV_NAME=my_env cluster/run_phase16_acceptance.slurm
 #
 #   # Override scratch project code:
 #   sbatch --export=PROJECT=ft29 cluster/run_phase16_acceptance.slurm
 #
 #   # Recommended: use the submit wrapper which also chains a push job:
 #   bash cluster/submit_phase16.sh
+#
+# Env contract:
+#   The script runs `pip install -e .[benchmark,dev]` into the activated env,
+#   so the single source of truth for dependencies is pyproject.toml in this
+#   repo. If the activated env is missing torch / pyro-ppl / torchdiffeq / zuko
+#   / scipy / matplotlib, pip will pull them. Note that a missing torch will
+#   pull ~2GB on first run.
 #
 # Outputs:
 #   cluster/logs/phase16_<jobid>.out              SLURM stdout
@@ -74,48 +81,99 @@ echo "============================================================"
 # Configuration (override via --export=KEY=VALUE)
 # =============================================================================
 _PROJECT="${PROJECT:-fc37}"
-ENV_NAME="${ENV_NAME:-ds_env}"
-ENV_FALLBACK="${ENV_FALLBACK:-rlwm_gpu}"
+ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
+ENV_FALLBACK="${ENV_FALLBACK:-}"
 
 # Track which env actually activated, for the result summary.
 ACTIVATED_ENV="unknown"
 
 # =============================================================================
-# Conda Activation (3-tier fallback)
+# Conda Activation + Dep Sync (fallback on activate OR import failure)
 # =============================================================================
-# 1. Try ENV_NAME by name (works if .condarc has envs_dirs configured).
-# 2. Try /scratch/<project>/<user>/conda/envs/<ENV_NAME> (HPC layout).
-# 3. Try ENV_FALLBACK by name.
-# 4. Error with diagnostic.
-if conda activate "$ENV_NAME" 2>/dev/null; then
-    echo "Activated $ENV_NAME by name"
-    ACTIVATED_ENV="$ENV_NAME"
-elif conda activate "/scratch/${_PROJECT}/${USER}/conda/envs/${ENV_NAME}" 2>/dev/null; then
-    echo "Activated $ENV_NAME from /scratch/${_PROJECT}/${USER}/"
-    ACTIVATED_ENV="$ENV_NAME (scratch)"
-elif [[ -n "$ENV_FALLBACK" ]] && conda activate "$ENV_FALLBACK" 2>/dev/null; then
-    echo "Activated $ENV_FALLBACK (fallback)"
-    ACTIVATED_ENV="$ENV_FALLBACK"
-else
-    echo "ERROR: Failed to activate conda environment"
-    echo "Tried: $ENV_NAME (by name), /scratch/${_PROJECT}/${USER}/conda/envs/${ENV_NAME}, $ENV_FALLBACK"
-    echo "Debug: run 'conda env list' on a login node to inspect available envs."
-    exit 1
-fi
+# Previous version only fell back when `conda activate` itself failed. A live
+# env with a missing package (e.g. torch) would activate cleanly and then crash
+# the import check without trying the fallback. This version treats missing
+# deps as a fallback trigger, and always runs `pip install -e .[benchmark,dev]`
+# so pyproject.toml is the single source of truth for package versions.
 
-# =============================================================================
-# Import Checks (fail fast if env is missing torch/pyro OR src/ layout broken)
-# =============================================================================
-python -c "
-import torch, pyro
-print(f'torch {torch.__version__}, pyro {pyro.__version__}')
-print(f'CUDA available: {torch.cuda.is_available()}')
-" || {
-    echo "ERROR: torch/pyro import check failed in activated env ($ACTIVATED_ENV)"
-    echo "Ensure torch and pyro are installed in the active environment."
-    exit 1
+activate_and_verify() {
+    local env="$1"
+    local project="$2"
+    local activated=""
+
+    conda deactivate 2>/dev/null || true
+
+    if conda activate "$env" 2>/dev/null; then
+        activated="$env (by name)"
+    elif conda activate "/scratch/${project}/${USER}/conda/envs/${env}" 2>/dev/null; then
+        activated="$env (scratch)"
+    else
+        echo "  cannot activate $env (tried name + /scratch/${project}/${USER}/conda/envs/${env})"
+        return 1
+    fi
+
+    echo "  activated $activated"
+
+    # Sync deps from pyproject.toml. -q to keep log small when nothing to do.
+    echo "  syncing deps via pip install -e .[benchmark,dev]"
+    if ! pip install -q -e ".[benchmark,dev]"; then
+        echo "  pip install failed in $activated"
+        local py_ver
+        py_ver="$(python -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")' 2>/dev/null || echo unknown)"
+        echo "  active Python: $py_ver (pyproject.toml requires >=3.11)"
+        echo "  if the error was 'requires a different Python', submit with a 3.11+ env:"
+        echo "    sbatch --export=ENV_NAME=<py311_env> cluster/run_phase16_acceptance.slurm"
+        echo "  or re-submit with PIP_IGNORE_REQUIRES_PYTHON=1 to override (expert only)."
+        return 1
+    fi
+
+    # Must-have imports (the project's runtime + benchmark stack).
+    if ! python -c "import torch, pyro, torchdiffeq, zuko, scipy, matplotlib" 2>/dev/null; then
+        echo "  import check failed in $activated after pip install"
+        python -c "import torch, pyro, torchdiffeq, zuko, scipy, matplotlib" || true
+        return 1
+    fi
+
+    ACTIVATED_ENV="$activated"
+    return 0
 }
 
+echo "Trying primary env: $ENV_NAME"
+if ! activate_and_verify "$ENV_NAME" "$_PROJECT"; then
+    if [[ -n "$ENV_FALLBACK" ]]; then
+        echo "Primary env unusable; trying fallback: $ENV_FALLBACK"
+        if ! activate_and_verify "$ENV_FALLBACK" "$_PROJECT"; then
+            echo "ERROR: neither $ENV_NAME nor $ENV_FALLBACK satisfies project deps"
+            echo "Required packages (from pyproject.toml):"
+            echo "  runtime:   torch>=2.0, torchdiffeq, pyro-ppl>=1.9, scipy, numpy, zuko>=1.2"
+            echo "  benchmark: matplotlib, tabulate"
+            echo "  dev:       pytest"
+            echo "Fix on a login node:"
+            echo "  conda activate $ENV_NAME && pip install -e .[benchmark,dev]"
+            exit 1
+        fi
+    else
+        echo "ERROR: $ENV_NAME unusable and no ENV_FALLBACK set"
+        echo "Required packages (from pyproject.toml):"
+        echo "  runtime:   torch>=2.0, torchdiffeq, pyro-ppl>=1.9, scipy, numpy, zuko>=1.2"
+        echo "  benchmark: matplotlib, tabulate"
+        echo "  dev:       pytest"
+        echo "Fix on a login node:"
+        echo "  conda activate $ENV_NAME && pip install -e .[benchmark,dev]"
+        echo "Or submit with an override: sbatch --export=ENV_NAME=<env> ..."
+        exit 1
+    fi
+fi
+
+# Echo the active stack for debugging/audit.
+python -c "
+import torch, pyro, torchdiffeq, zuko, scipy, matplotlib
+print(f'torch {torch.__version__} | pyro {pyro.__version__} | torchdiffeq {torchdiffeq.__version__}')
+print(f'zuko {zuko.__version__} | scipy {scipy.__version__} | matplotlib {matplotlib.__version__}')
+print(f'CUDA available: {torch.cuda.is_available()}')
+"
+
+# Project imports (must succeed after pip install -e .).
 python -c "
 from pyro_dcm.models.task_dcm_model import task_dcm_model
 from benchmarks.bilinear_metrics import compute_acceptance_gates
@@ -123,7 +181,7 @@ from benchmarks.plotting import plot_acceptance_gates_table
 print('project imports OK')
 " || {
     echo "ERROR: project import check failed"
-    echo "Likely causes: src/ layout not on PYTHONPATH, or benchmarks/ module missing."
+    echo "Likely causes: pip install -e . did not register the package, or benchmarks/ module missing."
     exit 1
 }
 echo ""
