@@ -23,6 +23,7 @@ from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import ClippedAdam
 
 from benchmarks.config import BenchmarkConfig
+from benchmarks.fixtures import load_fixture
 from benchmarks.metrics import (
     compute_amortization_gap,
     compute_coverage_from_ci,
@@ -36,7 +37,12 @@ from pyro_dcm.guides import (
     CsdSummaryNet,
     SpectralDCMPacker,
 )
-from pyro_dcm.models import create_guide, run_svi, spectral_dcm_model
+from pyro_dcm.models import (
+    create_guide,
+    extract_posterior_params,
+    run_svi,
+    spectral_dcm_model,
+)
 from pyro_dcm.models.amortized_wrappers import (
     amortized_spectral_dcm_model,
 )
@@ -289,13 +295,35 @@ def run_spectral_amortized(
 
     # Generate test data
     n_test = config.n_datasets
-    test_seed = config.seed + 5000
-    test_data, test_params, test_freqs, _ = (
-        _generate_spectral_datasets(n_test, N, test_seed)
-    )
 
-    if test_freqs is not None:
-        freqs = test_freqs
+    if config.fixtures_dir is not None:
+        test_data: list[torch.Tensor] = []
+        test_params: list[dict[str, torch.Tensor]] = []
+        for fi in range(n_test):
+            fdata = load_fixture(
+                "spectral", N, fi,
+                config.fixtures_dir,
+            )
+            noisy_csd = torch.complex(
+                fdata["noisy_csd_real"].to(torch.float64),
+                fdata["noisy_csd_imag"].to(torch.float64),
+            )
+            test_data.append(noisy_csd)
+            test_params.append({
+                "A_free": invert_A_to_A_free(
+                    fdata["A_true"],
+                ),
+            })
+            freqs = fdata["freqs"]
+    else:
+        test_seed = config.seed + 5000
+        test_data, test_params, test_freqs, _ = (
+            _generate_spectral_datasets(
+                n_test, N, test_seed,
+            )
+        )
+        if test_freqs is not None:
+            freqs = test_freqs
 
     rmse_list: list[float] = []
     coverage_list: list[float] = []
@@ -352,24 +380,45 @@ def run_spectral_amortized(
                 amort_A_mean.flatten().tolist(),
             )
 
+            # Compute amortized ELBO BEFORE clear_param_store wipes
+            # guide params
+            with torch.no_grad():
+                elbo_fn = Trace_ELBO(num_particles=5)
+                guide.eval()
+                amortized_elbo = elbo_fn.loss(
+                    amortized_spectral_dcm_model,
+                    guide,
+                    csd, freqs, a_mask, packer,
+                )
+
             # Per-subject SVI comparison
             pyro.clear_param_store()
             pyro.enable_validation(False)
             try:
                 model_args = (csd, freqs, a_mask, N)
                 svi_guide = create_guide(
-                    spectral_dcm_model, init_scale=0.01,
+                    spectral_dcm_model,
+                    init_scale=0.01,
+                    guide_type=config.guide_type,
+                    n_regions=N,
                 )
                 t0 = time.time()
                 svi_result = run_svi(
                     spectral_dcm_model, svi_guide, model_args,
                     num_steps=500, lr=0.01,
                     clip_norm=10.0, lr_decay_factor=0.1,
+                    elbo_type=config.elbo_type,
+                    guide_type=config.guide_type,
                 )
                 svi_elapsed = time.time() - t0
 
-                svi_median = svi_guide.median(*model_args)
-                svi_A_free = svi_median.get(
+                svi_extract = svi_result.get(
+                    "guide", svi_guide,
+                )
+                svi_post = extract_posterior_params(
+                    svi_extract, model_args,
+                )
+                svi_A_free = svi_post["median"].get(
                     "A_free",
                     torch.zeros(N, N, dtype=torch.float64),
                 )
@@ -382,14 +431,17 @@ def run_spectral_amortized(
                         amort_elapsed / svi_elapsed,
                     )
 
-                # Amortization gap from RMSE ratio
-                # True ELBO gap requires wrapper model + packer;
-                # RMSE ratio is the observable proxy
+                # SVI ELBO evaluation (guide params fresh from
+                # SVI training)
+                with torch.no_grad():
+                    svi_elbo = elbo_fn.loss(
+                        spectral_dcm_model,
+                        svi_guide,
+                        *model_args,
+                    )
+
                 gap = compute_amortization_gap(
-                    svi_result["final_loss"],
-                    svi_result["final_loss"] * (
-                        1.0 + max(0.0, rmse_amort / rmse_svi - 1.0)
-                    ),
+                    svi_elbo, amortized_elbo,
                 )
                 gap_list.append(gap)
                 svi_time_list.append(svi_elapsed)

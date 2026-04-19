@@ -6,7 +6,7 @@ and compare competing connectivity models. You will touch all three DCM variants
 (task, spectral, regression) and see that the same API pattern applies to each.
 
 **Prerequisites:** You know what DCM is (effective connectivity, A matrix,
-hemodynamic model). You have Python 3.11+ installed.
+hemodynamic model). You have Python 3.10+ installed.
 
 ---
 
@@ -217,6 +217,9 @@ print(f"Inferred A:\n{A_spec_inf.detach().numpy().round(3)}")
 
 ## Next Steps
 
+- **Guide selection:** Which variational guide should you use? See
+  [guide_selection.md](guide_selection.md) for a decision tree based on your DCM
+  variant, network size, and compute budget.
 - **Methods reference:** See `docs/03_methods_reference/methods.md` for
   the full mathematical framework (paper-ready).
 - **Equations quick-reference:** See `docs/03_methods_reference/equations.md`

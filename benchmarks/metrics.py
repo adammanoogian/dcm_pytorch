@@ -157,6 +157,137 @@ def compute_coverage_from_samples(
     return in_ci.float().mean().item()
 
 
+def compute_coverage_multi_level(
+    true_vals: torch.Tensor,
+    samples: torch.Tensor,
+    ci_levels: list[float] | None = None,
+) -> dict[float, float]:
+    """Coverage at multiple credible interval levels using empirical quantiles.
+
+    For each CI level, computes lower and upper bounds from the sample
+    distribution via ``torch.quantile`` (not z-scores), which gives
+    accurate intervals for non-Gaussian posteriors (e.g., AutoIAF).
+
+    Parameters
+    ----------
+    true_vals : torch.Tensor
+        Ground-truth values, shape ``(D,)`` where D is the number of
+        parameters.
+    samples : torch.Tensor
+        Posterior samples, shape ``(S, D)`` where S is the number of
+        samples.
+    ci_levels : list[float] or None, optional
+        CI levels to evaluate. Default ``[0.50, 0.75, 0.90, 0.95]``.
+
+    Returns
+    -------
+    dict[float, float]
+        Mapping from CI level to coverage fraction in [0, 1].
+
+    Notes
+    -----
+    Uses empirical quantiles rather than z-scores for accuracy with
+    non-Gaussian guide families (research Section 3.2).
+    """
+    if ci_levels is None:
+        ci_levels = [0.50, 0.75, 0.90, 0.95]
+
+    result: dict[float, float] = {}
+    for level in ci_levels:
+        alpha = (1.0 - level) / 2.0
+        lo = torch.quantile(samples.float(), alpha, dim=0)
+        hi = torch.quantile(samples.float(), 1.0 - alpha, dim=0)
+        in_ci = (true_vals.float() >= lo) & (true_vals.float() <= hi)
+        result[level] = in_ci.float().mean().item()
+    return result
+
+
+def compute_coverage_by_param_type(
+    A_true: torch.Tensor,
+    samples: torch.Tensor,
+    ci_levels: list[float] | None = None,
+) -> dict[str, dict[float, float]]:
+    """Coverage split by diagonal vs off-diagonal A elements.
+
+    Parameters
+    ----------
+    A_true : torch.Tensor
+        Ground-truth connectivity matrix, shape ``(N, N)``.
+    samples : torch.Tensor
+        Posterior samples, shape ``(S, N, N)`` where S is the number
+        of samples.
+    ci_levels : list[float] or None, optional
+        CI levels to evaluate. Default ``[0.50, 0.75, 0.90, 0.95]``.
+
+    Returns
+    -------
+    dict[str, dict[float, float]]
+        Keys ``"all"``, ``"diagonal"``, ``"off_diagonal"``, each
+        mapping CI level to coverage fraction.
+    """
+    N = A_true.shape[0]
+    S = samples.shape[0]
+
+    diag_mask = torch.eye(N, dtype=torch.bool)
+    offdiag_mask = ~diag_mask
+
+    # Flatten for compute_coverage_multi_level
+    all_cov = compute_coverage_multi_level(
+        A_true.flatten(),
+        samples.reshape(S, -1),
+        ci_levels=ci_levels,
+    )
+
+    # Diagonal elements
+    diag_true = A_true[diag_mask]  # shape (N,)
+    diag_samples = samples[:, diag_mask]  # shape (S, N)
+    diag_cov = compute_coverage_multi_level(
+        diag_true, diag_samples, ci_levels=ci_levels,
+    )
+
+    # Off-diagonal elements
+    offdiag_true = A_true[offdiag_mask]  # shape (N*(N-1),)
+    offdiag_samples = samples[:, offdiag_mask]  # shape (S, N*(N-1))
+    offdiag_cov = compute_coverage_multi_level(
+        offdiag_true, offdiag_samples, ci_levels=ci_levels,
+    )
+
+    return {
+        "all": all_cov,
+        "diagonal": diag_cov,
+        "off_diagonal": offdiag_cov,
+    }
+
+
+def compute_summary_stats(values: list[float]) -> dict[str, float]:
+    """Compute summary statistics with median and IQR.
+
+    Parameters
+    ----------
+    values : list[float]
+        List of scalar values.
+
+    Returns
+    -------
+    dict[str, float]
+        Keys: ``"median"``, ``"q25"``, ``"q75"``, ``"mean"``,
+        ``"std"``.
+
+    Notes
+    -----
+    Reports median + IQR per STATE.md risk P12 (avoid mean-only
+    summaries that hide distributional shape).
+    """
+    t = torch.tensor(values, dtype=torch.float64)
+    return {
+        "median": torch.median(t).item(),
+        "q25": torch.quantile(t, 0.25).item(),
+        "q75": torch.quantile(t, 0.75).item(),
+        "mean": t.mean().item(),
+        "std": t.std().item(),
+    }
+
+
 def compute_amortization_gap(
     elbo_svi: float,
     elbo_amortized: float,

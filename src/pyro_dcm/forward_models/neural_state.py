@@ -1,15 +1,22 @@
-"""Neural state equation for Dynamic Causal Modeling.
+"""Neural state equation for DCM (Friston, Harrison & Penny 2003).
 
-Implements the bilinear neural state equation from [REF-001] Eq. 1
-(Friston, Harrison & Penny, 2003).
+Implements the **linear form** ``dx/dt = Ax + Cu`` of the [REF-001] Eq. 1
+neural state equation. The full bilinear form
+``dx/dt = (A + Sigma_j u_j * B_j) * x + Cu`` -- which gives this module its
+historical name -- is supported as an opt-in path via the ``B`` / ``u_mod``
+arguments of ``NeuralStateEquation.derivatives`` (added in v0.3.0) and the
+``parameterize_B`` / ``compute_effective_A`` utilities in this module.
 
-This module provides the linear form dx/dt = Ax + Cu (without modulatory
-B matrices, which are deferred to a later extension). The A matrix
-parameterization follows SPM12 spm_fx_fmri.m conventions, guaranteeing
-negative self-connections via the transform a_ii = -exp(A_free_ii) / 2.
+Callers who do not pass ``B`` see bit-exact v0.2.0 linear behavior.
+
+The A matrix parameterization follows SPM12 ``spm_fx_fmri.m`` conventions,
+guaranteeing negative self-connections via the transform
+``a_ii = -exp(A_free_ii) / 2``.
 """
 
 from __future__ import annotations
+
+import warnings
 
 import torch
 
@@ -52,8 +59,173 @@ def parameterize_A(A_free: torch.Tensor) -> torch.Tensor:
     return A
 
 
+def parameterize_B(
+    B_free: torch.Tensor,
+    b_mask: torch.Tensor,
+) -> torch.Tensor:
+    """Convert free B parameters to masked modulatory B matrices.
+
+    Implements the v0.3.0 bilinear-extension B factory [REF-001] Eq. 1
+    (Friston et al. 2003). Applies the binary mask ``b_mask`` elementwise
+    to the free parameters ``B_free``. The recommended default mask zeros
+    the diagonal (self-modulation disabled) to avoid the A_eff stability
+    failure mode (Pitfall B5 per v0.3.0 research notes).
+
+    Parameters
+    ----------
+    B_free : torch.Tensor
+        Free (unconstrained) modulatory parameters, shape ``(J, N, N)``.
+        ``J`` is the number of modulatory inputs, ``N`` is the number of
+        regions.
+    b_mask : torch.Tensor
+        Binary mask, shape ``(J, N, N)``. Entries in ``{0, 1}``. Diagonal
+        entries ``b_mask[:, i, i]`` should be zero unless the caller
+        explicitly opts in to self-modulation (discouraged; see Warns).
+
+    Returns
+    -------
+    torch.Tensor
+        Masked modulatory matrices ``B = B_free * b_mask``, shape
+        ``(J, N, N)``.
+
+    Warns
+    -----
+    DeprecationWarning
+        If any diagonal element of ``b_mask`` is non-zero. Self-modulation
+        via the B path can push ``max Re(eig(A_eff))`` positive under the
+        ``N(0, 1.0)`` prior (D1, Pitfall B5). A future
+        ``parameterize_B_safe_diag`` (v0.4+) may add a guaranteed-stable
+        transform; until then, callers should keep the diagonal zero.
+
+    Raises
+    ------
+    ValueError
+        If ``B_free`` and ``b_mask`` shapes differ, or if either tensor is
+        not 3-D of shape ``(J, N, N)``.
+
+    Notes
+    -----
+    Off-diagonal elements pass through via pure mask multiplication. No
+    ``-exp`` transform and no ``tanh`` bounding: the ``N(0, 1.0)`` prior
+    (D1) performs regularization, not the factory.
+
+    Examples
+    --------
+    >>> import torch
+    >>> B_free = torch.randn(2, 3, 3, dtype=torch.float64)
+    >>> b_mask = torch.ones(2, 3, 3, dtype=torch.float64)
+    >>> # Zero diagonal per recommended default
+    >>> for j in range(2):
+    ...     b_mask[j].fill_diagonal_(0.0)
+    >>> B = parameterize_B(B_free, b_mask)
+    >>> B.shape
+    torch.Size([2, 3, 3])
+    """
+    if B_free.shape != b_mask.shape:
+        raise ValueError(
+            "parameterize_B shape mismatch: expected B_free.shape == "
+            f"b_mask.shape, got B_free.shape={tuple(B_free.shape)} and "
+            f"b_mask.shape={tuple(b_mask.shape)}."
+        )
+    if B_free.ndim != 3:
+        raise ValueError(
+            "parameterize_B expects 3-D stacked tensors (J, N, N); "
+            f"got B_free.ndim={B_free.ndim} with shape {tuple(B_free.shape)}."
+        )
+
+    # DeprecationWarning if any diagonal mask entry is non-zero (Pitfall B5).
+    if b_mask.shape[0] > 0:
+        _, N, _ = b_mask.shape
+        diag_idx = torch.arange(N, device=b_mask.device)
+        diag_entries = b_mask[:, diag_idx, diag_idx]  # shape (J, N)
+        if (diag_entries != 0).any():
+            warnings.warn(
+                "parameterize_B received a b_mask with non-zero diagonal "
+                "entries. Self-modulation via B can push "
+                "max Re(eig(A_eff)) > 0 under the N(0, 1.0) prior (D1; "
+                "Pitfall B5). Consider zeroing b_mask[:, i, i]. A future "
+                "parameterize_B_safe_diag (v0.4+) may provide a "
+                "guaranteed-stable diagonal transform.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
+    return B_free * b_mask
+
+
+def compute_effective_A(
+    A: torch.Tensor,
+    B: torch.Tensor,
+    u_mod: torch.Tensor,
+) -> torch.Tensor:
+    """Compose the effective connectivity ``A_eff = A + sum_j u_j * B_j``.
+
+    Implements [REF-001] Eq. 1 (Friston et al. 2003) modulator composition
+    for the task-DCM bilinear extension. Uses ``torch.einsum`` for the
+    sum over the modulator index.
+
+    Parameters
+    ----------
+    A : torch.Tensor
+        Baseline effective connectivity, shape ``(N, N)``.
+    B : torch.Tensor
+        Stacked modulatory matrices, shape ``(J, N, N)``. ``J`` is the
+        number of modulatory inputs. ``J=0`` (empty zeroth dim) is a
+        supported edge case that returns ``A`` unchanged.
+    u_mod : torch.Tensor
+        Modulator values at the current time, shape ``(J,)``.
+
+    Returns
+    -------
+    torch.Tensor
+        Effective connectivity ``A_eff``, shape ``(N, N)``.
+
+    Raises
+    ------
+    ValueError
+        If ``B`` is not 3-D, ``u_mod`` is not 1-D, or their modulator
+        counts (``B.shape[0]`` vs ``u_mod.shape[0]``) disagree.
+
+    Examples
+    --------
+    >>> import torch
+    >>> A = torch.eye(2, dtype=torch.float64) * -0.5
+    >>> B = torch.zeros(1, 2, 2, dtype=torch.float64)
+    >>> B[0, 0, 1] = 0.3
+    >>> u_mod = torch.tensor([1.0], dtype=torch.float64)
+    >>> A_eff = compute_effective_A(A, B, u_mod)
+    >>> A_eff[0, 1].item()
+    0.3
+    """
+    if B.ndim != 3:
+        raise ValueError(
+            "compute_effective_A expects B with shape (J, N, N); "
+            f"got B.ndim={B.ndim} with shape {tuple(B.shape)}."
+        )
+    if u_mod.ndim != 1:
+        raise ValueError(
+            "compute_effective_A expects u_mod with shape (J,); "
+            f"got u_mod.ndim={u_mod.ndim} with shape {tuple(u_mod.shape)}."
+        )
+    if B.shape[0] != u_mod.shape[0]:
+        raise ValueError(
+            "compute_effective_A modulator-count mismatch: expected "
+            f"B.shape[0] == u_mod.shape[0], got B.shape[0]={B.shape[0]} "
+            f"vs u_mod.shape[0]={u_mod.shape[0]}."
+        )
+
+    # Empty-J short-circuit: einsum over a zero-length axis is well-defined
+    # (returns zeros of shape (N, N)), but the explicit branch returns A
+    # bit-exactly without any arithmetic.
+    if B.shape[0] == 0:
+        return A
+
+    # Einsum: for each j, add u_mod[j] * B[j] to A.
+    return A + torch.einsum("j,jnm->nm", u_mod, B)
+
+
 class NeuralStateEquation:
-    """Bilinear neural state equation dx/dt = Ax + Cu.
+    """Neural state equation dx/dt = Ax + Cu (linear form; bilinear B-matrix path added in v0.3.0).
 
     Implements [REF-001] Eq. 1 (Friston, Harrison & Penny, 2003),
     restricted to the linear case (no modulatory B matrices).
@@ -87,21 +259,77 @@ class NeuralStateEquation:
         self.A = A
         self.C = C
 
-    def derivatives(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
-        """Compute neural state derivatives dx/dt = Ax + Cu.
+    def derivatives(
+        self,
+        x: torch.Tensor,
+        u: torch.Tensor,
+        *,
+        B: torch.Tensor | None = None,
+        u_mod: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Compute neural state derivatives dx/dt.
 
-        Implements [REF-001] Eq. 1 (linear form).
+        Implements [REF-001] Eq. 1 (Friston, Harrison & Penny, 2003):
+
+        - Linear form (v0.1/v0.2 path, default): ``dx/dt = A @ x + C @ u``
+          when ``B is None`` or ``B.shape[0] == 0``.
+        - Bilinear form (v0.3.0 extension):
+          ``dx/dt = (A + sum_j u_mod[j] * B[j]) @ x + C @ u``
+          when ``B`` and ``u_mod`` are both supplied.
+
+        The linear path evaluates the literal expression
+        ``self.A @ x + self.C @ u`` (NOT ``A_eff = A + 0`` followed by
+        ``A_eff @ x``), guaranteeing bit-exact numerical equivalence to
+        v0.2.0 callers per the CONTEXT-locked short-circuit gate (verified
+        at ``atol=1e-10`` in ``tests/test_linear_invariance.py``).
 
         Parameters
         ----------
         x : torch.Tensor
             Neural activity per region, shape ``(N,)``.
         u : torch.Tensor
-            Experimental input, shape ``(M,)``.
+            Driving experimental input, shape ``(M,)``. When bilinear
+            arguments are supplied, this tensor is the driving-input slice
+            only; the modulator slice is passed separately via ``u_mod``.
+        B : torch.Tensor or None, optional
+            Stacked modulatory matrices, shape ``(J, N, N)``. ``None``
+            (default) or empty ``J=0`` routes through the linear
+            short-circuit. Accepts optional ``B: (J, N, N)`` and
+            ``u_mod: (J,)`` for the bilinear extension; default ``None``
+            preserves exact linear behavior.
+        u_mod : torch.Tensor or None, optional
+            Modulator values at current time, shape ``(J,)``. Required
+            when ``B`` is non-empty; must match ``B.shape[0]``. Ignored
+            when ``B`` triggers the linear short-circuit.
 
         Returns
         -------
         torch.Tensor
             Time derivatives of neural activity, shape ``(N,)``.
+
+        Raises
+        ------
+        ValueError
+            If ``B`` is non-empty and ``u_mod`` is ``None``, or if their
+            modulator counts disagree. (Shape-level validation is
+            delegated to ``compute_effective_A``.)
         """
-        return self.A @ x + self.C @ u
+        # Linear short-circuit gate (BILIN-03 bit-exact guarantee).
+        # Branch on identity (None) FIRST, then on empty-J shape. Do NOT
+        # call compute_effective_A with a zero tensor; the literal
+        # A@x + C@u path must remain byte-identical to the v0.2.0
+        # implementation.
+        if B is None or B.shape[0] == 0:
+            return self.A @ x + self.C @ u
+
+        if u_mod is None:
+            raise ValueError(
+                "NeuralStateEquation.derivatives: B is non-empty but "
+                "u_mod is None; expected u_mod tensor of shape "
+                f"({B.shape[0]},)."
+            )
+
+        # Bilinear path (v0.3.0). Shape validation delegated to
+        # compute_effective_A.
+        A_eff = compute_effective_A(self.A, B, u_mod)
+        return A_eff @ x + self.C @ u

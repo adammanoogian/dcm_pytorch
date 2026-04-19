@@ -80,6 +80,7 @@ class TestSimulatorOutputStructure:
             "bold", "bold_clean", "bold_fine", "neural",
             "hemodynamic", "times_fine", "times_TR",
             "params", "stimulus",
+            "B_list", "stimulus_mod",  # Phase 14 (SIM-04): bilinear forward-compat keys
         }
         assert set(result.keys()) == expected_keys
 

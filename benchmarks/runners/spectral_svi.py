@@ -18,9 +18,12 @@ import pyro
 import torch
 
 from benchmarks.config import BenchmarkConfig
+from benchmarks.fixtures import load_fixture
 from benchmarks.metrics import (
     compute_coverage_from_ci,
+    compute_coverage_multi_level,
     compute_rmse,
+    compute_summary_stats,
     pearson_corr,
 )
 from pyro_dcm.forward_models.neural_state import parameterize_A
@@ -102,6 +105,15 @@ def run_spectral_svi(config: BenchmarkConfig) -> dict[str, Any]:
     n_steps_list: list[int] = []
     a_true_list: list[list[float]] = []
     a_inferred_list: list[list[float]] = []
+    coverage_multi: dict[float, list[float]] = {
+        lv: [] for lv in [0.50, 0.75, 0.90, 0.95]
+    }
+    coverage_diag_multi: dict[float, list[float]] = {
+        lv: [] for lv in [0.50, 0.75, 0.90, 0.95]
+    }
+    coverage_offdiag_multi: dict[float, list[float]] = {
+        lv: [] for lv in [0.50, 0.75, 0.90, 0.95]
+    }
     n_failed = 0
 
     for i in range(config.n_datasets):
@@ -115,57 +127,86 @@ def run_spectral_svi(config: BenchmarkConfig) -> dict[str, Any]:
             pyro.set_rng_seed(seed_i)
             pyro.clear_param_store()
 
-            # Generate ground truth A
-            A_true = make_stable_A_spectral(N, seed=seed_i)
+            if config.fixtures_dir is not None:
+                data = load_fixture(
+                    "spectral", N, i, config.fixtures_dir,
+                )
+                A_true = data["A_true"]
+                noisy_csd = torch.complex(
+                    data["noisy_csd_real"].to(torch.float64),
+                    data["noisy_csd_imag"].to(torch.float64),
+                )
+                sim_freqs = data["freqs"]
+            else:
+                # Generate ground truth A
+                A_true = make_stable_A_spectral(N, seed=seed_i)
 
-            # Simulate CSD
-            sim = simulate_spectral_dcm(
-                A_true, TR=2.0, n_freqs=32, seed=seed_i,
-            )
+                # Simulate CSD
+                sim = simulate_spectral_dcm(
+                    A_true, TR=2.0, n_freqs=32, seed=seed_i,
+                )
 
-            # Add noise in decomposed real/imag space
-            obs_real = decompose_csd_for_likelihood(sim["csd"])
-            signal_power = obs_real.pow(2).mean().sqrt()
-            noise_std = signal_power / snr
-            torch.manual_seed(seed_i + 1000)
-            noisy_obs = obs_real + noise_std * torch.randn_like(
-                obs_real,
-            )
+                # Add noise in decomposed real/imag space
+                obs_real = decompose_csd_for_likelihood(
+                    sim["csd"],
+                )
+                signal_power = obs_real.pow(2).mean().sqrt()
+                noise_std = signal_power / snr
+                torch.manual_seed(seed_i + 1000)
+                noisy_obs = (
+                    obs_real
+                    + noise_std * torch.randn_like(obs_real)
+                )
 
-            # Reconstruct noisy complex CSD
-            F, n, _ = sim["csd"].shape
-            half = F * n * n
-            noisy_real = noisy_obs[:half].reshape(F, n, n)
-            noisy_imag = noisy_obs[half:].reshape(F, n, n)
-            noisy_csd = torch.complex(noisy_real, noisy_imag)
+                # Reconstruct noisy complex CSD
+                F, n, _ = sim["csd"].shape
+                half = F * n * n
+                noisy_real = noisy_obs[:half].reshape(F, n, n)
+                noisy_imag = noisy_obs[half:].reshape(F, n, n)
+                noisy_csd = torch.complex(
+                    noisy_real, noisy_imag,
+                )
+                sim_freqs = sim["freqs"]
 
             # Model args
             a_mask = torch.ones(N, N, dtype=torch.float64)
-            model_args = (noisy_csd, sim["freqs"], a_mask, N)
+            model_args = (noisy_csd, sim_freqs, a_mask, N)
 
             # SVI
             guide = create_guide(
-                spectral_dcm_model, init_scale=0.01,
+                spectral_dcm_model,
+                init_scale=0.01,
+                guide_type=config.guide_type,
+                n_regions=N,
             )
             t0 = time.time()
             svi_result = run_svi(
                 spectral_dcm_model, guide, model_args,
                 num_steps=num_steps, lr=0.01,
                 clip_norm=10.0, lr_decay_factor=0.1,
+                elbo_type=config.elbo_type,
+                guide_type=config.guide_type,
             )
             elapsed = time.time() - t0
 
-            # Posterior
-            posterior = extract_posterior_params(guide, model_args)
-            A_free_median = posterior["median"]["A_free"]
-            A_inferred = parameterize_A(A_free_median)
+            # Use post-Laplace guide if available
+            extract_guide = svi_result.get("guide", guide)
 
-            # 95% CI via quantiles
-            quantiles = guide.quantiles(
-                [0.025, 0.975], *model_args,
+            # Posterior via Predictive sampling
+            posterior = extract_posterior_params(
+                extract_guide, model_args,
             )
-            A_free_lo = quantiles["A_free"][0]
-            A_free_hi = quantiles["A_free"][1]
+            A_free_mean = posterior["A_free"]["mean"]
+            A_inferred = parameterize_A(A_free_mean)
+
+            # 95% CI via sample-based quantiles
+            A_free_samples = posterior["A_free"]["samples"]
+            A_free_lo = torch.quantile(
+                A_free_samples.float(), 0.025, dim=0,
+            )
+            A_free_hi = torch.quantile(
+                A_free_samples.float(), 0.975, dim=0,
+            )
             A_lo, A_hi = _build_A_ci(A_free_lo, A_free_hi, N)
 
             # Metrics
@@ -174,6 +215,33 @@ def run_spectral_svi(config: BenchmarkConfig) -> dict[str, Any]:
             corr = pearson_corr(
                 A_true.flatten(), A_inferred.flatten(),
             )
+
+            # Multi-level coverage via parameterized samples
+            A_param_samples = torch.stack(
+                [parameterize_A(s) for s in A_free_samples],
+            )
+            ml_all = compute_coverage_multi_level(
+                A_true.flatten(),
+                A_param_samples.reshape(
+                    A_param_samples.shape[0], -1,
+                ),
+            )
+            diag_mask_ml = torch.eye(N, dtype=torch.bool)
+            offdiag_mask_ml = ~diag_mask_ml
+            ml_diag = compute_coverage_multi_level(
+                A_true[diag_mask_ml],
+                A_param_samples[:, diag_mask_ml],
+            )
+            ml_offdiag = compute_coverage_multi_level(
+                A_true[offdiag_mask_ml],
+                A_param_samples[:, offdiag_mask_ml],
+            )
+            for lv in coverage_multi:
+                coverage_multi[lv].append(ml_all[lv])
+                coverage_diag_multi[lv].append(ml_diag[lv])
+                coverage_offdiag_multi[lv].append(
+                    ml_offdiag[lv],
+                )
 
             rmse_list.append(rmse)
             coverage_list.append(coverage)
@@ -205,7 +273,7 @@ def run_spectral_svi(config: BenchmarkConfig) -> dict[str, Any]:
             "n_datasets": config.n_datasets,
         }
 
-    # Summary statistics
+    # Summary statistics (backward-compatible + median/IQR)
     summary: dict[str, Any] = {
         "mean_rmse": float(np.mean(rmse_list)),
         "std_rmse": float(np.std(rmse_list)),
@@ -215,6 +283,12 @@ def run_spectral_svi(config: BenchmarkConfig) -> dict[str, Any]:
         "std_correlation": float(np.std(correlation_list)),
         "mean_time": float(np.mean(time_list)),
         "mean_elbo": float(np.mean(elbo_list)),
+        "rmse_stats": compute_summary_stats(rmse_list),
+        "coverage_stats": compute_summary_stats(coverage_list),
+        "correlation_stats": compute_summary_stats(
+            correlation_list,
+        ),
+        "time_stats": compute_summary_stats(time_list),
     }
 
     return {
@@ -226,6 +300,16 @@ def run_spectral_svi(config: BenchmarkConfig) -> dict[str, Any]:
         "n_steps_list": n_steps_list,
         "a_true_list": a_true_list,
         "a_inferred_list": a_inferred_list,
+        "coverage_multi": {
+            str(k): v for k, v in coverage_multi.items()
+        },
+        "coverage_diag_multi": {
+            str(k): v for k, v in coverage_diag_multi.items()
+        },
+        "coverage_offdiag_multi": {
+            str(k): v
+            for k, v in coverage_offdiag_multi.items()
+        },
         "n_success": n_success,
         "n_failed": n_failed,
         **summary,

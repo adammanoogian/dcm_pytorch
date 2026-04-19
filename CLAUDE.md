@@ -71,7 +71,7 @@ No module is integrated into the pipeline until it passes its own standalone tes
 
 ## Tech Stack
 
-- **Python 3.11+**
+- **Python 3.10+**
 - **PyTorch 2.x** -- tensor computations, autograd
 - **Pyro 1.9+** -- probabilistic programming, SVI, ELBO
 - **torchdiffeq** -- ODE integration (odeint, odeint_adjoint)
@@ -98,11 +98,13 @@ dcm_pytorch/
 │       │   ├── spectral_transfer.py # H(w) = (iwI - A)^-1  [REF-010]
 │       │   ├── csd_computation.py   # Cross-spectral density  [REF-010]
 │       │   └── rdcm_likelihood.py   # Frequency-domain regression  [REF-020]
-│       ├── generative_models/
+│       ├── models/
 │       │   ├── __init__.py
-│       │   ├── task_dcm.py          # Pyro model for task-based DCM
-│       │   ├── spectral_dcm.py      # Pyro model for spectral DCM
-│       │   └── regression_dcm.py    # Pyro model for regression DCM
+│       │   ├── task_dcm_model.py       # Pyro model for task-based DCM [v0.3.0: + bilinear B path]
+│       │   ├── spectral_dcm_model.py   # Pyro model for spectral DCM
+│       │   ├── rdcm_model.py           # Pyro model for regression DCM
+│       │   ├── guides.py               # SVI guide factory (AutoNormal/AutoLowRankMVN/AutoIAF/...)
+│       │   └── amortized_wrappers.py   # Amortized task/spectral DCM wrappers
 │       ├── guides/
 │       │   ├── __init__.py
 │       │   ├── meanfield.py         # Baseline Gaussian guide

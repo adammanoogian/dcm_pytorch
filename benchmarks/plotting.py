@@ -13,11 +13,18 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import matplotlib
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
+
+from benchmarks.bilinear_metrics import (
+    RECOV_07_SHRINKAGE_SOFT_TARGET,
+    compute_acceptance_gates,
+)
 
 # ---------------------------------------------------------------------------
 # Style configuration
@@ -72,6 +79,29 @@ _METHOD_LABELS: dict[str, str] = {
     "svi": "SVI",
     "amortized": "Amortized",
     "vb": "Analytic VB",
+}
+
+# Guide-level color and label mappings for calibration plots
+GUIDE_COLORS: dict[str, str] = {
+    "auto_delta": "#1f77b4",
+    "auto_normal": "#ff7f0e",
+    "auto_lowrank_mvn": "#2ca02c",
+    "auto_mvn": "#d62728",
+    "auto_iaf": "#9467bd",
+    "auto_laplace": "#8c564b",
+    "rdcm_rigid": "#e377c2",
+    "rdcm_sparse": "#7f7f7f",
+}
+
+GUIDE_LABELS: dict[str, str] = {
+    "auto_delta": "AutoDelta",
+    "auto_normal": "AutoNormal",
+    "auto_lowrank_mvn": "AutoLowRankMVN",
+    "auto_mvn": "AutoMVN",
+    "auto_iaf": "AutoIAF",
+    "auto_laplace": "AutoLaplace",
+    "rdcm_rigid": "rDCM (rigid)",
+    "rdcm_sparse": "rDCM (sparse)",
 }
 
 
@@ -501,6 +531,1327 @@ def plot_amortization_gap(
     )
 
 
+# ---------------------------------------------------------------------------
+# Calibration analysis helpers
+# ---------------------------------------------------------------------------
+
+# Canonical CI levels for calibration curves
+_CI_LEVELS = [0.50, 0.75, 0.90, 0.95]
+_CI_LEVEL_STRS = ["0.5", "0.75", "0.9", "0.95"]
+
+# Variant detection patterns for rDCM keys
+_RDCM_PREFIXES = ("rdcm_rigid", "rdcm_sparse")
+
+# SVI variant prefixes
+_SVI_VARIANTS = ("task", "spectral")
+
+
+def _parse_calibration_key(
+    key: str,
+) -> dict[str, str] | None:
+    """Parse a calibration result key into components.
+
+    Handles both SVI keys (e.g., ``spectral_auto_normal_trace_elbo_3``)
+    and rDCM keys (e.g., ``rdcm_rigid_vb_na_3``).
+
+    Parameters
+    ----------
+    key : str
+        Result dictionary key.
+
+    Returns
+    -------
+    dict[str, str] or None
+        Parsed components with keys ``"variant"``, ``"guide_type"``,
+        ``"elbo_type"``, ``"n_regions"``. Returns ``None`` for
+        metadata or unrecognized keys.
+    """
+    if key == "metadata":
+        return None
+
+    parts = key.split("_")
+    if len(parts) < 3:
+        return None
+
+    # Last element should be the n_regions integer
+    try:
+        int(parts[-1])
+    except ValueError:
+        return None
+    n_regions = parts[-1]
+
+    # rDCM keys: rdcm_{rigid|sparse}_vb_na_{N}
+    for prefix in _RDCM_PREFIXES:
+        prefix_parts = prefix.split("_")
+        n_prefix = len(prefix_parts)
+        if parts[:n_prefix] == prefix_parts:
+            remaining = parts[n_prefix:-1]
+            if len(remaining) >= 2:
+                return {
+                    "variant": prefix,
+                    "guide_type": prefix,
+                    "elbo_type": "_".join(remaining),
+                    "n_regions": n_regions,
+                }
+            return None
+
+    # SVI keys: {variant}_{guide_type}_{elbo_type}_{N}
+    for variant in _SVI_VARIANTS:
+        variant_parts = variant.split("_")
+        n_var = len(variant_parts)
+        if parts[:n_var] == variant_parts:
+            remaining = parts[n_var:-1]
+            # Find split between guide_type and elbo_type
+            # Guide types: auto_delta, auto_normal,
+            # auto_lowrank_mvn, auto_mvn, auto_iaf, auto_laplace
+            # ELBO types: trace_elbo, tracemeanfield_elbo,
+            # renyi_elbo
+            guide_type, elbo_type = _split_guide_elbo(
+                remaining,
+            )
+            if guide_type is not None:
+                return {
+                    "variant": variant,
+                    "guide_type": guide_type,
+                    "elbo_type": elbo_type,
+                    "n_regions": n_regions,
+                }
+    return None
+
+
+def _split_guide_elbo(
+    parts: list[str],
+) -> tuple[str | None, str | None]:
+    """Split remaining key parts into guide_type and elbo_type.
+
+    Parameters
+    ----------
+    parts : list[str]
+        Key parts between variant prefix and N suffix.
+
+    Returns
+    -------
+    tuple[str or None, str or None]
+        ``(guide_type, elbo_type)`` or ``(None, None)`` if
+        unrecognized.
+    """
+    joined = "_".join(parts)
+
+    # Known guide types (longest first to avoid prefix ambiguity)
+    guide_types = [
+        "auto_lowrank_mvn",
+        "auto_laplace",
+        "auto_normal",
+        "auto_delta",
+        "auto_mvn",
+        "auto_iaf",
+    ]
+    for gt in guide_types:
+        if joined.startswith(gt + "_"):
+            elbo = joined[len(gt) + 1 :]
+            if elbo:
+                return gt, elbo
+    return None, None
+
+
+def _group_by_variant_and_guide(
+    results: dict,
+    n_regions: int,
+    param_type: str = "all",
+) -> dict[str, dict[str, dict]]:
+    """Group calibration results by variant and guide type.
+
+    Parameters
+    ----------
+    results : dict
+        Full calibration results.
+    n_regions : int
+        Network size to filter on.
+    param_type : str
+        ``"all"``, ``"diagonal"``, or ``"off_diagonal"``.
+
+    Returns
+    -------
+    dict[str, dict[str, dict]]
+        ``{variant: {guide_type: result_data}}``
+    """
+    coverage_key_map = {
+        "all": "coverage_multi",
+        "diagonal": "coverage_diag_multi",
+        "off_diagonal": "coverage_offdiag_multi",
+    }
+    cov_key = coverage_key_map.get(param_type, "coverage_multi")
+
+    grouped: dict[str, dict[str, dict]] = {}
+    for key, val in results.items():
+        parsed = _parse_calibration_key(key)
+        if parsed is None:
+            continue
+        if parsed["n_regions"] != str(n_regions):
+            continue
+        if not isinstance(val, dict):
+            continue
+        if val.get("status") not in ("completed", None):
+            continue
+        if cov_key not in val:
+            continue
+
+        variant = parsed["variant"]
+        guide = parsed["guide_type"]
+        grouped.setdefault(variant, {})[guide] = val
+    return grouped
+
+
+# ---------------------------------------------------------------------------
+# Calibration curve plotting (CAL-01)
+# ---------------------------------------------------------------------------
+
+
+def plot_calibration_curves(
+    results: dict,
+    output_dir: str,
+    n_regions: int = 3,
+    param_type: str = "all",
+    formats: tuple[str, ...] = ("png",),
+) -> None:
+    """Plot expected-vs-observed coverage calibration curves.
+
+    Creates one subplot per DCM variant with lines for each guide
+    type showing median coverage across datasets. IQR bands show
+    variability. A y=x diagonal is the reference for perfect
+    calibration.
+
+    Never aggregates across DCM variants (STATE.md risk P9).
+
+    Parameters
+    ----------
+    results : dict
+        Calibration results loaded from JSON.
+    output_dir : str
+        Directory for saving the figure.
+    n_regions : int, optional
+        Network size to plot. Default 3.
+    param_type : str, optional
+        Parameter subset: ``"all"``, ``"diagonal"``, or
+        ``"off_diagonal"``. Default ``"all"``.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
+    """
+    _apply_style()
+    grouped = _group_by_variant_and_guide(
+        results, n_regions, param_type,
+    )
+    if not grouped:
+        print(
+            f"No calibration data for N={n_regions}, "
+            f"param_type={param_type} -- skipping"
+        )
+        return
+
+    coverage_key_map = {
+        "all": "coverage_multi",
+        "diagonal": "coverage_diag_multi",
+        "off_diagonal": "coverage_offdiag_multi",
+    }
+    cov_key = coverage_key_map.get(param_type, "coverage_multi")
+
+    variant_order = [
+        v for v in ["task", "spectral", "rdcm_rigid", "rdcm_sparse"]
+        if v in grouped
+    ]
+    n_variants = len(variant_order)
+
+    fig, axes = plt.subplots(
+        1, n_variants,
+        figsize=(5 * n_variants + 1, 5),
+        dpi=150,
+        squeeze=False,
+    )
+
+    for ax_idx, variant in enumerate(variant_order):
+        ax = axes[0, ax_idx]
+        guide_data = grouped[variant]
+
+        # y=x diagonal reference
+        ax.plot(
+            [0, 1], [0, 1], "k--",
+            linewidth=1.0, alpha=0.7,
+            label="y = x",
+            zorder=1,
+        )
+
+        for guide_type in sorted(guide_data.keys()):
+            data = guide_data[guide_type]
+            cov_multi = data.get(cov_key, {})
+
+            medians = []
+            q25s = []
+            q75s = []
+            x_levels = []
+
+            for lv, lv_str in zip(
+                _CI_LEVELS, _CI_LEVEL_STRS, strict=True,
+            ):
+                values = cov_multi.get(lv_str, [])
+                if not values:
+                    continue
+                arr = np.array(values)
+                medians.append(float(np.median(arr)))
+                q25s.append(float(np.percentile(arr, 25)))
+                q75s.append(float(np.percentile(arr, 75)))
+                x_levels.append(lv)
+
+            if not x_levels:
+                continue
+
+            color = GUIDE_COLORS.get(guide_type, "#333333")
+            label = GUIDE_LABELS.get(guide_type, guide_type)
+
+            ax.plot(
+                x_levels, medians,
+                color=color, marker="o", markersize=5,
+                linewidth=1.5, label=label, zorder=3,
+            )
+            ax.fill_between(
+                x_levels, q25s, q75s,
+                color=color, alpha=0.2, zorder=2,
+            )
+
+        variant_label = _VARIANT_LABELS.get(variant, variant)
+        param_label = param_type.replace("_", "-")
+        ax.set_title(
+            f"{variant_label} (N={n_regions}, {param_label})",
+            fontsize=11,
+        )
+        ax.set_xlabel("Nominal CI level")
+        ax.set_ylabel("Observed coverage")
+        ax.set_xlim(0.4, 1.0)
+        ax.set_ylim(0.0, 1.05)
+        ax.set_xticks(_CI_LEVELS)
+        ax.grid(alpha=0.3)
+
+    # Shared legend below subplots
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(
+        handles, labels,
+        loc="lower center",
+        ncol=min(len(handles), 5),
+        fontsize=8,
+        bbox_to_anchor=(0.5, -0.05),
+    )
+    fig.suptitle(
+        f"Coverage Calibration Curves ({param_label}, N={n_regions})",
+        fontsize=13, y=1.02,
+    )
+    fig.tight_layout()
+
+    fname = f"calibration_curves_{param_type}_N{n_regions}"
+    _save_figure(fig, os.path.join(output_dir, fname), formats)
+
+
+# ---------------------------------------------------------------------------
+# Cross-method comparison table (CAL-03)
+# ---------------------------------------------------------------------------
+
+
+def generate_comparison_table(
+    results: dict,
+    output_dir: str,
+    n_regions: int = 3,
+) -> dict[str, str]:
+    """Generate cross-method comparison tables with median (IQR).
+
+    Produces Markdown, LaTeX, and JSON tables grouped by DCM variant
+    with one row per guide type. All cells use median (q25-q75)
+    format per STATE.md risk P12.
+
+    Never aggregates across variants (STATE.md risk P9).
+
+    Parameters
+    ----------
+    results : dict
+        Calibration results loaded from JSON.
+    output_dir : str
+        Directory for saving table files.
+    n_regions : int, optional
+        Network size to tabulate. Default 3.
+
+    Returns
+    -------
+    dict[str, str]
+        Keys ``"markdown"``, ``"latex"``, ``"json"`` with string
+        content for each format.
+    """
+    grouped = _group_by_variant_and_guide(
+        results, n_regions, param_type="all",
+    )
+    if not grouped:
+        print(
+            f"No results for comparison table at N={n_regions} "
+            "-- skipping"
+        )
+        return {"markdown": "", "latex": "", "json": ""}
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Collect table data
+    table_data: dict[str, list[dict[str, str]]] = {}
+
+    for variant in [
+        "task", "spectral", "rdcm_rigid", "rdcm_sparse",
+    ]:
+        if variant not in grouped:
+            continue
+        variant_label = _VARIANT_LABELS.get(variant, variant)
+        rows = []
+        for guide_type in sorted(grouped[variant].keys()):
+            data = grouped[variant][guide_type]
+            row = _build_table_row(data, guide_type)
+            rows.append(row)
+        table_data[variant_label] = rows
+
+    # Generate Markdown
+    md = _format_table_markdown(table_data, n_regions)
+    md_path = os.path.join(
+        output_dir,
+        f"comparison_table_N{n_regions}.md",
+    )
+    with open(md_path, "w") as f:
+        f.write(md)
+
+    # Generate LaTeX
+    tex = _format_table_latex(table_data, n_regions)
+    tex_path = os.path.join(
+        output_dir,
+        f"comparison_table_N{n_regions}.tex",
+    )
+    with open(tex_path, "w") as f:
+        f.write(tex)
+
+    # Generate JSON
+    json_path = os.path.join(
+        output_dir,
+        f"comparison_table_N{n_regions}.json",
+    )
+    json_str = json.dumps(table_data, indent=2)
+    with open(json_path, "w") as f:
+        f.write(json_str)
+
+    print(
+        f"Comparison table N={n_regions}: "
+        f"{md_path}, {tex_path}, {json_path}"
+    )
+    return {"markdown": md, "latex": tex, "json": json_str}
+
+
+def _build_table_row(
+    data: dict, guide_type: str,
+) -> dict[str, str]:
+    """Build one row of the comparison table.
+
+    Parameters
+    ----------
+    data : dict
+        Result data for one configuration.
+    guide_type : str
+        Guide type string.
+
+    Returns
+    -------
+    dict[str, str]
+        Row dict with keys ``"method"``, ``"rmse"``,
+        ``"coverage_90"``, ``"correlation"``, ``"wall_time"``.
+    """
+    method = GUIDE_LABELS.get(guide_type, guide_type)
+
+    # RMSE
+    rmse_str = _format_median_iqr_from_list(
+        data.get("rmse_list", []),
+    )
+
+    # Coverage@90%
+    cov_multi = data.get("coverage_multi", {})
+    cov90_list = cov_multi.get("0.9", [])
+    cov90_str = _format_median_iqr_from_list(cov90_list)
+
+    # Correlation
+    corr_str = _format_median_iqr_from_list(
+        data.get("correlation_list", []),
+    )
+
+    # Wall time
+    time_list = data.get("time_list", [])
+    if not time_list:
+        time_list = data.get("amort_time_list", [])
+    time_str = _format_median_iqr_from_list(time_list, fmt=".1f")
+
+    return {
+        "method": method,
+        "rmse": rmse_str,
+        "coverage_90": cov90_str,
+        "correlation": corr_str,
+        "wall_time": time_str,
+    }
+
+
+def _format_median_iqr_from_list(
+    values: list[float],
+    fmt: str = ".3f",
+) -> str:
+    """Format a list as 'median (q25-q75)'.
+
+    Parameters
+    ----------
+    values : list[float]
+        Raw values.
+    fmt : str, optional
+        Format specifier. Default ``".3f"``.
+
+    Returns
+    -------
+    str
+        Formatted string like ``"0.123 (0.110-0.140)"``.
+    """
+    if not values:
+        return "N/A"
+    arr = np.array(values)
+    med = float(np.median(arr))
+    q25 = float(np.percentile(arr, 25))
+    q75 = float(np.percentile(arr, 75))
+    return f"{med:{fmt}} ({q25:{fmt}}-{q75:{fmt}})"
+
+
+def _format_table_markdown(
+    table_data: dict[str, list[dict[str, str]]],
+    n_regions: int,
+) -> str:
+    """Format comparison table as Markdown.
+
+    Parameters
+    ----------
+    table_data : dict
+        ``{variant_label: [row_dicts]}``.
+    n_regions : int
+        Network size.
+
+    Returns
+    -------
+    str
+        Markdown table string.
+    """
+    lines = [f"# Cross-Method Comparison (N={n_regions})\n"]
+
+    for variant_label, rows in table_data.items():
+        lines.append(f"\n## {variant_label}\n")
+        header = (
+            "| Method | RMSE | Coverage@90% "
+            "| Pearson r | Wall Time (s) |"
+        )
+        sep = (
+            "|--------|------|----------"
+            "----|-----------|---------------|"
+        )
+        lines.append(header)
+        lines.append(sep)
+        for row in rows:
+            lines.append(
+                f"| {row['method']} "
+                f"| {row['rmse']} "
+                f"| {row['coverage_90']} "
+                f"| {row['correlation']} "
+                f"| {row['wall_time']} |"
+            )
+
+    return "\n".join(lines) + "\n"
+
+
+def _format_table_latex(
+    table_data: dict[str, list[dict[str, str]]],
+    n_regions: int,
+) -> str:
+    """Format comparison table as LaTeX.
+
+    Parameters
+    ----------
+    table_data : dict
+        ``{variant_label: [row_dicts]}``.
+    n_regions : int
+        Network size.
+
+    Returns
+    -------
+    str
+        LaTeX table string.
+    """
+    lines = [
+        f"% Cross-Method Comparison (N={n_regions})",
+    ]
+
+    for variant_label, rows in table_data.items():
+        lines.append(f"\n% {variant_label}")
+        lines.append("\\begin{table}[htbp]")
+        lines.append("\\centering")
+        lines.append(
+            f"\\caption{{{variant_label} (N={n_regions})}}"
+        )
+        lines.append(
+            "\\begin{tabular}{l c c c c}"
+        )
+        lines.append("\\toprule")
+        lines.append(
+            "Method & RMSE & Coverage@90\\% "
+            "& Pearson $r$ & Wall Time (s) \\\\"
+        )
+        lines.append("\\midrule")
+        for row in rows:
+            lines.append(
+                f"{row['method']} & {row['rmse']} "
+                f"& {row['coverage_90']} "
+                f"& {row['correlation']} "
+                f"& {row['wall_time']} \\\\"
+            )
+        lines.append("\\bottomrule")
+        lines.append("\\end{tabular}")
+        lines.append("\\end{table}")
+
+    return "\n".join(lines) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# Scaling study (CAL-02)
+# ---------------------------------------------------------------------------
+
+
+def plot_scaling_study(
+    results: dict,
+    output_dir: str,
+    metric: str = "rmse",
+    formats: tuple[str, ...] = ("png",),
+) -> None:
+    """Plot metric vs network size scaling study.
+
+    X-axis is network size (3, 5, 10). Y-axis is the chosen metric.
+    One line per guide type with IQR error bars. Separate subplots
+    per DCM variant.
+
+    Parameters
+    ----------
+    results : dict
+        Calibration results loaded from JSON.
+    output_dir : str
+        Directory for saving the figure.
+    metric : str, optional
+        Metric to plot: ``"rmse"``, ``"coverage"``, or ``"time"``.
+        Default ``"rmse"``.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
+    """
+    _apply_style()
+
+    # Discover all (variant, guide_type, n_regions) combos
+    entries: dict[
+        str, dict[str, dict[int, list[float]]]
+    ] = {}
+
+    for key, val in results.items():
+        parsed = _parse_calibration_key(key)
+        if parsed is None:
+            continue
+        if not isinstance(val, dict):
+            continue
+        if val.get("status") not in ("completed", None):
+            continue
+
+        variant = parsed["variant"]
+        guide = parsed["guide_type"]
+        n_reg = int(parsed["n_regions"])
+        values = _extract_metric_values(val, metric)
+        if values is None:
+            continue
+
+        entries.setdefault(variant, {}).setdefault(
+            guide, {},
+        )[n_reg] = values
+
+    if not entries:
+        print(
+            f"No scaling data for metric={metric} -- skipping"
+        )
+        return
+
+    variant_order = [
+        v for v in [
+            "task", "spectral", "rdcm_rigid", "rdcm_sparse",
+        ]
+        if v in entries
+    ]
+    n_variants = len(variant_order)
+
+    fig, axes = plt.subplots(
+        1, n_variants,
+        figsize=(5 * n_variants + 1, 5),
+        dpi=150,
+        squeeze=False,
+    )
+
+    metric_labels = {
+        "rmse": "RMSE(A)",
+        "coverage": "Coverage@90%",
+        "time": "Wall Time (s)",
+    }
+
+    for ax_idx, variant in enumerate(variant_order):
+        ax = axes[0, ax_idx]
+        guide_data = entries[variant]
+
+        for guide_type in sorted(guide_data.keys()):
+            size_data = guide_data[guide_type]
+            sizes = sorted(size_data.keys())
+            medians = []
+            q25s = []
+            q75s = []
+
+            for n in sizes:
+                arr = np.array(size_data[n])
+                medians.append(float(np.median(arr)))
+                q25s.append(float(np.percentile(arr, 25)))
+                q75s.append(float(np.percentile(arr, 75)))
+
+            color = GUIDE_COLORS.get(guide_type, "#333333")
+            label = GUIDE_LABELS.get(guide_type, guide_type)
+            err_lo = [
+                m - q for m, q in zip(medians, q25s, strict=True)
+            ]
+            err_hi = [
+                q - m for m, q in zip(medians, q75s, strict=True)
+            ]
+
+            ax.errorbar(
+                sizes, medians,
+                yerr=[err_lo, err_hi],
+                color=color, marker="o", markersize=5,
+                linewidth=1.5, capsize=3,
+                label=label, zorder=3,
+            )
+
+        variant_label = _VARIANT_LABELS.get(variant, variant)
+        ax.set_title(variant_label, fontsize=11)
+        ax.set_xlabel("Network size (N)")
+        ax.set_ylabel(metric_labels.get(metric, metric))
+        ax.set_xticks(
+            sorted(
+                {
+                    n
+                    for gd in guide_data.values()
+                    for n in gd.keys()
+                },
+            ),
+        )
+        ax.grid(alpha=0.3)
+
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(
+        handles, labels,
+        loc="lower center",
+        ncol=min(len(handles), 5),
+        fontsize=8,
+        bbox_to_anchor=(0.5, -0.05),
+    )
+    fig.suptitle(
+        f"Scaling Study: {metric_labels.get(metric, metric)}",
+        fontsize=13, y=1.02,
+    )
+    fig.tight_layout()
+
+    _save_figure(
+        fig,
+        os.path.join(output_dir, f"scaling_{metric}"),
+        formats,
+    )
+
+
+def _extract_metric_values(
+    data: dict, metric: str,
+) -> list[float] | None:
+    """Extract per-dataset metric values from result data.
+
+    Parameters
+    ----------
+    data : dict
+        Single result entry.
+    metric : str
+        ``"rmse"``, ``"coverage"``, or ``"time"``.
+
+    Returns
+    -------
+    list[float] or None
+        Per-dataset values, or ``None`` if unavailable.
+    """
+    if metric == "rmse":
+        return data.get("rmse_list")
+    if metric == "coverage":
+        cov_multi = data.get("coverage_multi", {})
+        return cov_multi.get("0.9")
+    if metric == "time":
+        t = data.get("time_list")
+        if t is None:
+            t = data.get("amort_time_list")
+        return t
+    return None
+
+
+def plot_posterior_violins(
+    posterior_samples: dict[str, torch.Tensor],
+    A_true: torch.Tensor,
+    output_dir: str,
+    formats: tuple[str, ...] = ("png",),
+) -> None:
+    """Plot per-A_ij violin overlay across guide types.
+
+    Creates an NxN grid of subplots (one per A matrix element). Each
+    subplot shows one violin per guide type, allowing visual comparison
+    of posterior distributions. Ground truth is marked with a horizontal
+    dashed red line.
+
+    Parameters
+    ----------
+    posterior_samples : dict[str, torch.Tensor]
+        Mapping from guide type label to A parameter samples tensor
+        of shape ``(S, N, N)`` where S is number of samples.
+        **Must be in parameterized A space** (not A_free space).
+        Caller is responsible for applying ``parameterize_A`` before
+        passing samples.
+    A_true : torch.Tensor
+        Ground truth A matrix, shape ``(N, N)``.
+    output_dir : str
+        Directory for saving the figure.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
+
+    Notes
+    -----
+    Samples must be in parameterized A space (diagonal elements are
+    negative via ``a_ii = -exp(A_free_ii) / 2``). Apply
+    ``parameterize_A`` to each A_free sample before passing.
+    """
+    _apply_style()
+
+    # Determine N from A_true
+    N = A_true.shape[0]
+    guide_types = list(posterior_samples.keys())
+    n_guides = len(guide_types)
+
+    if n_guides == 0:
+        print("No posterior samples for violin plot -- skipping")
+        return
+
+    fig, axes = plt.subplots(
+        N, N, figsize=(3 * N + 2, 3 * N),
+        dpi=150, squeeze=False,
+    )
+
+    for i in range(N):
+        for j in range(N):
+            ax = axes[i, j]
+            data_list = []
+            colors = []
+
+            for gt in guide_types:
+                samples = posterior_samples[gt]
+                if isinstance(samples, torch.Tensor):
+                    vals = samples[:, i, j].detach().cpu().numpy()
+                else:
+                    vals = np.array(samples)[:, i, j]
+                data_list.append(vals)
+                colors.append(
+                    GUIDE_COLORS.get(gt, "#333333"),
+                )
+
+            if data_list:
+                parts = ax.violinplot(
+                    data_list,
+                    positions=list(range(n_guides)),
+                    showmeans=False,
+                    showmedians=True,
+                )
+                # Color each violin body
+                for idx, body in enumerate(
+                    parts.get("bodies", []),
+                ):
+                    body.set_facecolor(colors[idx])
+                    body.set_alpha(0.7)
+
+            # Ground truth horizontal dashed red line
+            true_val = float(A_true[i, j])
+            ax.axhline(
+                true_val, color="red", linestyle="--",
+                linewidth=1.5, alpha=0.8,
+                label="Ground truth" if (i == 0 and j == 0) else None,
+            )
+
+            ax.set_title(f"A[{i},{j}]", fontsize=9)
+            ax.set_xticks(list(range(n_guides)))
+            ax.set_xticklabels(
+                [GUIDE_LABELS.get(gt, gt) for gt in guide_types],
+                fontsize=6, rotation=45, ha="right",
+            )
+
+    fig.suptitle(
+        f"Posterior Violins (N={N})", fontsize=13, y=1.01,
+    )
+    fig.tight_layout()
+
+    fname = f"posterior_violins_N{N}"
+    _save_figure(fig, os.path.join(output_dir, fname), formats)
+
+
+def plot_pareto_frontier(
+    results: dict,
+    output_dir: str,
+    n_regions: int = 3,
+    formats: tuple[str, ...] = ("png",),
+) -> None:
+    """Plot wall-time vs RMSE scatter with Pareto front overlay.
+
+    X-axis is median wall time (log scale), Y-axis is median RMSE.
+    One scatter point per (guide_type, variant) combination at the
+    given network size. Error bars show IQR on both axes. Pareto-
+    optimal points are connected with a dashed line.
+
+    Parameters
+    ----------
+    results : dict
+        Calibration results loaded from JSON.
+    output_dir : str
+        Directory for saving the figure.
+    n_regions : int, optional
+        Network size to plot. Default 3.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
+    """
+    _apply_style()
+
+    # Marker shapes by variant
+    variant_markers: dict[str, str] = {
+        "task": "o",
+        "spectral": "s",
+        "rdcm_rigid": "^",
+        "rdcm_sparse": "v",
+    }
+
+    # Collect scatter data
+    points: list[dict[str, Any]] = []
+    for key, val in results.items():
+        parsed = _parse_calibration_key(key)
+        if parsed is None:
+            continue
+        if parsed["n_regions"] != str(n_regions):
+            continue
+        if not isinstance(val, dict):
+            continue
+
+        time_list = val.get("time_list")
+        if time_list is None:
+            time_list = val.get("amort_time_list")
+        rmse_list = val.get("rmse_list")
+
+        if not time_list or not rmse_list:
+            continue
+
+        t_arr = np.array(time_list)
+        r_arr = np.array(rmse_list)
+
+        points.append({
+            "variant": parsed["variant"],
+            "guide_type": parsed["guide_type"],
+            "time_med": float(np.median(t_arr)),
+            "time_q25": float(np.percentile(t_arr, 25)),
+            "time_q75": float(np.percentile(t_arr, 75)),
+            "rmse_med": float(np.median(r_arr)),
+            "rmse_q25": float(np.percentile(r_arr, 25)),
+            "rmse_q75": float(np.percentile(r_arr, 75)),
+        })
+
+    if not points:
+        print(
+            f"No data for Pareto frontier at N={n_regions} "
+            "-- skipping"
+        )
+        return
+
+    fig, ax = plt.subplots(figsize=(9, 6), dpi=150)
+
+    for pt in points:
+        color = GUIDE_COLORS.get(pt["guide_type"], "#333333")
+        marker = variant_markers.get(pt["variant"], "o")
+        label = (
+            f"{GUIDE_LABELS.get(pt['guide_type'], pt['guide_type'])}"
+            f" ({_VARIANT_LABELS.get(pt['variant'], pt['variant'])})"
+        )
+
+        ax.errorbar(
+            pt["time_med"], pt["rmse_med"],
+            xerr=[
+                [pt["time_med"] - pt["time_q25"]],
+                [pt["time_q75"] - pt["time_med"]],
+            ],
+            yerr=[
+                [pt["rmse_med"] - pt["rmse_q25"]],
+                [pt["rmse_q75"] - pt["rmse_med"]],
+            ],
+            color=color, marker=marker, markersize=8,
+            capsize=3, linewidth=0, elinewidth=1.0,
+            label=label, zorder=3,
+        )
+
+    # Compute and draw Pareto front
+    sorted_pts = sorted(points, key=lambda p: p["time_med"])
+    pareto: list[dict[str, Any]] = []
+    best_rmse = float("inf")
+    for pt in sorted_pts:
+        if pt["rmse_med"] < best_rmse:
+            pareto.append(pt)
+            best_rmse = pt["rmse_med"]
+
+    if len(pareto) >= 2:
+        px = [p["time_med"] for p in pareto]
+        py = [p["rmse_med"] for p in pareto]
+        ax.plot(
+            px, py, "k--", linewidth=1.0,
+            alpha=0.6, label="Pareto front", zorder=2,
+        )
+
+    ax.set_xscale("log")
+    ax.set_xlabel("Median wall time (s, log scale)")
+    ax.set_ylabel("Median RMSE(A)")
+    ax.set_title(
+        f"Pareto Frontier: Wall Time vs RMSE (N={n_regions})",
+    )
+    ax.legend(
+        loc="upper right", fontsize=7,
+        bbox_to_anchor=(1.0, 1.0),
+    )
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+
+    fname = f"pareto_frontier_N{n_regions}"
+    _save_figure(fig, os.path.join(output_dir, fname), formats)
+
+
+def plot_timing_breakdown(
+    timing_data: dict[str, dict[str, float]],
+    output_dir: str,
+    formats: tuple[str, ...] = ("png",),
+) -> None:
+    """Plot stacked horizontal bar chart of SVI step timing components.
+
+    Each bar represents one guide type, decomposed into forward model
+    (blue), guide evaluation (orange), and gradient/backward (green)
+    percentages.
+
+    Parameters
+    ----------
+    timing_data : dict[str, dict[str, float]]
+        Mapping from guide type to timing profile with keys
+        ``"forward_pct"``, ``"guide_pct"``, ``"gradient_pct"``.
+    output_dir : str
+        Directory for saving the figure.
+    formats : tuple of str, optional
+        File formats to save. Default ``("png",)``.
+    """
+    _apply_style()
+
+    guide_types = list(timing_data.keys())
+    if not guide_types:
+        print("No timing data for breakdown plot -- skipping")
+        return
+
+    labels = [
+        GUIDE_LABELS.get(gt, gt) for gt in guide_types
+    ]
+    forward_pcts = [
+        timing_data[gt]["forward_pct"] for gt in guide_types
+    ]
+    guide_pcts = [
+        timing_data[gt]["guide_pct"] for gt in guide_types
+    ]
+    gradient_pcts = [
+        timing_data[gt]["gradient_pct"] for gt in guide_types
+    ]
+
+    y_pos = np.arange(len(guide_types))
+
+    fig, ax = plt.subplots(figsize=(10, 5), dpi=150)
+
+    ax.barh(
+        y_pos, forward_pcts,
+        color="#1f77b4", label="Forward model",
+    )
+    ax.barh(
+        y_pos, guide_pcts, left=forward_pcts,
+        color="#ff7f0e", label="Guide evaluation",
+    )
+    left_for_grad = [
+        f + g for f, g in zip(forward_pcts, guide_pcts)
+    ]
+    ax.barh(
+        y_pos, gradient_pcts, left=left_for_grad,
+        color="#2ca02c", label="Gradient/backward",
+    )
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(labels, fontsize=9)
+    ax.set_xlabel("Percentage of total step time")
+    ax.set_title("SVI Step Timing Breakdown by Guide Type")
+    ax.legend(loc="lower right", fontsize=8)
+    ax.set_xlim(0, 105)
+    ax.grid(axis="x", alpha=0.3)
+    fig.tight_layout()
+
+    _save_figure(
+        fig,
+        os.path.join(output_dir, "timing_breakdown"),
+        formats,
+    )
+
+
+def plot_bilinear_b_forest(
+    results: dict[str, Any],
+    output_dir: str,
+    *,
+    formats: tuple[str, ...] = ("png",),
+    ci_level: float = 0.95,
+) -> matplotlib.figure.Figure | None:
+    """Per-element forest plot of B recovery across seeds (Phase 16 headline).
+
+    Reads the ``('task_bilinear', 'svi')`` entry from the results JSON and
+    renders one row per B element (9 rows for 3-region J=1). Each row shows
+    (a) the per-seed posterior medians as small dots, (b) the cross-seed
+    median + IQR horizontal error bar (L6 aggregation), (c) the ground-truth
+    B value as a red reference dot, and (d) an inline shrinkage annotation
+    (std_post / sigma_prior mean across seeds) displayed right of the error
+    bar (RECOV-07 inline annotation per 16-CONTEXT.md).
+
+    Parameters
+    ----------
+    results : dict
+        Top-level results JSON with ``results[('task_bilinear', 'svi')]``
+        mapping to the runner output (plan 16-01 contract).
+    output_dir : str
+        Directory to write figure into.
+    formats : tuple of str, optional
+        Output formats. Default ``("png",)``. Pass ``("png", "pdf")`` for
+        vector.
+    ci_level : float, optional
+        Credible-interval level for per-element CI annotation. Default 0.95
+        (L7; matches RECOV-06 coverage_of_zero).
+
+    Returns
+    -------
+    matplotlib.figure.Figure or None
+        The rendered figure (for inline testing), or None if results lacks
+        a task_bilinear entry.
+
+    Notes
+    -----
+    Saves to ``{output_dir}/b_forest_recovery.{fmt}`` for each fmt.
+    """
+    _apply_style()
+    key = ("task_bilinear", "svi")
+    if str(key) not in results and key not in results:
+        return None
+    # Results JSON often stringifies tuple keys via json.dumps; support both.
+    rr = results.get(key) or results.get(str(key))
+    if rr is None or rr.get("status") == "insufficient_data":
+        return None
+
+    # Per-seed posterior medians for each of the 9 B elements: shape
+    # (n_seeds, J, N, N).
+    posteriors = rr["posterior_list"]
+    # (n_seeds, N, N)
+    b_means = np.array([np.array(p["B_free_0"]["mean"]) for p in posteriors])
+    # (n_seeds, N, N)
+    b_stds = np.array([np.array(p["B_free_0"]["std"]) for p in posteriors])
+    # B_true: all seeds share the same topology per plan 16-01
+    # _make_bilinear_ground_truth. (N, N)
+    b_true = np.array(posteriors[0]["B_true"]).reshape(b_means.shape[1:])
+
+    n_seeds, n_regions, _ = b_means.shape
+    n_elements = n_regions * n_regions
+
+    fig, ax = plt.subplots(figsize=(8, max(4, 0.6 * n_elements)))
+
+    row_labels = []
+    for i in range(n_regions):
+        for j in range(n_regions):
+            idx_flat = i * n_regions + j
+            row_labels.append(f"B[{i},{j}]")
+            per_seed_medians = b_means[:, i, j]
+            per_seed_stds = b_stds[:, i, j]
+            # Cross-seed aggregate (L6): median + IQR.
+            med = np.median(per_seed_medians)
+            q25 = np.percentile(per_seed_medians, 25)
+            q75 = np.percentile(per_seed_medians, 75)
+            # Shrinkage mean across seeds (RECOV-07 inline). sigma_prior=1.0.
+            shrinkage = np.mean(per_seed_stds)
+            # Color: green if non-null (|B_true|>0.1), gray if null.
+            color = "#2ca02c" if abs(b_true[i, j]) > 0.1 else "#7f7f7f"
+            # Per-seed small dots (jittered within the row y-band).
+            jitter = np.linspace(-0.15, 0.15, n_seeds)
+            ax.scatter(
+                per_seed_medians,
+                [idx_flat + jj for jj in jitter],
+                s=10, color=color, alpha=0.4, zorder=2,
+            )
+            # Cross-seed median + IQR error bar.
+            ax.errorbar(
+                med, idx_flat,
+                xerr=[[med - q25], [q75 - med]],
+                fmt="o", color=color, ecolor=color,
+                markersize=8, capsize=4, zorder=3,
+                label=None,
+            )
+            # Ground-truth reference dot.
+            ax.scatter(
+                [b_true[i, j]], [idx_flat],
+                marker="D", color="red", s=60, zorder=4,
+                label="B_true" if idx_flat == 0 else None,
+            )
+            # Inline shrinkage annotation (to the right of the row).
+            annot_color = (
+                "#2ca02c"
+                if shrinkage <= RECOV_07_SHRINKAGE_SOFT_TARGET
+                else "#d62728"
+            )
+            ax.text(
+                0.98, idx_flat,
+                f"$\\sigma_{{post}}/\\sigma_{{prior}}$={shrinkage:.2f}",
+                transform=ax.get_yaxis_transform(),
+                va="center", ha="right",
+                fontsize=8, color=annot_color,
+            )
+
+    ax.set_yticks(range(n_elements))
+    ax.set_yticklabels(row_labels)
+    ax.invert_yaxis()
+    ax.axvline(0, color="black", linestyle="--", linewidth=0.5, alpha=0.5)
+    ax.set_xlabel("B posterior median (per-seed medians + cross-seed IQR)")
+    ax.set_title(
+        f"Phase 16: Bilinear B Recovery Forest Plot (n_seeds={n_seeds}, "
+        f"CI={int(ci_level * 100)}%)"
+    )
+    ax.legend(loc="lower right", fontsize=9)
+    plt.tight_layout()
+
+    for fmt in formats:
+        out_path = os.path.join(output_dir, f"b_forest_recovery.{fmt}")
+        fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    return fig
+
+
+def plot_acceptance_gates_table(
+    results: dict[str, Any],
+    output_dir: str,
+    *,
+    formats: tuple[str, ...] = ("png",),
+) -> matplotlib.figure.Figure | None:
+    """Render RECOV-03..08 acceptance gates as a pass/fail table.
+
+    Consumes ``compute_acceptance_gates(runner_result)`` output and renders
+    a 6-row table (4 pass/fail gates + 2 info rows for RECOV-07 shrinkage
+    and RECOV-08 wall-time ratio). Matches ``/gsd:verify-work`` format per
+    16-CONTEXT.md.
+
+    Parameters
+    ----------
+    results : dict
+        Top-level results JSON; same shape as ``plot_bilinear_b_forest``.
+    output_dir : str
+        Directory to save figure.
+    formats : tuple of str, optional
+        Output formats. Default ``("png",)``.
+
+    Returns
+    -------
+    matplotlib.figure.Figure or None
+        Figure or None if task_bilinear not present or insufficient_data.
+    """
+    _apply_style()
+    key = ("task_bilinear", "svi")
+    rr = results.get(key) or results.get(str(key))
+    if rr is None or rr.get("status") == "insufficient_data":
+        return None
+    gates = compute_acceptance_gates(rr)
+
+    rows = []
+    # 4 pass/fail rows.
+    for tag in ("RECOV-03", "RECOV-04", "RECOV-05", "RECOV-06"):
+        g = gates[tag]
+        pass_str = "PASS" if g["pass"] else "FAIL"
+        # Prefer 'observed', fall back to 'ratio' (RECOV-03 uses ratio).
+        obs_val = g.get("observed", g.get("ratio"))
+        obs_str = (
+            f"{obs_val:.4f}" if isinstance(obs_val, (int, float)) else "NA"
+        )
+        thresh_str = f"{g['threshold']:.4f}"
+        rows.append((tag, obs_str, thresh_str, pass_str))
+    # RECOV-07 info row.
+    r07 = gates["RECOV-07"]
+    r07_nonnull = r07["shrinkage_nonnull"]
+    r07_str = (
+        f"non-null means: {[round(x, 3) for x in r07_nonnull]}; "
+        f"all<=soft({r07['soft_target']}): {r07['all_below_soft_target']}"
+    )
+    rows.append(
+        ("RECOV-07 (info)", r07_str, f"<= {r07['soft_target']}", "INFO"),
+    )
+    # RECOV-08 info row.
+    r08 = gates["RECOV-08"]
+    flag_str = "10x-FLAG" if r08["flag_over_10x"] else "OK"
+    r08_str = (
+        f"ratio={r08['ratio']:.2f}x "
+        f"(bi={r08['time_bilinear']:.1f}s / lin={r08['time_linear']:.1f}s)"
+    )
+    rows.append(("RECOV-08 (info)", r08_str, "<= 10x", flag_str))
+
+    fig, ax = plt.subplots(figsize=(12, 1.5 + 0.5 * len(rows)))
+    ax.axis("off")
+    col_labels = ["Criterion", "Observed", "Threshold", "Pass?"]
+    cell_colors = []
+    for row in rows:
+        pf = row[3]
+        if pf == "PASS":
+            rc = ["#d4f4d4"] * 4
+        elif pf == "FAIL":
+            rc = ["#f4d4d4"] * 4
+        elif pf == "10x-FLAG":
+            rc = ["#fff4d4"] * 4
+        else:
+            rc = ["#e4e4e4"] * 4
+        cell_colors.append(rc)
+    table = ax.table(
+        cellText=rows,
+        colLabels=col_labels,
+        cellColours=cell_colors,
+        loc="center", cellLoc="left",
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.scale(1, 1.5)
+    all_pass = gates["all_pass"]
+    ax.set_title(
+        f"Phase 16 Acceptance Gates "
+        f"({'ALL PASS' if all_pass else 'SOME FAIL'})",
+        fontsize=14, fontweight="bold",
+        color="#2ca02c" if all_pass else "#d62728",
+    )
+
+    for fmt in formats:
+        out_path = os.path.join(output_dir, f"acceptance_gates.{fmt}")
+        fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    return fig
+
+
 def generate_all_figures(
     results: dict,
     output_dir: str = "figures",
@@ -536,6 +1887,73 @@ def generate_all_figures(
             n_generated += 1
         except Exception as e:
             print(f"Warning: {func.__name__} failed: {e}")
+
+    # Calibration figures (when coverage_multi data is present)
+    has_calibration = any(
+        isinstance(v, dict) and "coverage_multi" in v
+        for v in results.values()
+    )
+    if has_calibration:
+        # Discover available n_regions values
+        n_regions_set: set[int] = set()
+        for key in results:
+            parsed = _parse_calibration_key(key)
+            if parsed is not None:
+                n_regions_set.add(int(parsed["n_regions"]))
+
+        for n_reg in sorted(n_regions_set):
+            for ptype in ("all", "diagonal", "off_diagonal"):
+                try:
+                    plot_calibration_curves(
+                        results, output_dir, n_reg, ptype,
+                        formats,
+                    )
+                    n_generated += 1
+                except Exception as e:
+                    print(
+                        f"Warning: plot_calibration_curves"
+                        f"({ptype}, N={n_reg}) failed: {e}"
+                    )
+            try:
+                generate_comparison_table(
+                    results, output_dir, n_reg,
+                )
+                n_generated += 1
+            except Exception as e:
+                print(
+                    f"Warning: generate_comparison_table"
+                    f"(N={n_reg}) failed: {e}"
+                )
+        for m in ("rmse", "coverage", "time"):
+            try:
+                plot_scaling_study(
+                    results, output_dir, m, formats,
+                )
+                n_generated += 1
+            except Exception as e:
+                print(
+                    f"Warning: plot_scaling_study"
+                    f"({m}) failed: {e}"
+                )
+
+    # Phase 16 bilinear dispatch (additive; supports both tuple and
+    # str-tuple keys for JSON-roundtrip compatibility).
+    bilinear_key = ("task_bilinear", "svi")
+    if bilinear_key in results or str(bilinear_key) in results:
+        try:
+            plot_bilinear_b_forest(
+                results, output_dir, formats=formats,
+            )
+            n_generated += 1
+        except Exception as e:
+            print(f"Warning: plot_bilinear_b_forest failed: {e}")
+        try:
+            plot_acceptance_gates_table(
+                results, output_dir, formats=formats,
+            )
+            n_generated += 1
+        except Exception as e:
+            print(f"Warning: plot_acceptance_gates_table failed: {e}")
 
     print(f"Generated {n_generated} figures in {output_dir}/")
 

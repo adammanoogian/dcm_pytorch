@@ -7,7 +7,8 @@ counts, and output settings.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -36,6 +37,20 @@ class BenchmarkConfig:
         If True, generate and save figures.
     figure_dir : str
         Directory for saving figures.
+    guide_type : str
+        Guide type for inference. Uses string keys matching
+        ``GUIDE_REGISTRY`` in ``guides.py``: ``"auto_normal"``
+        (default), ``"auto_delta"``, ``"auto_lowrank_mvn"``,
+        ``"auto_mvn"``, ``"auto_iaf"``, ``"auto_laplace"``.
+    n_regions_list : list[int]
+        List of network sizes to benchmark.
+    elbo_type : str
+        ELBO objective type. Uses string keys matching
+        ``ELBO_REGISTRY`` in ``guides.py``: ``"trace_elbo"``
+        (default), ``"tracemeanfield_elbo"``, ``"renyi_elbo"``.
+    fixtures_dir : str or None
+        Path to shared fixtures directory. ``None`` means inline
+        generation (v0.1.0 behavior).
     """
 
     variant: str
@@ -48,9 +63,15 @@ class BenchmarkConfig:
     output_dir: str = "benchmarks/results"
     save_figures: bool = True
     figure_dir: str = "figures"
+    guide_type: str = "auto_normal"
+    n_regions_list: list[int] = field(default_factory=lambda: [3])
+    elbo_type: str = "trace_elbo"
+    fixtures_dir: str | None = None
 
     @classmethod
-    def quick_config(cls, variant: str, method: str) -> BenchmarkConfig:
+    def quick_config(
+        cls, variant: str, method: str, **kwargs: Any,
+    ) -> BenchmarkConfig:
         """Create a reduced-parameter config for CI/development runs.
 
         Parameters
@@ -59,6 +80,9 @@ class BenchmarkConfig:
             DCM variant: ``"task"``, ``"spectral"``, or ``"rdcm"``.
         method : str
             Inference method.
+        **kwargs : Any
+            Additional keyword arguments forwarded to the constructor
+            (e.g., ``fixtures_dir``, ``guide_type``).
 
         Returns
         -------
@@ -67,6 +91,7 @@ class BenchmarkConfig:
         """
         defaults: dict[str, dict[str, int]] = {
             "task": {"n_datasets": 3, "n_svi_steps": 500},
+            "task_bilinear": {"n_datasets": 3, "n_svi_steps": 500},
             "spectral": {"n_datasets": 5, "n_svi_steps": 500},
             "rdcm": {"n_datasets": 5, "n_svi_steps": 500},
             "rdcm_rigid": {"n_datasets": 5, "n_svi_steps": 500},
@@ -79,10 +104,13 @@ class BenchmarkConfig:
             n_datasets=params["n_datasets"],
             n_svi_steps=params["n_svi_steps"],
             quick=True,
+            **kwargs,
         )
 
     @classmethod
-    def full_config(cls, variant: str, method: str) -> BenchmarkConfig:
+    def full_config(
+        cls, variant: str, method: str, **kwargs: Any,
+    ) -> BenchmarkConfig:
         """Create a paper-quality config for full benchmark runs.
 
         Parameters
@@ -91,6 +119,9 @@ class BenchmarkConfig:
             DCM variant: ``"task"``, ``"spectral"``, or ``"rdcm"``.
         method : str
             Inference method.
+        **kwargs : Any
+            Additional keyword arguments forwarded to the constructor
+            (e.g., ``fixtures_dir``, ``guide_type``).
 
         Returns
         -------
@@ -99,6 +130,7 @@ class BenchmarkConfig:
         """
         defaults: dict[str, dict[str, int]] = {
             "task": {"n_datasets": 20, "n_svi_steps": 3000},
+            "task_bilinear": {"n_datasets": 10, "n_svi_steps": 1500},
             "spectral": {"n_datasets": 50, "n_svi_steps": 500},
             "rdcm": {"n_datasets": 50, "n_svi_steps": 500},
             "rdcm_rigid": {"n_datasets": 50, "n_svi_steps": 500},
@@ -111,4 +143,5 @@ class BenchmarkConfig:
             n_datasets=params["n_datasets"],
             n_svi_steps=params["n_svi_steps"],
             quick=False,
+            **kwargs,
         )

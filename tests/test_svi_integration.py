@@ -446,3 +446,149 @@ class TestAllModelsIntegration:
             assert torch.isfinite(theta_r).all(), (
                 f"rDCM: NaN/Inf in theta_{r}"
             )
+
+
+# ------------------------------------------------------------------
+# model_kwargs forward-kwargs parameter (L1, Phase 16-01)
+# ------------------------------------------------------------------
+
+
+class TestRunSVIModelKwargs:
+    """L1: run_svi forwards model_kwargs via svi.step(*args, **kwargs).
+
+    Two guards:
+    1. Bilinear task_dcm_model kwargs (b_masks, stim_mod) reach the model
+       when passed through model_kwargs; 20-step SVI smoke converges
+       without NaN loss and pyro.get_param_store() grows to include the
+       B_free_0 site.
+    2. Default model_kwargs=None yields bit-exact equivalence to the
+       pre-v0.3.0 signature (linear task_dcm_model first-step loss matches
+       between run_svi(..., model_kwargs=None) and a bare SVI loop).
+    """
+
+    @pytest.fixture(autouse=True)
+    def _silence_stability_logger(self, caplog) -> None:
+        """Silence pyro_dcm.stability WARNING spam during bilinear SVI."""
+        import logging
+        caplog.set_level(logging.ERROR, logger="pyro_dcm.stability")
+
+    def test_run_svi_with_model_kwargs_forwards_bilinear(self) -> None:
+        """Verify 20-step bilinear SVI finishes finite with B_free_0 in param store."""
+        from pyro_dcm.models.guides import create_guide, run_svi
+        from pyro_dcm.models.task_dcm_model import task_dcm_model
+        from pyro_dcm.simulators.task_simulator import (
+            make_block_stimulus,
+            make_epoch_stimulus,
+            make_random_stable_A,
+            simulate_task_dcm,
+        )
+        from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
+
+        N, M, J = 3, 1, 1
+        A = make_random_stable_A(N, density=0.5, seed=42)
+        C = torch.tensor([[0.25], [0.0], [0.0]], dtype=torch.float64)
+        stim = make_block_stimulus(
+            n_blocks=2, block_duration=8.0, rest_duration=7.0, n_inputs=M,
+        )
+        res = simulate_task_dcm(
+            A, C, stim, duration=30.0, dt=0.01, TR=2.0, SNR=5.0, seed=7,
+        )
+        a_mask = torch.ones(N, N, dtype=torch.float64)
+        c_mask = torch.ones(N, M, dtype=torch.float64)
+        t_eval = torch.arange(0, 30.0, 0.5, dtype=torch.float64)
+        b_mask_0 = torch.zeros(N, N, dtype=torch.float64)
+        b_mask_0[1, 0] = 1.0
+        stim_mod_dict = make_epoch_stimulus(
+            event_times=[10.0], event_durations=[10.0], event_amplitudes=[1.0],
+            duration=30.0, dt=0.01, n_inputs=1,
+        )
+        stim_mod = PiecewiseConstantInput(
+            stim_mod_dict["times"], stim_mod_dict["values"],
+        )
+        pyro.clear_param_store()
+        guide = create_guide(
+            task_dcm_model, guide_type="auto_normal", init_scale=0.005,
+        )
+        model_args = (
+            res["bold"], res["stimulus"], a_mask, c_mask, t_eval, 2.0, 0.5,
+        )
+        model_kwargs = {"b_masks": [b_mask_0], "stim_mod": stim_mod}
+        # Reference J to satisfy F841 (used only in the descriptive assert below).
+        assert J == 1
+        result = run_svi(
+            task_dcm_model, guide, model_args,
+            num_steps=20, lr=0.01, clip_norm=10.0, lr_decay_factor=0.01,
+            model_kwargs=model_kwargs,
+        )
+        assert "losses" in result
+        assert len(result["losses"]) == 20
+        for step, loss in enumerate(result["losses"]):
+            assert torch.isfinite(torch.tensor(loss)).item(), (
+                f"Non-finite loss at step {step}: {loss}; "
+                f"L1 model_kwargs forwarding broke bilinear SVI."
+            )
+        # Param store contains B_free_0 (from AutoNormal deep_setattr).
+        param_names = list(pyro.get_param_store().keys())
+        has_b_free = any("B_free_0" in n for n in param_names)
+        assert has_b_free, (
+            f"No param referencing B_free_0 after 20 SVI steps with "
+            f"bilinear model_kwargs; got: {param_names}. L1 forwarding broken."
+        )
+
+    def test_run_svi_without_model_kwargs_is_bit_exact(self) -> None:
+        """Verify default None model_kwargs yields bit-exact first-step loss vs bare."""
+        from pyro.infer import SVI, Trace_ELBO
+
+        from pyro_dcm.models.guides import create_guide, run_svi
+        from pyro_dcm.models.task_dcm_model import task_dcm_model
+        from pyro_dcm.simulators.task_simulator import (
+            make_block_stimulus,
+            make_random_stable_A,
+            simulate_task_dcm,
+        )
+
+        N, M = 3, 1
+        A = make_random_stable_A(N, density=0.5, seed=42)
+        C = torch.tensor([[0.25], [0.0], [0.0]], dtype=torch.float64)
+        stim = make_block_stimulus(
+            n_blocks=2, block_duration=8.0, rest_duration=7.0, n_inputs=M,
+        )
+        res = simulate_task_dcm(
+            A, C, stim, duration=30.0, dt=0.01, TR=2.0, SNR=5.0, seed=7,
+        )
+        a_mask = torch.ones(N, N, dtype=torch.float64)
+        c_mask = torch.ones(N, M, dtype=torch.float64)
+        t_eval = torch.arange(0, 30.0, 0.5, dtype=torch.float64)
+        model_args = (
+            res["bold"], res["stimulus"], a_mask, c_mask, t_eval, 2.0, 0.5,
+        )
+        # Reference: bare SVI loop (1 step).
+        pyro.clear_param_store()
+        pyro.set_rng_seed(123)
+        guide_bare = create_guide(
+            task_dcm_model, guide_type="auto_normal", init_scale=0.01,
+        )
+        optimizer_bare = pyro.optim.ClippedAdam(
+            {"lr": 0.01, "clip_norm": 10.0, "lrd": 1.0},
+        )
+        svi_bare = SVI(
+            task_dcm_model, guide_bare, optimizer_bare, loss=Trace_ELBO(),
+        )
+        loss_bare = svi_bare.step(*model_args)
+        # Run via run_svi (1 step, lr_decay_factor=1.0 -> lrd=1.0).
+        pyro.clear_param_store()
+        pyro.set_rng_seed(123)
+        guide_ref = create_guide(
+            task_dcm_model, guide_type="auto_normal", init_scale=0.01,
+        )
+        result = run_svi(
+            task_dcm_model, guide_ref, model_args,
+            num_steps=1, lr=0.01, clip_norm=10.0, lr_decay_factor=1.0,
+            model_kwargs=None,   # the regression target
+        )
+        loss_ref = result["losses"][0]
+        # Bit-exact first-step loss (same RNG seed, same guide, same kwargs=empty).
+        assert abs(loss_ref - loss_bare) < 1e-9, (
+            f"Backward-compat broken: loss_ref={loss_ref} != loss_bare={loss_bare} "
+            f"at first SVI step. L1 default model_kwargs=None must be a no-op."
+        )

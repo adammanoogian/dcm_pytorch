@@ -2,6 +2,16 @@ from __future__ import annotations
 
 __version__ = "0.1.0"
 
+import logging as _logging
+
+# Library-logging discipline (PEP 282, Python HOWTO). Attach a NullHandler to
+# the pyro_dcm package root so that consumers who do not configure logging
+# never see "no handlers could be found" warnings when pyro_dcm emits log
+# events (e.g. the pyro_dcm.stability eigenvalue monitor from
+# CoupledDCMSystem). Downstream users silence via the standard stdlib:
+#     logging.getLogger("pyro_dcm.stability").setLevel(logging.ERROR)
+_logging.getLogger("pyro_dcm").addHandler(_logging.NullHandler())
+
 # Generative models
 from pyro_dcm.models import (
     task_dcm_model,

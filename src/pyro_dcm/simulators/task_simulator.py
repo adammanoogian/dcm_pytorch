@@ -19,6 +19,8 @@ SPM12 source: spm_fx_fmri.m, spm_gx_fmri.m.
 
 from __future__ import annotations
 
+import warnings
+
 import torch
 
 from pyro_dcm.forward_models.balloon_model import DEFAULT_HEMO_PARAMS
@@ -28,7 +30,101 @@ from pyro_dcm.utils.ode_integrator import (
     PiecewiseConstantInput,
     integrate_ode,
     make_initial_state,
+    merge_piecewise_inputs,
 )
+
+
+def _normalize_B_list(
+    B_list: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor, ...] | None,
+    device: str,
+    dtype: torch.dtype,
+) -> torch.Tensor | None:
+    """Normalize ``B_list`` input to a stacked ``(J, N, N)`` tensor or ``None``.
+
+    Accepts either a Python list/tuple of ``(N, N)`` tensors or a 3-D stacked
+    tensor. Empty list and shape ``(0, N, N)`` both collapse to ``None``
+    (linear mode).
+
+    Parameters
+    ----------
+    B_list : torch.Tensor, list of torch.Tensor, tuple of torch.Tensor, or None
+        Modulatory weights input to normalize.
+    device : str
+        Target device for the returned tensor.
+    dtype : torch.dtype
+        Target dtype for the returned tensor.
+
+    Returns
+    -------
+    torch.Tensor or None
+        Stacked ``(J, N, N)`` tensor when non-trivial; ``None`` when
+        ``B_list is None`` or the input is empty.
+
+    Raises
+    ------
+    ValueError
+        If ``B_list`` is a tensor but not 3-D.
+    TypeError
+        If ``B_list`` is not ``None``, list, tuple, or tensor.
+    """
+    if B_list is None:
+        return None
+    if isinstance(B_list, (list, tuple)):
+        if len(B_list) == 0:
+            return None
+        return torch.stack(list(B_list)).to(device=device, dtype=dtype)
+    if isinstance(B_list, torch.Tensor):
+        if B_list.ndim != 3:
+            raise ValueError(
+                f"B_list as tensor must be 3-D (J, N, N); got ndim={B_list.ndim}, "
+                f"shape={tuple(B_list.shape)}"
+            )
+        if B_list.shape[0] == 0:
+            return None
+        return B_list.to(device=device, dtype=dtype)
+    raise TypeError(
+        "B_list must be None, list/tuple of (N, N) tensors, or (J, N, N) tensor; "
+        f"got {type(B_list).__name__}"
+    )
+
+
+def _normalize_stimulus_to_input_fn(
+    stim: dict[str, torch.Tensor] | PiecewiseConstantInput,
+    device: str,
+    dtype: torch.dtype,
+) -> PiecewiseConstantInput:
+    """Accept dict or ``PiecewiseConstantInput``; return a ``PiecewiseConstantInput``.
+
+    Parameters
+    ----------
+    stim : dict[str, torch.Tensor] or PiecewiseConstantInput
+        Stimulus input as either a breakpoint dict (with ``'times'`` and
+        ``'values'`` keys) or an already-constructed ``PiecewiseConstantInput``.
+    device : str
+        Target device for the constructed tensors.
+    dtype : torch.dtype
+        Target dtype for the constructed tensors.
+
+    Returns
+    -------
+    PiecewiseConstantInput
+        The input function ready for ODE integration.
+
+    Raises
+    ------
+    TypeError
+        If ``stim`` is not a dict or ``PiecewiseConstantInput``.
+    """
+    if isinstance(stim, PiecewiseConstantInput):
+        return stim
+    if isinstance(stim, dict):
+        times = stim["times"].to(device=device, dtype=dtype)
+        values = stim["values"].to(device=device, dtype=dtype)
+        return PiecewiseConstantInput(times, values)
+    raise TypeError(
+        "stimulus must be dict[str, Tensor] or PiecewiseConstantInput; "
+        f"got {type(stim).__name__}"
+    )
 
 
 def simulate_task_dcm(
@@ -44,6 +140,10 @@ def simulate_task_dcm(
     device: str = "cpu",
     dtype: torch.dtype = torch.float64,
     seed: int | None = None,
+    *,
+    B_list: torch.Tensor | list[torch.Tensor] | None = None,
+    stimulus_mod: dict[str, torch.Tensor] | PiecewiseConstantInput | None = None,
+    n_driving_inputs: int | None = None,
 ) -> dict:
     """Generate synthetic BOLD time series from a task-DCM model.
 
@@ -88,6 +188,28 @@ def simulate_task_dcm(
         Tensor dtype. Default ``torch.float64``.
     seed : int or None, optional
         Random seed for reproducibility. If None, no seed is set.
+    B_list : torch.Tensor, list of torch.Tensor, or None, optional
+        Modulatory input weights for the Friston 2003 bilinear neural state
+        equation ``dx/dt = Ax + Σ_j u_j(t) · B_j · x + Cu``. Accepts either a
+        Python list of ``(N, N)`` tensors (one per modulator) or a pre-stacked
+        ``(J, N, N)`` tensor. Empty list or shape ``(0, N, N)`` collapses to
+        ``None``. When ``None`` (default), the simulator runs in linear mode
+        (pre-Phase-14 behavior) with guaranteed bit-exact output (SIM-03).
+        Requires ``stimulus_mod`` when non-None. Keyword-only.
+    stimulus_mod : dict[str, torch.Tensor] or PiecewiseConstantInput or None, optional
+        Modulatory input trajectory ``u_mod(t)``. Shape contract: dict with
+        keys ``'times'`` (``(K,)``) and ``'values'`` (``(K, J)``) where ``J``
+        must equal ``B_list.shape[0]``. Build with ``make_epoch_stimulus``
+        (preferred primitive per Pitfall B12) or ``make_event_stimulus``.
+        Required when ``B_list`` is non-None; raises ``ValueError`` otherwise.
+        Keyword-only.
+    n_driving_inputs : int or None, optional
+        Number of driving input columns, matching ``C.shape[1]``. When
+        ``None`` and ``B_list`` is supplied, defaults to ``C.shape[1]`` (L3
+        policy: simulator defaults differ from ``CoupledDCMSystem``, which
+        raises on non-None ``B`` with ``n_driving_inputs=None`` — the
+        simulator has ``C`` in scope and can infer). Raises ``ValueError`` if
+        explicit value mismatches ``C.shape[1]``. Keyword-only.
 
     Returns
     -------
@@ -107,14 +229,21 @@ def simulate_task_dcm(
         - ``'times_TR'``: Downsampled time points, shape ``(T_TR,)``.
         - ``'params'``: dict with ``A``, ``C``, ``hemo_params``,
           ``SNR``, ``TR``, ``duration``, ``solver``.
-        - ``'stimulus'``: The ``PiecewiseConstantInput`` used.
+        - ``'stimulus'``: The driving ``PiecewiseConstantInput`` used.
+        - ``'B_list'``: Normalized stacked ``(J, N, N)`` B tensor
+          (bilinear mode) or ``None`` (linear mode). Added in Phase 14
+          (SIM-04).
+        - ``'stimulus_mod'``: The constructed modulator
+          ``PiecewiseConstantInput`` (bilinear mode) or ``None`` (linear
+          mode). Added in Phase 14 (SIM-04).
 
     Notes
     -----
     The simulator applies the full pipeline from [REF-001] Eq. 1 and
     [REF-002] Eq. 2-6:
 
-    1. Neural dynamics: dx/dt = Ax + Cu(t)
+    1. Neural dynamics: dx/dt = Ax + Cu(t)  (linear) or
+       dx/dt = Ax + Σ_j u_j(t) · B_j · x + Cu  (bilinear)
     2. Hemodynamic ODE: ds, dlnf, dlnv, dlnq per region
     3. BOLD observation: y = V0 * (k1*(1-q) + k2*(1-q/v) + k3*(1-v))
     4. Downsample to TR resolution
@@ -122,6 +251,18 @@ def simulate_task_dcm(
 
     The A matrix must already have negative self-connections. To generate
     a random stable A matrix, use ``make_random_stable_A``.
+
+    **Linear short-circuit.** When ``B_list=None``, the simulator calls
+    ``CoupledDCMSystem(A, C, input_fn, hemo_params)`` without any ``B=`` or
+    ``n_driving_inputs=`` kwarg. This inherits the Phase 13 linear gate at
+    ``coupled_system.py:287-291``, guaranteeing bit-exact output compared to
+    the pre-Phase-14 simulator (regression test
+    ``test_bilinear_arg_none_matches_no_kwarg`` asserts ``torch.equal``).
+
+    References
+    ----------
+    [REF-001] Friston, Harrison & Penny (2003), Eq. 1 — bilinear neural state
+        form ``dx/dt = Ax + Σ_j u_j · B_j · x + Cu``.
 
     Examples
     --------
@@ -138,13 +279,8 @@ def simulate_task_dcm(
 
     N = A.shape[0]  # number of regions
 
-    # 2. Create PiecewiseConstantInput from stimulus dict if needed
-    if isinstance(stimulus, PiecewiseConstantInput):
-        input_fn = stimulus
-    else:
-        times = stimulus["times"].to(device=device, dtype=dtype)
-        values = stimulus["values"].to(device=device, dtype=dtype)
-        input_fn = PiecewiseConstantInput(times, values)
+    # 2. Normalize the driving stimulus (dict or PiecewiseConstantInput).
+    driving_input_fn = _normalize_stimulus_to_input_fn(stimulus, device, dtype)
 
     # 3. Resolve hemodynamic parameters
     if hemo_params is None:
@@ -152,10 +288,60 @@ def simulate_task_dcm(
 
     E0 = hemo_params.get("E0", DEFAULT_HEMO_PARAMS["E0"])
 
-    # 4. Create coupled ODE system
+    # 4. Cast A, C to device/dtype and normalize B_list.
     A_dev = A.to(device=device, dtype=dtype)
     C_dev = C.to(device=device, dtype=dtype)
-    system = CoupledDCMSystem(A_dev, C_dev, input_fn, hemo_params)
+    B_stacked = _normalize_B_list(B_list, device, dtype)
+
+    # 5. Branch: linear short-circuit vs bilinear path.
+    #    CRITICAL (SIM-03 structural gate): when B_stacked is None, the
+    #    CoupledDCMSystem call must NOT include any B= or n_driving_inputs=
+    #    kwarg. This inherits the Phase 13 linear gate at
+    #    coupled_system.py:287-291 and guarantees bit-exact output vs
+    #    the pre-Phase-14 simulator (tested via torch.equal).
+    if B_stacked is None:
+        # LINEAR MODE: literal pre-Phase-14 path.
+        input_fn = driving_input_fn
+        stimulus_mod_input_fn: PiecewiseConstantInput | None = None
+        system = CoupledDCMSystem(A_dev, C_dev, input_fn, hemo_params)
+    else:
+        # BILINEAR MODE.
+        if stimulus_mod is None:
+            raise ValueError(
+                "stimulus_mod is required when B_list is non-None; got None. "
+                "Construct a modulator trajectory with make_epoch_stimulus "
+                "(preferred) or make_event_stimulus."
+            )
+        stimulus_mod_input_fn = _normalize_stimulus_to_input_fn(
+            stimulus_mod, device, dtype
+        )
+        J = B_stacked.shape[0]
+        if stimulus_mod_input_fn.values.shape[1] != J:
+            raise ValueError(
+                f"stimulus_mod has {stimulus_mod_input_fn.values.shape[1]} "
+                f"columns but B_list has J={J} modulators; they must match."
+            )
+        # L3 policy: default n_driving_inputs to C.shape[1] at simulator level.
+        n_driv = (
+            n_driving_inputs if n_driving_inputs is not None else C.shape[1]
+        )
+        if n_driv != C.shape[1]:
+            raise ValueError(
+                f"n_driving_inputs={n_driv} inconsistent with "
+                f"C.shape[1]={C.shape[1]}"
+            )
+        # Merge driving + modulator into a widened PiecewiseConstantInput.
+        input_fn = merge_piecewise_inputs(
+            driving_input_fn, stimulus_mod_input_fn
+        )
+        system = CoupledDCMSystem(
+            A_dev,
+            C_dev,
+            input_fn,
+            hemo_params,
+            B=B_stacked,
+            n_driving_inputs=n_driv,
+        )
 
     # 5. Create initial state (steady state: all zeros in log space)
     y0 = make_initial_state(N, dtype=dtype, device=device)
@@ -230,7 +416,9 @@ def simulate_task_dcm(
             "duration": duration,
             "solver": solver,
         },
-        "stimulus": input_fn,
+        "stimulus": driving_input_fn,  # driving input only (Phase 1 contract)
+        "B_list": B_stacked,           # Phase 14 (SIM-04): None in linear mode
+        "stimulus_mod": stimulus_mod_input_fn,  # Phase 14 (SIM-04)
     }
 
 
@@ -295,6 +483,462 @@ def make_block_stimulus(
 
     times = torch.tensor(times_list, dtype=dtype)
     values = torch.stack(values_list)  # shape (2*n_blocks, n_inputs)
+
+    return {"times": times, "values": values}
+
+
+def make_event_stimulus(
+    event_times: torch.Tensor | list[float],
+    event_amplitudes: torch.Tensor | list[float] | list[list[float]] | float,
+    duration: float,
+    dt: float,
+    n_inputs: int | None = None,
+    dtype: torch.dtype = torch.float64,
+) -> dict[str, torch.Tensor]:
+    """Create a variable-amplitude stick-function stimulus (SIM-01).
+
+    Constructs piecewise-constant breakpoints for a sequence of events,
+    each a single-``dt``-wide "stick" at amplitude ``event_amplitudes[i]``.
+    The output dict has the same shape contract as :func:`make_block_stimulus`
+    and is directly consumable by
+    :class:`pyro_dcm.utils.ode_integrator.PiecewiseConstantInput`.
+
+    This primitive implements SIM-01 and closes ROADMAP Phase 14 Success
+    Criterion 2 (variable-amplitude event stimuli via piecewise-constant
+    interpolation). It is designed for the driving-input term ``u(t)`` in
+    the neural state equation [REF-001] Eq. 1, where events are discrete
+    experimental onsets (e.g., visual flashes, button presses).
+
+    Parameters
+    ----------
+    event_times : torch.Tensor or list of float
+        Event onset times in seconds, shape ``(n_events,)``. Need not be
+        sorted; sorted internally before breakpoint construction. All
+        values must satisfy ``0 <= t < duration``.
+    event_amplitudes : torch.Tensor, list of float, list of list of float, or float
+        Per-event amplitudes. Three accepted shapes:
+
+        - Scalar (``ndim == 0``): broadcast to ``(n_events, n_inputs)``;
+          defaults ``n_inputs`` to 1 if not given.
+        - 1-D ``(n_events,)``: interpreted as the column-0 amplitude;
+          other columns (if ``n_inputs > 1``) are zero-padded.
+        - 2-D ``(n_events, n_inputs)``: used directly.
+    duration : float
+        Simulation duration in seconds. Must be ``> 0``.
+    dt : float
+        Stick-function width (and grid quantization step) in seconds.
+        Must be ``> 0``. Event times are quantized via
+        ``round(t / dt) * dt``.
+    n_inputs : int or None, optional
+        Number of stimulus columns. If ``None``, inferred from
+        ``event_amplitudes`` (1 for scalar/1-D, ``amps.shape[1]`` for 2-D).
+    dtype : torch.dtype, optional
+        Tensor dtype. Default ``torch.float64``.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys:
+
+        - ``'times'``: breakpoint times, shape ``(K,)``, sorted ascending.
+        - ``'values'``: piecewise-constant values at each breakpoint,
+          shape ``(K, n_inputs)``. ``values[k]`` is the amplitude active
+          for ``times[k] <= t < times[k+1]`` (left-closed, matching
+          :class:`PiecewiseConstantInput`).
+
+    Raises
+    ------
+    ValueError
+        If ``dt <= 0`` or ``duration <= 0``; if any ``event_times`` lies
+        outside ``[0, duration)``; if ``event_amplitudes`` has an
+        unsupported shape; if two events quantize to the same ``dt`` grid
+        index (supply one event with summed amplitudes instead).
+
+    Warns
+    -----
+    UserWarning
+        If an event's off-transition at ``t_on + dt`` would land past
+        ``duration``; the off-transition is omitted and the final window
+        holds the event amplitude until end-of-sim.
+
+    Notes
+    -----
+    **Pitfall B12 -- stick-function blur under rk4 mid-step sampling.**
+    When used as the modulatory input ``u_mod(t)`` in a bilinear DCM
+    with an rk4 integrator, a single-``dt`` stick is effectively blurred
+    to ~2x its declared width because the rk4 stages sample at
+    ``t, t+dt/2, t+dt/2, t+dt``. For bilinear modulators, prefer
+    :func:`make_epoch_stimulus` (boxcars are dt-invariant under rk4
+    mid-step sampling). Stick functions remain appropriate for the
+    driving-input term ``u(t)`` in [REF-001] Eq. 1.
+
+    **Ordering note.** Events are sorted by ``event_times`` internally,
+    so callers may pass them in any order. The same permutation is
+    applied to ``event_amplitudes``.
+
+    Examples
+    --------
+    >>> import torch
+    >>> stim = make_event_stimulus(
+    ...     event_times=[1.0, 3.0, 5.0],
+    ...     event_amplitudes=[0.5, 1.0, 0.7],
+    ...     duration=10.0,
+    ...     dt=0.01,
+    ... )
+    >>> stim["times"].shape
+    torch.Size([7])
+    >>> stim["values"].shape
+    torch.Size([7, 1])
+    """
+    # --- 1. Validate dt / duration up front ---
+    if dt <= 0 or duration <= 0:
+        raise ValueError(
+            f"dt={dt}, duration={duration} must be > 0"
+        )
+
+    # --- 2. Normalize event_times ---
+    event_times_t = torch.as_tensor(event_times, dtype=dtype)
+    if event_times_t.ndim != 1:
+        raise ValueError(
+            f"event_times.ndim={event_times_t.ndim}; expected 1"
+        )
+    n_events = event_times_t.shape[0]
+
+    # --- 3. Normalize event_amplitudes ---
+    amps = torch.as_tensor(event_amplitudes, dtype=dtype)
+    if amps.ndim == 0:
+        if n_inputs is None:
+            n_inputs = 1
+        amps = amps.expand(n_events, n_inputs).clone()
+    elif amps.ndim == 1:
+        if n_inputs is None:
+            n_inputs = 1
+        if amps.shape[0] != n_events:
+            raise ValueError(
+                f"event_amplitudes.shape[0]={amps.shape[0]} must match "
+                f"event_times.shape[0]={n_events}"
+            )
+        if n_inputs == 1:
+            amps = amps.unsqueeze(1)
+        else:
+            amps = torch.cat(
+                [
+                    amps.unsqueeze(1),
+                    torch.zeros(n_events, n_inputs - 1, dtype=dtype),
+                ],
+                dim=1,
+            )
+    elif amps.ndim == 2:
+        if n_inputs is None:
+            n_inputs = amps.shape[1]
+        elif amps.shape[1] != n_inputs:
+            raise ValueError(
+                f"event_amplitudes.shape[1]={amps.shape[1]} must match "
+                f"explicit n_inputs={n_inputs}"
+            )
+        if amps.shape[0] != n_events:
+            raise ValueError(
+                f"event_amplitudes.shape[0]={amps.shape[0]} must match "
+                f"event_times.shape[0]={n_events}"
+            )
+    else:
+        raise ValueError(
+            f"event_amplitudes.ndim={amps.ndim}; expected 0, 1, or 2"
+        )
+
+    # --- 4. Validate temporal domain ---
+    if n_events > 0:
+        out_of_range = (event_times_t < 0) | (event_times_t >= duration)
+        if out_of_range.any():
+            bad = event_times_t[out_of_range].tolist()
+            raise ValueError(
+                f"event_times {bad} out of [0, {duration})"
+            )
+
+    # --- 5. Sort events by time ---
+    if n_events > 0:
+        sort_idx = torch.argsort(event_times_t)
+        event_times_t = event_times_t[sort_idx]
+        amps = amps[sort_idx]
+
+    # --- 6. Quantize onsets to dt grid (nearest) ---
+    onset_idx = torch.round(event_times_t / dt).long()
+    onset_t = onset_idx.to(dtype) * dt
+
+    # --- 7. Detect same-grid-index collisions ---
+    if n_events >= 2:
+        collisions = onset_idx[1:] == onset_idx[:-1]
+        if collisions.any():
+            first = int(torch.nonzero(collisions, as_tuple=False)[0, 0].item())
+            raise ValueError(
+                f"events {first} and {first + 1} quantize to the same dt "
+                f"grid index ({int(onset_idx[first].item())}); supply one "
+                f"event with summed amplitudes instead"
+            )
+
+    # --- 8. Build breakpoint list ---
+    times_list: list[float] = [0.0]
+    values_list: list[torch.Tensor] = [torch.zeros(n_inputs, dtype=dtype)]
+    truncation_warned = False
+    for i in range(n_events):
+        t_on = float(onset_t[i].item())
+        t_off = t_on + dt
+        times_list.append(t_on)
+        values_list.append(amps[i].clone())
+        if t_off <= duration:
+            times_list.append(t_off)
+            values_list.append(torch.zeros(n_inputs, dtype=dtype))
+        elif not truncation_warned:
+            warnings.warn(
+                f"Event {i} onset at t={t_on} has off-transition at "
+                f"t={t_off} > duration={duration}; truncating tail to "
+                f"end-of-sim",
+                UserWarning,
+                stacklevel=2,
+            )
+            truncation_warned = True
+
+    times = torch.tensor(times_list, dtype=dtype)
+    values = torch.stack(values_list)  # shape (K, n_inputs)
+
+    return {"times": times, "values": values}
+
+
+def make_epoch_stimulus(
+    event_times: torch.Tensor | list[float],
+    event_durations: torch.Tensor | list[float] | float,
+    event_amplitudes: torch.Tensor | list[float] | list[list[float]] | float,
+    duration: float,
+    dt: float,
+    n_inputs: int | None = None,
+    dtype: torch.dtype = torch.float64,
+) -> dict[str, torch.Tensor]:
+    """Create a boxcar-shaped epoch stimulus (SIM-02).
+
+    Constructs piecewise-constant breakpoints for a sequence of epochs,
+    each a sustained-amplitude rectangle from ``t_on`` to
+    ``t_on + event_durations[i]`` at amplitude ``event_amplitudes[i]``.
+    The output dict has the same shape contract as
+    :func:`make_block_stimulus` and is directly consumable by
+    :class:`pyro_dcm.utils.ode_integrator.PiecewiseConstantInput`.
+
+    **Preferred primitive for modulatory inputs** (``stimulus_mod`` in
+    :func:`simulate_task_dcm`). Unlike :func:`make_event_stimulus`
+    (stick functions), boxcars are dt-invariant under rk4 mid-step
+    sampling because the amplitude is held constant for the full epoch
+    duration (Pitfall B12).
+
+    Parameters
+    ----------
+    event_times : torch.Tensor or list of float
+        Epoch onset times in seconds, shape ``(n_events,)``. Need not be
+        sorted. All values must satisfy ``0 <= t < duration``.
+    event_durations : torch.Tensor, list of float, or float
+        Per-epoch durations in seconds. Scalar broadcasts to all events;
+        1-D must match ``event_times.shape[0]``. All values must be ``> 0``.
+    event_amplitudes : torch.Tensor, list of float, list of list of float, or float
+        Per-epoch amplitudes. Same normalization rules as
+        :func:`make_event_stimulus` (scalar / 1-D / 2-D).
+    duration : float
+        Simulation duration in seconds. Must be ``> 0``.
+    dt : float
+        Grid quantization step in seconds. Must be ``> 0``. Onset and
+        offset times are quantized via ``round(t / dt) * dt``.
+    n_inputs : int or None, optional
+        Number of stimulus columns. If ``None``, inferred from
+        ``event_amplitudes``.
+    dtype : torch.dtype, optional
+        Tensor dtype. Default ``torch.float64``.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys:
+
+        - ``'times'``: breakpoint times, shape ``(K,)``, sorted ascending.
+        - ``'values'``: piecewise-constant amplitudes at each breakpoint,
+          shape ``(K, n_inputs)``.
+
+    Raises
+    ------
+    ValueError
+        If ``dt <= 0`` or ``duration <= 0``; if any ``event_times`` lies
+        outside ``[0, duration)``; if ``event_durations`` has any value
+        ``<= 0`` or a shape mismatched with ``event_times``; if
+        ``event_amplitudes`` has an unsupported shape.
+
+    Warns
+    -----
+    UserWarning
+        If any epoch's offset ``t_on + event_durations[i]`` exceeds
+        ``duration`` (epoch is clipped at end-of-sim).
+    UserWarning
+        If any two epochs overlap in time (amplitudes are summed; see
+        Notes). Fires at most once per call.
+
+    Notes
+    -----
+    **Overlap semantics (locked per v0.3.0 Phase 14 L1 decision).**
+    When two epochs overlap in time, their amplitudes **sum** (e.g., two
+    overlapping unit-amplitude epochs produce amplitude 2 during the
+    overlap window). A single :class:`UserWarning` is emitted at
+    construction time ("Overlapping epochs detected; amplitudes are
+    summed."). If override-semantics are desired (event ``i+1`` cancels
+    event ``i``'s tail), callers must pre-flatten the event schedule
+    themselves. This decision matches the bilinear DCM neural equation
+    ``A_eff(t) = A + sum_j u_j(t) * B_j``, where simultaneous modulators
+    already superpose.
+
+    **Pitfall B12 -- rk4 mid-step sampling rationale.** rk4 at
+    ``step_size=dt`` evaluates ``u(t)`` at ``{t, t+dt/2, t+dt/2, t+dt}``.
+    Boxcar amplitudes are constant across every window of width ``dt``,
+    so all four rk4 stages see the same value inside the epoch.
+    Stick-function primitives (:func:`make_event_stimulus`) do not have
+    this property and therefore should not be used as modulatory inputs
+    in the bilinear path.
+
+    Examples
+    --------
+    >>> import torch
+    >>> stim = make_epoch_stimulus(
+    ...     event_times=[5.0],
+    ...     event_durations=[10.0],
+    ...     event_amplitudes=[1.0],
+    ...     duration=30.0,
+    ...     dt=0.01,
+    ... )
+    >>> stim["times"][:3]
+    tensor([0., 5., 15.], dtype=torch.float64)
+    """
+    # --- 1. Validate dt / duration up front ---
+    if dt <= 0 or duration <= 0:
+        raise ValueError(
+            f"dt={dt}, duration={duration} must be > 0"
+        )
+
+    # --- 2. Normalize event_times ---
+    event_times_t = torch.as_tensor(event_times, dtype=dtype)
+    if event_times_t.ndim != 1:
+        raise ValueError(
+            f"event_times.ndim={event_times_t.ndim}; expected 1"
+        )
+    n_events = event_times_t.shape[0]
+
+    # --- 3. Normalize event_amplitudes ---
+    amps = torch.as_tensor(event_amplitudes, dtype=dtype)
+    if amps.ndim == 0:
+        if n_inputs is None:
+            n_inputs = 1
+        amps = amps.expand(n_events, n_inputs).clone()
+    elif amps.ndim == 1:
+        if n_inputs is None:
+            n_inputs = 1
+        if amps.shape[0] != n_events:
+            raise ValueError(
+                f"event_amplitudes.shape[0]={amps.shape[0]} must match "
+                f"event_times.shape[0]={n_events}"
+            )
+        if n_inputs == 1:
+            amps = amps.unsqueeze(1)
+        else:
+            amps = torch.cat(
+                [
+                    amps.unsqueeze(1),
+                    torch.zeros(n_events, n_inputs - 1, dtype=dtype),
+                ],
+                dim=1,
+            )
+    elif amps.ndim == 2:
+        if n_inputs is None:
+            n_inputs = amps.shape[1]
+        elif amps.shape[1] != n_inputs:
+            raise ValueError(
+                f"event_amplitudes.shape[1]={amps.shape[1]} must match "
+                f"explicit n_inputs={n_inputs}"
+            )
+        if amps.shape[0] != n_events:
+            raise ValueError(
+                f"event_amplitudes.shape[0]={amps.shape[0]} must match "
+                f"event_times.shape[0]={n_events}"
+            )
+    else:
+        raise ValueError(
+            f"event_amplitudes.ndim={amps.ndim}; expected 0, 1, or 2"
+        )
+
+    # --- 4. Normalize event_durations ---
+    durations_t = torch.as_tensor(event_durations, dtype=dtype)
+    if durations_t.ndim == 0:
+        durations_t = durations_t.expand(n_events).clone()
+    elif durations_t.ndim == 1:
+        if durations_t.shape[0] != n_events:
+            raise ValueError(
+                f"event_durations.shape[0]={durations_t.shape[0]} must "
+                f"match event_times.shape[0]={n_events}"
+            )
+    else:
+        raise ValueError(
+            f"event_durations.ndim={durations_t.ndim}; expected 0 or 1"
+        )
+    if n_events > 0 and (durations_t <= 0).any():
+        raise ValueError("event_durations must all be > 0")
+
+    # --- 5. Validate temporal domain ---
+    if n_events > 0:
+        out_of_range = (event_times_t < 0) | (event_times_t >= duration)
+        if out_of_range.any():
+            bad = event_times_t[out_of_range].tolist()
+            raise ValueError(
+                f"event_times {bad} out of [0, {duration})"
+            )
+
+    # --- 6. Quantize on/off times ---
+    t_on = torch.round(event_times_t / dt) * dt
+    t_off_raw = t_on + durations_t
+    t_off = torch.clamp(t_off_raw, max=duration)
+    if n_events > 0 and (t_off_raw > duration).any():
+        warnings.warn(
+            "Some epochs clipped to duration",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    # --- 7. Build delta-amp event list and sweep ---
+    events: list[tuple[float, torch.Tensor]] = []
+    for i in range(n_events):
+        events.append((float(t_on[i].item()), amps[i].clone()))
+        events.append((float(t_off[i].item()), -amps[i].clone()))
+    events.sort(key=lambda x: x[0])
+
+    times_list: list[float] = [0.0]
+    values_list: list[torch.Tensor] = [torch.zeros(n_inputs, dtype=dtype)]
+    current = torch.zeros(n_inputs, dtype=dtype)
+    max_individual_amp = (
+        amps.abs().max().item() if n_events > 0 else 0.0
+    )
+    overlap_warned = False
+    for t_k, delta in events:
+        current = current + delta
+        if times_list[-1] == t_k:
+            values_list[-1] = current.clone()
+        else:
+            times_list.append(t_k)
+            values_list.append(current.clone())
+        # Overlap detection: any column exceeds the max individual amp.
+        if (
+            not overlap_warned
+            and (current.abs() > max_individual_amp + 1e-12).any()
+        ):
+            warnings.warn(
+                "Overlapping epochs detected; amplitudes are summed. "
+                "If you want override semantics, pre-flatten events.",
+                UserWarning,
+                stacklevel=2,
+            )
+            overlap_warned = True
+
+    times = torch.tensor(times_list, dtype=dtype)
+    values = torch.stack(values_list)  # shape (K, n_inputs)
 
     return {"times": times, "values": values}
 

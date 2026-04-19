@@ -22,6 +22,14 @@ Specific variant and method::
 All rDCM benchmarks (rigid + sparse)::
 
     python benchmarks/run_all_benchmarks.py --variant rdcm
+
+With shared fixtures::
+
+    python benchmarks/run_all_benchmarks.py --fixtures-dir benchmarks/fixtures
+
+Multi-region benchmark::
+
+    python benchmarks/run_all_benchmarks.py --n-regions 3,5,10 --quick
 """
 
 from __future__ import annotations
@@ -50,6 +58,7 @@ from benchmarks.runners import RUNNER_REGISTRY
 VALID_COMBOS: list[tuple[str, str]] = [
     ("task", "svi"),
     ("task", "amortized"),
+    ("task_bilinear", "svi"),
     ("spectral", "svi"),
     ("spectral", "amortized"),
     ("rdcm_rigid", "vb"),
@@ -57,9 +66,12 @@ VALID_COMBOS: list[tuple[str, str]] = [
     ("spm", "reference"),
 ]
 
-# Mapping from user-facing variant to registry variants
+# Mapping from user-facing variant to registry variants.
+# NOTE: "task_bilinear" is EXPLICIT-ONLY -- it is NOT included in "all" to
+# prevent accidental 80-min default CI runs (research Section 9 Q10).
 VARIANT_EXPANSION: dict[str, list[str]] = {
     "task": ["task"],
+    "task_bilinear": ["task_bilinear"],
     "spectral": ["spectral"],
     "rdcm": ["rdcm_rigid", "rdcm_sparse"],
     "spm": ["spm"],
@@ -234,7 +246,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--variant",
-        choices=["task", "spectral", "rdcm", "all"],
+        choices=["task", "task_bilinear", "spectral", "rdcm", "all"],
         default="all",
         help="DCM variant to benchmark (default: all)",
     )
@@ -265,6 +277,35 @@ def main() -> None:
         "--no-figures",
         action="store_true",
         help="Skip figure generation",
+    )
+    parser.add_argument(
+        "--fixtures-dir",
+        type=str,
+        default=None,
+        help=(
+            "Load data from pre-generated fixtures instead "
+            "of inline generation"
+        ),
+    )
+    parser.add_argument(
+        "--guide-type",
+        type=str,
+        default="auto_normal",
+        help="Guide type for inference (default: auto_normal)",
+    )
+    parser.add_argument(
+        "--elbo-type",
+        type=str,
+        default="trace_elbo",
+        help="ELBO type for SVI (default: trace_elbo)",
+    )
+    parser.add_argument(
+        "--n-regions",
+        type=str,
+        default="3",
+        help=(
+            "Comma-separated region sizes (default: 3)"
+        ),
     )
 
     args = parser.parse_args()
@@ -305,6 +346,14 @@ def main() -> None:
         config.seed = args.seed
         config.output_dir = args.output_dir
         config.save_figures = not args.no_figures
+        config.fixtures_dir = args.fixtures_dir
+        config.guide_type = args.guide_type
+        config.elbo_type = args.elbo_type
+        n_regions_list = [
+            int(x) for x in args.n_regions.split(",")
+        ]
+        config.n_regions_list = n_regions_list
+        config.n_regions = n_regions_list[0]
 
         print(f"[RUN]  {label} (n_datasets={config.n_datasets}, "
               f"n_svi_steps={config.n_svi_steps})")

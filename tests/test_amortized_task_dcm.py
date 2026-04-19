@@ -390,3 +390,133 @@ class TestPosteriorSampling:
             f"Posterior sampling too slow: {elapsed:.3f}s > 1.0s"
         )
         assert samples["A_free"].shape[0] == 1000
+
+
+# ------------------------------------------------------------------
+# Bilinear refusal (MODEL-07, Phase 15-03)
+# ------------------------------------------------------------------
+
+
+class TestAmortizedRefusesBilinear:
+    """MODEL-07: amortized_task_dcm_model refuses bilinear kwargs per D5.
+
+    v0.3.0 defers bilinear amortized inference to v0.3.1. The wrapper raises
+    NotImplementedError with a message explicitly referencing 'v0.3.1' when
+    b_masks is non-empty. Linear behavior (b_masks=None or []) is unchanged.
+    """
+
+    def test_amortized_wrapper_refuses_bilinear_kwargs(self) -> None:
+        """Non-empty b_masks -> NotImplementedError with v0.3.1 in the message."""
+        from pyro_dcm.guides.parameter_packing import TaskDCMPacker
+        from pyro_dcm.models.amortized_wrappers import (
+            amortized_task_dcm_model,
+        )
+        from pyro_dcm.simulators.task_simulator import (
+            make_block_stimulus,
+            make_epoch_stimulus,
+        )
+        from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
+
+        N, M = 3, 1
+        a_mask = torch.ones(N, N, dtype=torch.float64)
+        c_mask = torch.ones(N, M, dtype=torch.float64)
+        packer = TaskDCMPacker(N, M, a_mask, c_mask)
+
+        # Minimal linear-compatible kwargs; the guard fires BEFORE any other work.
+        stim_dict = make_block_stimulus(
+            n_blocks=1, block_duration=8.0, rest_duration=7.0, n_inputs=M,
+        )
+        stimulus = PiecewiseConstantInput(
+            stim_dict["times"], stim_dict["values"],
+        )
+        t_eval = torch.arange(0, 20.0, 0.5, dtype=torch.float64)
+        observed_bold = torch.zeros(10, N, dtype=torch.float64)
+
+        # Bilinear kwargs that should trip the guard.
+        b_mask_0 = torch.zeros(N, N, dtype=torch.float64)
+        b_mask_0[1, 0] = 1.0
+        stim_mod_dict = make_epoch_stimulus(
+            event_times=[5.0], event_durations=[5.0], event_amplitudes=[1.0],
+            duration=20.0, dt=0.01, n_inputs=1,
+        )
+        stim_mod = PiecewiseConstantInput(
+            stim_mod_dict["times"], stim_mod_dict["values"],
+        )
+
+        with pytest.raises(NotImplementedError, match=r"v0\.3\.1"):
+            amortized_task_dcm_model(
+                observed_bold=observed_bold,
+                stimulus=stimulus,
+                a_mask=a_mask,
+                c_mask=c_mask,
+                t_eval=t_eval,
+                TR=2.0,
+                dt=0.5,
+                packer=packer,
+                b_masks=[b_mask_0],  # the trigger
+                stim_mod=stim_mod,
+            )
+
+    def test_amortized_wrapper_linear_mode_unchanged(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """b_masks=None + b_masks=[] both pass through the guard to the linear body.
+
+        MODEL-07 regression gate: adding the keyword-only kwargs must NOT
+        cause the wrapper's guard to reject linear calls. We verify that
+        the b_masks=None / b_masks=[] paths reach the downstream
+        ``_run_task_forward_model`` body (i.e. get past the guard) by
+        monkey-patching that body with a sentinel raise. If the guard
+        wrongly refused linear mode, we would see NotImplementedError
+        instead of the sentinel.
+
+        This decouples the guard-level regression gate from the forward
+        model's numerical behavior (ODE divergence under prior draws
+        varies with global RNG state accumulated across a pytest
+        session).
+        """
+        from pyro_dcm.guides.parameter_packing import TaskDCMPacker
+        from pyro_dcm.models import amortized_wrappers as aw_mod
+        from pyro_dcm.models.amortized_wrappers import (
+            amortized_task_dcm_model,
+        )
+
+        N, M, T = 3, 1, 10
+        bold = torch.zeros(T, N, dtype=torch.float64)
+        stimulus = {
+            "times": torch.tensor([0.0, 20.0], dtype=torch.float64),
+            "values": torch.zeros(2, M, dtype=torch.float64),
+        }
+        a_mask = torch.ones(N, N, dtype=torch.float64)
+        c_mask = torch.ones(N, M, dtype=torch.float64)
+        t_eval = torch.arange(0, 20.0, 0.5, dtype=torch.float64)
+        packer = TaskDCMPacker(N, M, a_mask, c_mask)
+        packer.fit_standardization([{
+            "A_free": torch.zeros(N, N, dtype=torch.float64),
+            "C": torch.zeros(N, M, dtype=torch.float64),
+            "noise_prec": torch.tensor(10.0, dtype=torch.float64),
+        }])
+
+        class _Sentinel(RuntimeError):
+            """Sentinel raise confirming we reached the forward-model call."""
+
+        def _sentinel_forward(*args: object, **kwargs: object) -> None:
+            raise _Sentinel("reached forward model")
+
+        monkeypatch.setattr(aw_mod, "_run_task_forward_model", _sentinel_forward)
+        pyro.clear_param_store()
+
+        # Case 1: b_masks=None (default) -- guard must allow, sentinel must fire.
+        with pytest.raises(_Sentinel, match="reached forward model"):
+            amortized_task_dcm_model(
+                bold, stimulus, a_mask, c_mask, t_eval, 2.0, 0.5, packer,
+            )
+
+        pyro.clear_param_store()
+
+        # Case 2: b_masks=[] -- guard must allow (empty list passes through).
+        with pytest.raises(_Sentinel, match="reached forward model"):
+            amortized_task_dcm_model(
+                bold, stimulus, a_mask, c_mask, t_eval, 2.0, 0.5, packer,
+                b_masks=[], stim_mod=None,
+            )

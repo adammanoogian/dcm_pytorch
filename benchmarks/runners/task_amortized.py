@@ -24,6 +24,7 @@ from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import ClippedAdam
 
 from benchmarks.config import BenchmarkConfig
+from benchmarks.fixtures import load_fixture
 from benchmarks.metrics import (
     compute_amortization_gap,
     compute_coverage_from_ci,
@@ -36,7 +37,12 @@ from pyro_dcm.guides import (
     BoldSummaryNet,
     TaskDCMPacker,
 )
-from pyro_dcm.models import create_guide, run_svi, task_dcm_model
+from pyro_dcm.models import (
+    create_guide,
+    extract_posterior_params,
+    run_svi,
+    task_dcm_model,
+)
 from pyro_dcm.models.amortized_wrappers import amortized_task_dcm_model
 from pyro_dcm.simulators.task_simulator import (
     make_block_stimulus,
@@ -300,18 +306,26 @@ def run_task_amortized(config: BenchmarkConfig) -> dict[str, Any]:
             torch.manual_seed(seed_i)
             np.random.seed(seed_i)
 
-            # Generate test data
-            A_true = make_random_stable_A(N, seed=seed_i)
-            C = torch.zeros(N, M, dtype=torch.float64)
-            C[0, 0] = 1.0
+            if config.fixtures_dir is not None:
+                data = load_fixture(
+                    "task", N, i, config.fixtures_dir,
+                )
+                A_true = data["A_true"]
+                bold = data["bold"]
+            else:
+                # Generate test data
+                A_true = make_random_stable_A(N, seed=seed_i)
+                C = torch.zeros(N, M, dtype=torch.float64)
+                C[0, 0] = 1.0
 
-            sim = simulate_task_dcm(
-                A_true, C, stimulus,
-                duration=duration, dt=0.01, TR=TR, SNR=5.0,
-                seed=seed_i,
-            )
+                sim = simulate_task_dcm(
+                    A_true, C, stimulus,
+                    duration=duration, dt=0.01, TR=TR,
+                    SNR=5.0, seed=seed_i,
+                )
 
-            bold = sim["bold"]
+                bold = sim["bold"]
+
             if torch.isnan(bold).any():
                 n_failed += 1
                 continue
@@ -356,10 +370,10 @@ def run_task_amortized(config: BenchmarkConfig) -> dict[str, Any]:
                 amort_A_mean.flatten().tolist(),
             )
 
-            # Per-subject SVI for comparison
-            pyro.clear_param_store()
-            pyro.enable_validation(False)
-            try:
+            # Compute amortized ELBO BEFORE clear_param_store wipes
+            # guide params
+            with torch.no_grad():
+                elbo_fn = Trace_ELBO(num_particles=5)
                 a_mask = torch.ones(
                     N, N, dtype=torch.float64,
                 )
@@ -370,24 +384,47 @@ def run_task_amortized(config: BenchmarkConfig) -> dict[str, Any]:
                 t_eval = torch.arange(
                     0, duration, dt_model, dtype=torch.float64,
                 )
+                guide.eval()
+                amortized_elbo = elbo_fn.loss(
+                    amortized_task_dcm_model,
+                    guide,
+                    bold, stimulus,
+                    a_mask, c_mask, t_eval, TR, dt_model,
+                    packer,
+                )
+
+            # Per-subject SVI for comparison
+            pyro.clear_param_store()
+            pyro.enable_validation(False)
+            try:
                 model_args = (
                     bold, stimulus,
                     a_mask, c_mask, t_eval, TR, dt_model,
                 )
 
                 svi_guide = create_guide(
-                    task_dcm_model, init_scale=0.01,
+                    task_dcm_model,
+                    init_scale=0.01,
+                    guide_type=config.guide_type,
+                    n_regions=N,
                 )
                 t0 = time.time()
                 svi_result = run_svi(
                     task_dcm_model, svi_guide, model_args,
                     num_steps=200, lr=0.005,
                     clip_norm=10.0, lr_decay_factor=0.01,
+                    elbo_type=config.elbo_type,
+                    guide_type=config.guide_type,
                 )
                 svi_elapsed = time.time() - t0
 
-                svi_median = svi_guide.median(*model_args)
-                svi_A_free = svi_median.get(
+                svi_extract = svi_result.get(
+                    "guide", svi_guide,
+                )
+                svi_post = extract_posterior_params(
+                    svi_extract, model_args,
+                )
+                svi_A_free = svi_post["median"].get(
                     "A_free",
                     torch.zeros(N, N, dtype=torch.float64),
                 )
@@ -400,14 +437,17 @@ def run_task_amortized(config: BenchmarkConfig) -> dict[str, Any]:
                         amort_elapsed / svi_elapsed,
                     )
 
-                # Amortization gap from RMSE ratio
-                # True ELBO gap requires wrapper model + packer;
-                # RMSE ratio is the observable proxy
+                # SVI ELBO evaluation (guide params fresh from
+                # SVI training)
+                with torch.no_grad():
+                    svi_elbo = elbo_fn.loss(
+                        task_dcm_model,
+                        svi_guide,
+                        *model_args,
+                    )
+
                 gap = compute_amortization_gap(
-                    svi_result["final_loss"],
-                    svi_result["final_loss"] * (
-                        1.0 + max(0.0, rmse_amort / rmse_svi - 1.0)
-                    ),
+                    svi_elbo, amortized_elbo,
                 )
                 gap_list.append(gap)
                 svi_time_list.append(svi_elapsed)

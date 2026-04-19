@@ -18,9 +18,12 @@ import pyro
 import torch
 
 from benchmarks.config import BenchmarkConfig
+from benchmarks.fixtures import load_fixture
 from benchmarks.metrics import (
     compute_coverage_from_ci,
+    compute_coverage_multi_level,
     compute_rmse,
+    compute_summary_stats,
     pearson_corr,
 )
 from pyro_dcm.forward_models.neural_state import parameterize_A
@@ -35,6 +38,7 @@ from pyro_dcm.simulators.task_simulator import (
     make_random_stable_A,
     simulate_task_dcm,
 )
+from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
 
 
 def _build_A_ci(
@@ -103,6 +107,15 @@ def run_task_svi(config: BenchmarkConfig) -> dict[str, Any]:
     n_steps_list: list[int] = []
     a_true_list: list[list[float]] = []
     a_inferred_list: list[list[float]] = []
+    coverage_multi: dict[float, list[float]] = {
+        lv: [] for lv in [0.50, 0.75, 0.90, 0.95]
+    }
+    coverage_diag_multi: dict[float, list[float]] = {
+        lv: [] for lv in [0.50, 0.75, 0.90, 0.95]
+    }
+    coverage_offdiag_multi: dict[float, list[float]] = {
+        lv: [] for lv in [0.50, 0.75, 0.90, 0.95]
+    }
     n_failed = 0
 
     for i in range(config.n_datasets):
@@ -117,24 +130,41 @@ def run_task_svi(config: BenchmarkConfig) -> dict[str, Any]:
             pyro.enable_validation(False)
             pyro.clear_param_store()
 
-            # Generate ground truth
-            A_true = make_random_stable_A(N, density=0.5, seed=seed_i)
-            C = torch.zeros(N, M, dtype=torch.float64)
-            C[0, 0] = 1.0
+            if config.fixtures_dir is not None:
+                data = load_fixture(
+                    "task", N, i, config.fixtures_dir,
+                )
+                A_true = data["A_true"]
+                C = data["C"]
+                bold = data["bold"]
+                stim = PiecewiseConstantInput(
+                    data["stimulus_times"],
+                    data["stimulus_values"],
+                )
+                sim = {"bold": bold, "stimulus": stim}
+                # Override duration from fixture metadata
+                duration = float(data["duration"])
+            else:
+                # Generate ground truth
+                A_true = make_random_stable_A(
+                    N, density=0.5, seed=seed_i,
+                )
+                C = torch.zeros(N, M, dtype=torch.float64)
+                C[0, 0] = 1.0
 
-            stim = make_block_stimulus(
-                n_blocks=n_blocks,
-                block_duration=15.0,
-                rest_duration=15.0,
-                n_inputs=M,
-            )
+                stim = make_block_stimulus(
+                    n_blocks=n_blocks,
+                    block_duration=15.0,
+                    rest_duration=15.0,
+                    n_inputs=M,
+                )
 
-            # Simulate BOLD
-            sim = simulate_task_dcm(
-                A_true, C, stim,
-                duration=duration, dt=0.01, TR=2.0, SNR=5.0,
-                seed=seed_i,
-            )
+                # Simulate BOLD
+                sim = simulate_task_dcm(
+                    A_true, C, stim,
+                    duration=duration, dt=0.01, TR=2.0,
+                    SNR=5.0, seed=seed_i,
+                )
 
             # Model args
             a_mask = torch.ones(N, N, dtype=torch.float64)
@@ -151,26 +181,40 @@ def run_task_svi(config: BenchmarkConfig) -> dict[str, Any]:
             )
 
             # SVI
-            guide = create_guide(task_dcm_model, init_scale=0.01)
+            guide = create_guide(
+                task_dcm_model,
+                init_scale=0.01,
+                guide_type=config.guide_type,
+                n_regions=N,
+            )
             t0 = time.time()
             svi_result = run_svi(
                 task_dcm_model, guide, model_args,
                 num_steps=num_steps, lr=0.005,
                 clip_norm=10.0, lr_decay_factor=0.01,
+                elbo_type=config.elbo_type,
+                guide_type=config.guide_type,
             )
             elapsed = time.time() - t0
 
-            # Posterior
-            posterior = extract_posterior_params(guide, model_args)
-            A_free_median = posterior["median"]["A_free"]
-            A_inferred = parameterize_A(A_free_median)
+            # Use post-Laplace guide if available
+            extract_guide = svi_result.get("guide", guide)
 
-            # 95% CI via quantiles
-            quantiles = guide.quantiles(
-                [0.025, 0.975], *model_args,
+            # Posterior via Predictive sampling
+            posterior = extract_posterior_params(
+                extract_guide, model_args,
             )
-            A_free_lo = quantiles["A_free"][0]
-            A_free_hi = quantiles["A_free"][1]
+            A_free_mean = posterior["A_free"]["mean"]
+            A_inferred = parameterize_A(A_free_mean)
+
+            # 95% CI via sample-based quantiles
+            A_free_samples = posterior["A_free"]["samples"]
+            A_free_lo = torch.quantile(
+                A_free_samples.float(), 0.025, dim=0,
+            )
+            A_free_hi = torch.quantile(
+                A_free_samples.float(), 0.975, dim=0,
+            )
             A_lo, A_hi = _build_A_ci(A_free_lo, A_free_hi, N)
 
             # Metrics
@@ -179,6 +223,33 @@ def run_task_svi(config: BenchmarkConfig) -> dict[str, Any]:
             corr = pearson_corr(
                 A_true.flatten(), A_inferred.flatten(),
             )
+
+            # Multi-level coverage via parameterized samples
+            A_param_samples = torch.stack(
+                [parameterize_A(s) for s in A_free_samples],
+            )
+            ml_all = compute_coverage_multi_level(
+                A_true.flatten(),
+                A_param_samples.reshape(
+                    A_param_samples.shape[0], -1,
+                ),
+            )
+            diag_mask_ml = torch.eye(N, dtype=torch.bool)
+            offdiag_mask_ml = ~diag_mask_ml
+            ml_diag = compute_coverage_multi_level(
+                A_true[diag_mask_ml],
+                A_param_samples[:, diag_mask_ml],
+            )
+            ml_offdiag = compute_coverage_multi_level(
+                A_true[offdiag_mask_ml],
+                A_param_samples[:, offdiag_mask_ml],
+            )
+            for lv in coverage_multi:
+                coverage_multi[lv].append(ml_all[lv])
+                coverage_diag_multi[lv].append(ml_diag[lv])
+                coverage_offdiag_multi[lv].append(
+                    ml_offdiag[lv],
+                )
 
             rmse_list.append(rmse)
             coverage_list.append(coverage)
@@ -212,7 +283,7 @@ def run_task_svi(config: BenchmarkConfig) -> dict[str, Any]:
             "n_datasets": config.n_datasets,
         }
 
-    # Summary statistics
+    # Summary statistics (backward-compatible + median/IQR)
     summary: dict[str, Any] = {
         "mean_rmse": float(np.mean(rmse_list)),
         "std_rmse": float(np.std(rmse_list)),
@@ -222,6 +293,12 @@ def run_task_svi(config: BenchmarkConfig) -> dict[str, Any]:
         "std_correlation": float(np.std(correlation_list)),
         "mean_time": float(np.mean(time_list)),
         "mean_elbo": float(np.mean(elbo_list)),
+        "rmse_stats": compute_summary_stats(rmse_list),
+        "coverage_stats": compute_summary_stats(coverage_list),
+        "correlation_stats": compute_summary_stats(
+            correlation_list,
+        ),
+        "time_stats": compute_summary_stats(time_list),
     }
 
     return {
@@ -233,6 +310,16 @@ def run_task_svi(config: BenchmarkConfig) -> dict[str, Any]:
         "n_steps_list": n_steps_list,
         "a_true_list": a_true_list,
         "a_inferred_list": a_inferred_list,
+        "coverage_multi": {
+            str(k): v for k, v in coverage_multi.items()
+        },
+        "coverage_diag_multi": {
+            str(k): v for k, v in coverage_diag_multi.items()
+        },
+        "coverage_offdiag_multi": {
+            str(k): v
+            for k, v in coverage_offdiag_multi.items()
+        },
         "n_success": n_success,
         "n_failed": n_failed,
         **summary,

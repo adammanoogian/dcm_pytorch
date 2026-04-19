@@ -226,3 +226,39 @@ class TestAFreeInversion:
             torch.testing.assert_close(
                 A_recovered, A, atol=1e-12, rtol=1e-12,
             )
+
+
+class TestTaskDCMPackerBilinearRefusal:
+    """MODEL-07: TaskDCMPacker.pack refuses bilinear sites per D5.
+
+    Amortized bilinear inference is deferred to v0.3.1. The packer's fixed
+    n_features = N*N + N*M + 1 cannot accommodate J*N*N bilinear terms.
+    pack() raises NotImplementedError (referencing v0.3.1) on any
+    ``B_free_*`` key; the linear pack/unpack path is unchanged.
+    """
+
+    def test_packer_refuses_bilinear_keys(self) -> None:
+        """TaskDCMPacker.pack raises NotImplementedError on 'B_free_*' keys."""
+        packer = TaskDCMPacker(3, 1, torch.ones(3, 3), torch.ones(3, 1))
+        params_bilinear = {
+            "A_free": torch.zeros(3, 3),
+            "C": torch.zeros(3, 1),
+            "noise_prec": torch.tensor(10.0),
+            "B_free_0": torch.zeros(3, 3),  # the trigger
+        }
+        with pytest.raises(NotImplementedError, match=r"v0\.3\.1"):
+            packer.pack(params_bilinear)
+
+    def test_packer_accepts_linear_keys_after_bilinear_guard(self) -> None:
+        """Regression: linear pack/unpack still works after the guard added."""
+        packer = TaskDCMPacker(3, 1, torch.ones(3, 3), torch.ones(3, 1))
+        params_linear = {
+            "A_free": torch.zeros(3, 3),
+            "C": torch.zeros(3, 1),
+            "noise_prec": torch.tensor(10.0),
+        }
+        z = packer.pack(params_linear)
+        assert z.shape == (13,)
+        unpacked = packer.unpack(z)
+        assert unpacked["A_free"].shape == (3, 3)
+        assert unpacked["C"].shape == (3, 1)

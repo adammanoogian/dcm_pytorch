@@ -17,9 +17,11 @@ import numpy as np
 import torch
 
 from benchmarks.config import BenchmarkConfig
+from benchmarks.fixtures import load_fixture
 from benchmarks.metrics import (
     compute_coverage_from_ci,
     compute_rmse,
+    compute_summary_stats,
     pearson_corr,
 )
 from pyro_dcm.forward_models.rdcm_forward import (
@@ -43,6 +45,14 @@ _U_DT = 0.5
 _Y_DT = 2.0
 _SNR = 3.0
 _N_INPUTS = 2
+
+# z-scores for multi-level CI computation (analytic Gaussian)
+_Z_SCORES: dict[float, float] = {
+    0.50: 0.6745,
+    0.75: 1.1503,
+    0.90: 1.6449,
+    0.95: 1.9600,
+}
 
 
 def _extract_A_ci(
@@ -128,6 +138,68 @@ def _extract_sparse_A_ci(
             A_hi[r, j] = val + 1.96 * std_val
 
     return A_lo, A_hi
+
+
+def _extract_A_std_rigid(
+    result: dict,
+    a_mask: torch.Tensor,
+    nr: int,
+) -> torch.Tensor:
+    """Extract standard deviations of A from rigid VB posterior.
+
+    Parameters
+    ----------
+    result : dict
+        Output from rigid_inversion with Sigma_per_region.
+    a_mask : torch.Tensor
+        Binary architecture mask for A, shape ``(nr, nr)``.
+    nr : int
+        Number of regions.
+
+    Returns
+    -------
+    torch.Tensor
+        Standard deviations, shape ``(nr, nr)``.
+    """
+    dtype = torch.float64
+    A_std = torch.zeros(nr, nr, dtype=dtype)
+    for r in range(nr):
+        Sigma_r = result["Sigma_per_region"][r]
+        std_r = torch.sqrt(torch.diag(Sigma_r))
+        pos = 0
+        for j in range(nr):
+            if a_mask[r, j] > 0:
+                A_std[r, j] = std_r[pos]
+                pos += 1
+    return A_std
+
+
+def _extract_A_std_sparse(
+    result: dict,
+    nr: int,
+) -> torch.Tensor:
+    """Extract standard deviations of A from sparse VB posterior.
+
+    Parameters
+    ----------
+    result : dict
+        Output from sparse_inversion with Sigma_per_region.
+    nr : int
+        Number of regions.
+
+    Returns
+    -------
+    torch.Tensor
+        Standard deviations, shape ``(nr, nr)``.
+    """
+    dtype = torch.float64
+    A_std = torch.zeros(nr, nr, dtype=dtype)
+    for r in range(nr):
+        Sigma_r = result["Sigma_per_region"][r]
+        std_r = torch.sqrt(torch.diag(Sigma_r))
+        for j in range(nr):
+            A_std[r, j] = std_r[j]
+    return A_std
 
 
 def _compute_f1(
@@ -254,6 +326,15 @@ def run_rdcm_rigid_vb(config: BenchmarkConfig) -> dict[str, Any]:
     time_list: list[float] = []
     a_true_list: list[list[float]] = []
     a_inferred_list: list[list[float]] = []
+    coverage_multi: dict[float, list[float]] = {
+        lv: [] for lv in _Z_SCORES
+    }
+    coverage_diag_multi: dict[float, list[float]] = {
+        lv: [] for lv in _Z_SCORES
+    }
+    coverage_offdiag_multi: dict[float, list[float]] = {
+        lv: [] for lv in _Z_SCORES
+    }
     n_failed = 0
 
     for i in range(config.n_datasets):
@@ -264,7 +345,24 @@ def run_rdcm_rigid_vb(config: BenchmarkConfig) -> dict[str, Any]:
             torch.manual_seed(seed_i)
             np.random.seed(seed_i)
 
-            data = _generate_rdcm_data(seed_i, nr)
+            if config.fixtures_dir is not None:
+                fdata = load_fixture(
+                    "rdcm", nr, i, config.fixtures_dir,
+                )
+                hrf = get_hrf(_N_TIME, _U_DT)
+                X, Y, N_eff = create_regressors(
+                    hrf, fdata["y"], fdata["u"],
+                    _U_DT, _Y_DT,
+                )
+                data = {
+                    "A": fdata["A_true"],
+                    "a_mask": fdata["a_mask"],
+                    "C": fdata["C_true"],
+                    "c_mask": fdata["c_mask"],
+                    "X": X, "Y": Y, "N_eff": N_eff,
+                }
+            else:
+                data = _generate_rdcm_data(seed_i, nr)
 
             t0 = time.time()
             inv_result = rigid_inversion(
@@ -288,6 +386,35 @@ def run_rdcm_rigid_vb(config: BenchmarkConfig) -> dict[str, Any]:
                 A_true[data["a_mask"].bool()],
                 A_inferred[data["a_mask"].bool()],
             )
+
+            # Multi-level coverage via z-score CIs
+            A_mu = inv_result["A_mu"]
+            A_std = _extract_A_std_rigid(
+                inv_result, data["a_mask"], nr,
+            )
+            diag_mask = torch.eye(nr, dtype=torch.bool)
+            offdiag_mask = ~diag_mask
+            for lv, z in _Z_SCORES.items():
+                lo = A_mu - z * A_std
+                hi = A_mu + z * A_std
+                cov_all = compute_coverage_from_ci(
+                    A_true, lo, hi,
+                )
+                cov_diag = compute_coverage_from_ci(
+                    A_true[diag_mask],
+                    lo[diag_mask],
+                    hi[diag_mask],
+                )
+                cov_offdiag = compute_coverage_from_ci(
+                    A_true[offdiag_mask],
+                    lo[offdiag_mask],
+                    hi[offdiag_mask],
+                )
+                coverage_multi[lv].append(cov_all)
+                coverage_diag_multi[lv].append(cov_diag)
+                coverage_offdiag_multi[lv].append(
+                    cov_offdiag,
+                )
 
             rmse_list.append(rmse)
             coverage_list.append(coverage)
@@ -326,6 +453,12 @@ def run_rdcm_rigid_vb(config: BenchmarkConfig) -> dict[str, Any]:
         "std_correlation": float(np.std(correlation_list)),
         "mean_time": float(np.mean(time_list)),
         "mean_free_energy": float(np.mean(free_energy_list)),
+        "rmse_stats": compute_summary_stats(rmse_list),
+        "coverage_stats": compute_summary_stats(coverage_list),
+        "correlation_stats": compute_summary_stats(
+            correlation_list,
+        ),
+        "time_stats": compute_summary_stats(time_list),
     }
 
     return {
@@ -336,6 +469,16 @@ def run_rdcm_rigid_vb(config: BenchmarkConfig) -> dict[str, Any]:
         "time_list": time_list,
         "a_true_list": a_true_list,
         "a_inferred_list": a_inferred_list,
+        "coverage_multi": {
+            str(k): v for k, v in coverage_multi.items()
+        },
+        "coverage_diag_multi": {
+            str(k): v for k, v in coverage_diag_multi.items()
+        },
+        "coverage_offdiag_multi": {
+            str(k): v
+            for k, v in coverage_offdiag_multi.items()
+        },
         "n_success": n_success,
         "n_failed": n_failed,
         **summary,
@@ -381,6 +524,15 @@ def run_rdcm_sparse_vb(config: BenchmarkConfig) -> dict[str, Any]:
     time_list: list[float] = []
     a_true_list: list[list[float]] = []
     a_inferred_list: list[list[float]] = []
+    coverage_multi: dict[float, list[float]] = {
+        lv: [] for lv in _Z_SCORES
+    }
+    coverage_diag_multi: dict[float, list[float]] = {
+        lv: [] for lv in _Z_SCORES
+    }
+    coverage_offdiag_multi: dict[float, list[float]] = {
+        lv: [] for lv in _Z_SCORES
+    }
     n_failed = 0
 
     for i in range(config.n_datasets):
@@ -391,7 +543,24 @@ def run_rdcm_sparse_vb(config: BenchmarkConfig) -> dict[str, Any]:
             torch.manual_seed(seed_i)
             np.random.seed(seed_i)
 
-            data = _generate_rdcm_data(seed_i, nr)
+            if config.fixtures_dir is not None:
+                fdata = load_fixture(
+                    "rdcm", nr, i, config.fixtures_dir,
+                )
+                hrf = get_hrf(_N_TIME, _U_DT)
+                X, Y, N_eff = create_regressors(
+                    hrf, fdata["y"], fdata["u"],
+                    _U_DT, _Y_DT,
+                )
+                data = {
+                    "A": fdata["A_true"],
+                    "a_mask": fdata["a_mask"],
+                    "C": fdata["C_true"],
+                    "c_mask": fdata["c_mask"],
+                    "X": X, "Y": Y, "N_eff": N_eff,
+                }
+            else:
+                data = _generate_rdcm_data(seed_i, nr)
 
             t0 = time.time()
             inv_result = sparse_inversion(
@@ -427,6 +596,33 @@ def run_rdcm_sparse_vb(config: BenchmarkConfig) -> dict[str, Any]:
                 corr = 0.0
 
             f1 = _compute_f1(A_true, z_matrix, nr)
+
+            # Multi-level coverage via z-score CIs
+            A_mu = inv_result["A_mu"]
+            A_std = _extract_A_std_sparse(inv_result, nr)
+            diag_mask = torch.eye(nr, dtype=torch.bool)
+            offdiag_mask = ~diag_mask
+            for lv, z in _Z_SCORES.items():
+                lo = A_mu - z * A_std
+                hi = A_mu + z * A_std
+                cov_all = compute_coverage_from_ci(
+                    A_true, lo, hi,
+                )
+                cov_diag = compute_coverage_from_ci(
+                    A_true[diag_mask],
+                    lo[diag_mask],
+                    hi[diag_mask],
+                )
+                cov_offdiag = compute_coverage_from_ci(
+                    A_true[offdiag_mask],
+                    lo[offdiag_mask],
+                    hi[offdiag_mask],
+                )
+                coverage_multi[lv].append(cov_all)
+                coverage_diag_multi[lv].append(cov_diag)
+                coverage_offdiag_multi[lv].append(
+                    cov_offdiag,
+                )
 
             rmse_list.append(rmse)
             coverage_list.append(coverage)
@@ -468,6 +664,13 @@ def run_rdcm_sparse_vb(config: BenchmarkConfig) -> dict[str, Any]:
         "std_f1": float(np.std(f1_list)),
         "mean_time": float(np.mean(time_list)),
         "mean_free_energy": float(np.mean(free_energy_list)),
+        "rmse_stats": compute_summary_stats(rmse_list),
+        "coverage_stats": compute_summary_stats(coverage_list),
+        "correlation_stats": compute_summary_stats(
+            correlation_list,
+        ),
+        "f1_stats": compute_summary_stats(f1_list),
+        "time_stats": compute_summary_stats(time_list),
     }
 
     return {
@@ -479,6 +682,16 @@ def run_rdcm_sparse_vb(config: BenchmarkConfig) -> dict[str, Any]:
         "time_list": time_list,
         "a_true_list": a_true_list,
         "a_inferred_list": a_inferred_list,
+        "coverage_multi": {
+            str(k): v for k, v in coverage_multi.items()
+        },
+        "coverage_diag_multi": {
+            str(k): v for k, v in coverage_diag_multi.items()
+        },
+        "coverage_offdiag_multi": {
+            str(k): v
+            for k, v in coverage_offdiag_multi.items()
+        },
         "n_success": n_success,
         "n_failed": n_failed,
         **summary,
