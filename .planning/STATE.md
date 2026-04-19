@@ -100,6 +100,10 @@ None currently.
 |---|-------------|------|--------|-----------|
 | 001 | Cluster sbatch infrastructure for Phase 16 acceptance-gate test (Monash M3; ds_env/rlwm_gpu fallback; autopush to results branch) | 2026-04-19 | 6bade20 | [001-cluster-sbatch-phase-16-acceptance](./quick/001-cluster-sbatch-phase-16-acceptance/) |
 
+### Pending Todos
+
+1 pending — see `.planning/todos/pending/`. Most recent: retry NaN seeds at halved `init_scale` in task_bilinear runner (unblocks v0.3.0 acceptance gate; cluster job 54901072 lost 3/10 seeds to step-0 NaN).
+
 ## Key Risks
 
 - **Identifiability** of B-matrix elements under sparse or low-amplitude modulatory inputs
