@@ -6,7 +6,7 @@ and compare competing connectivity models. You will touch all three DCM variants
 (task, spectral, regression) and see that the same API pattern applies to each.
 
 **Prerequisites:** You know what DCM is (effective connectivity, A matrix,
-hemodynamic model). You have Python 3.11+ installed.
+hemodynamic model). You have Python 3.10+ installed.
 
 ---
 

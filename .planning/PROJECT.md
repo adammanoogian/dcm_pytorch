@@ -94,7 +94,7 @@ Pyro generative model + priors, simulator, and recovery benchmark.
 - **Flow library**: Zuko (Pyro-compatible normalizing flows)
 - **Mathematical fidelity**: Every function must cite [REF-XXX] and equation number from REFERENCES.md
 - **No placeholders**: Every function computes real mathematics — no pass, no TODO stubs
-- **Python 3.11+**: Modern type hints, src/ layout with pyproject.toml
+- **Python 3.10+**: Modern type hints, src/ layout with pyproject.toml
 - **Coding standards**: project_utils CODING_STANDARDS.md (NumPy docstrings, ruff, mypy, 88-char lines)
 
 ## Key Decisions

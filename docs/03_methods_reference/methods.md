@@ -320,7 +320,7 @@ See `src/pyro_dcm/inference/model_comparison.py` for implementation.
 
 ### 4.1 Software Stack
 
-Pyro-DCM is implemented in Python 3.11+ using the following core
+Pyro-DCM is implemented in Python 3.10+ using the following core
 libraries:
 
 | Library | Version | Role |

@@ -71,7 +71,7 @@ No module is integrated into the pipeline until it passes its own standalone tes
 
 ## Tech Stack
 
-- **Python 3.11+**
+- **Python 3.10+**
 - **PyTorch 2.x** -- tensor computations, autograd
 - **Pyro 1.9+** -- probabilistic programming, SVI, ELBO
 - **torchdiffeq** -- ODE integration (odeint, odeint_adjoint)
