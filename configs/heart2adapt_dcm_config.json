@@ -1,0 +1,363 @@
+{
+  "_schema": "dcm_circuit_explorer/v1",
+  "_study": "HEART2ADAPT",
+  "_description": "ERC AdG 2024 — Autonomic balance for adaptive decision making. Four-region DCM: dACC, AMY, VS, vACC. Three HGF-derived B-matrix modulators: epsilon_2 (reward PE), epsilon_3 (volatility PE), delta_hr (cardiac anticipatory signal).",
+  "_status": "planned",
+
+  "meta": {
+    "title": "DCM Circuit Explorer",
+    "subtitle": "HEART2ADAPT — approach-avoidance under threat",
+    "tags": ["4-region", "HGF modulators", "Pyro SVI"],
+    "peb_covariates": ["beta_rew", "beta_shk", "omega", "mean_delta_hr", "STAI-T"]
+  },
+
+  "palette": {
+    "dacc": "#534AB7",
+    "amy":  "#D85A30",
+    "vs":   "#1D9E75",
+    "vacc": "#888780",
+    "blu":  "#185FA5",
+    "gld":  "#9A7820",
+    "hl":   "#CC8800",
+    "gray": "#6B7280"
+  },
+
+  "regions": ["dACC", "AMY", "VS", "vACC"],
+  "region_colors": ["#534AB7", "#D85A30", "#1D9E75", "#888780"],
+
+  "matrices": {
+    "A": {
+      "label": "A — Intrinsic",
+      "color": "#374151",
+      "vals": [
+        [-0.50,  0.30,  0.20,  0.10],
+        [ 0.10, -0.50,  0.00,  0.15],
+        [ 0.10,  0.10, -0.50,  0.00],
+        [ 0.20,  0.10,  0.00, -0.50]
+      ],
+      "note": "rows=target, cols=source. Self-inhibition A[i,i]=−0.5 (log-normal prior on decay)."
+    },
+    "B1": {
+      "label": "B₁ — ε₂ (H1)",
+      "color": "#1D9E75",
+      "modulator": "epsilon_2(t)",
+      "modulator_display": "ε₂(t) — precision-weighted reward PE (HGF level 2)",
+      "vals": [
+        [0,    0,    0.15, 0],
+        [0,    0,    0,    0],
+        [0,    0,    0,    0],
+        [0,    0,    0,    0]
+      ],
+      "note": "VS→dACC (row 0, col 2). ACh-VS incremental sampling pathway."
+    },
+    "B2": {
+      "label": "B₂ — ε₃ (H2)",
+      "color": "#D85A30",
+      "modulator": "epsilon_3(t)",
+      "modulator_display": "ε₃(t) — volatility PE (HGF level 3)",
+      "vals": [
+        [0,    0.20, 0,    0],
+        [0,    0,    0,    0],
+        [0,    0,    0,    0],
+        [0,    0,    0,    0]
+      ],
+      "note": "AMY→dACC (row 0, col 1). NE-AMY phasic shift-detection pathway."
+    },
+    "B3": {
+      "label": "B₃ — Δhr (H3)",
+      "color": "#185FA5",
+      "modulator": "delta_hr(t)",
+      "modulator_display": "Δhr(t) — cardiac anticipatory signal (neg = bradycardia)",
+      "vals": [
+        [0,    0.15, -0.20, 0],
+        [0,    0,    0,     0],
+        [0,    0,    0,     0],
+        [0,    0,    0,     0]
+      ],
+      "note": "B₃[0,1]=+0.15 → bradycardia attenuates AMY→dACC (pos × neg = neg). B₃[0,2]=−0.20 → bradycardia boosts VS→dACC (neg × neg = pos)."
+    },
+    "C": {
+      "label": "C — Driving input",
+      "color": "#6B7280",
+      "vals": [
+        [0.00, 0.25],
+        [0.25, 0.00],
+        [0.00, 0.00],
+        [0.00, 0.00]
+      ],
+      "inputs": ["u_driving"],
+      "note": "Outcome onset drives AMY (row 1) and VS (row 0 col 1 → row 1? check sign). C=0.25 each."
+    }
+  },
+
+  "mat_order": ["A", "B1", "B2", "B3"],
+
+  "hypotheses": [
+    {
+      "id": "H1",
+      "label": "ε₂ → VS→dACC",
+      "short_desc": "Outcome PEs scale VS→dACC — incremental sampling pathway",
+      "color": "#1D9E75",
+      "hl_nodes": ["vs", "dacc"],
+      "hl_edges": ["e-vs-dacc"],
+      "b_overlays": ["b1-overlay"],
+      "hl_cells": {"B1": [[0, 2]]},
+      "modulator": "ε₂(t)",
+      "mat_param": "B₁[0,2] = +0.15",
+      "test_param": "B₁[0,2] > 0",
+      "desc": "When an outcome surprises the learner (large ε₂), VS sends a stronger incremental-value signal to dACC. The VS→dACC pathway scales proportionally with precision-weighted prediction error magnitude."
+    },
+    {
+      "id": "H2",
+      "label": "ε₃ → AMY→dACC",
+      "short_desc": "Volatility PEs scale AMY→dACC — shift-detection pathway",
+      "color": "#D85A30",
+      "hl_nodes": ["amy", "dacc"],
+      "hl_edges": ["e-amy-dacc"],
+      "b_overlays": ["b2-overlay"],
+      "hl_cells": {"B2": [[0, 1]]},
+      "modulator": "ε₃(t)",
+      "mat_param": "B₂[0,1] = +0.20",
+      "test_param": "B₂[0,1] > 0",
+      "desc": "Unexpected contingency changes (large ε₃) trigger phasic AMY→dACC signalling. The amygdala detects that the world may have changed and increases its influence on the dACC conflict-integration hub."
+    },
+    {
+      "id": "H3a",
+      "label": "Bradycardia ↑ VS→dACC",
+      "short_desc": "Negative Δhr boosts VS→dACC via sign inversion (neg × neg = pos)",
+      "color": "#185FA5",
+      "hl_nodes": ["vs", "dacc"],
+      "hl_edges": ["e-vs-dacc"],
+      "b_overlays": ["b3a-overlay"],
+      "hl_cells": {"B3": [[0, 2]]},
+      "modulator": "Δhr(t) [neg = bradycardia]",
+      "mat_param": "B₃[0,2] = −0.20",
+      "test_param": "B₃[0,2] < 0  (neg × neg = pos)",
+      "desc": "Parasympathetic dominance (negative Δhr) enhances VS→dACC. At Δhr=−2: eff VS→dACC = 0.20 + (−0.20)(−2) = 0.60. Bradycardia opens the value pathway — the core HEART2ADAPT prediction."
+    },
+    {
+      "id": "H3b",
+      "label": "Bradycardia ↓ AMY→dACC",
+      "short_desc": "Negative Δhr attenuates AMY→dACC — threat pathway silenced",
+      "color": "#9A7820",
+      "hl_nodes": ["amy", "dacc"],
+      "hl_edges": ["e-amy-dacc"],
+      "b_overlays": ["b3b-overlay"],
+      "hl_cells": {"B3": [[0, 1]]},
+      "modulator": "Δhr(t)",
+      "mat_param": "B₃[0,1] = +0.15",
+      "test_param": "B₃[0,1] > 0  (pos × neg = neg)",
+      "desc": "Parasympathetic dominance attenuates AMY→dACC. At Δhr=−2: eff AMY→dACC = 0.30 + (0.15)(−2) = 0.00. Bradycardia quiets the threat pathway simultaneously with boosting VS."
+    },
+    {
+      "id": "H4",
+      "label": "STAI-T → tonic AMY↑ (A-matrix)",
+      "short_desc": "PEB: STAI-T as continuous covariate on A[0,1] — tonic over-connectivity",
+      "color": "#D85A30",
+      "hl_nodes": ["amy", "dacc"],
+      "hl_edges": ["e-amy-dacc"],
+      "b_overlays": [],
+      "hl_cells": {"A": [[0, 1]]},
+      "modulator": "A-matrix (tonic; PEB covariate)",
+      "mat_param": "A[0,1]: high STAI-T +0.1",
+      "test_param": "PEB: A[0,1] ~ STAI-T (continuous)",
+      "desc": "High trait anxiety predicts tonically stronger AMY→dACC (A[0,1]≈0.45 vs 0.30). Detected via PEB with STAI-T as a continuous covariate — analogous to the high-β_shk + high-ω phenotype."
+    },
+    {
+      "id": "H5",
+      "label": "High β_shk: B₃ attenuation",
+      "short_desc": "PEB: high β_shk / STAI-T group predicts attenuated B₃ terms",
+      "color": "#534AB7",
+      "hl_nodes": ["dacc", "amy", "vs"],
+      "hl_edges": ["e-amy-dacc", "e-vs-dacc"],
+      "b_overlays": ["b3a-overlay", "b3b-overlay"],
+      "hl_cells": {"B3": [[0, 1], [0, 2]]},
+      "modulator": "B₃ × β_shk/STAI-T interaction",
+      "mat_param": "B₃[0,1]→0.05, B₃[0,2]→−0.10",
+      "test_param": "PEB: B₃ parameters ~ group / STAI-T",
+      "desc": "Even when high-β_shk participants achieve bradycardia, it fails to reconfigure the circuit. Both B₃ terms attenuated — the autonomic→neural coupling is broken. The v/n misattribution: noisy updating persists despite physiological calm."
+    },
+    {
+      "id": "H6",
+      "label": "Low β_rew → VS→dACC ↓",
+      "short_desc": "PEB: β_rew predicts tonic A[0,2] and modulated B₁[0,2] — reward blunting",
+      "color": "#1D9E75",
+      "hl_nodes": ["vs", "dacc"],
+      "hl_edges": ["e-vs-dacc"],
+      "b_overlays": ["b1-overlay"],
+      "hl_cells": {"A": [[0, 2]], "B1": [[0, 2]]},
+      "modulator": "β_rew as PEB covariate",
+      "mat_param": "A[0,2] ↓ and B₁[0,2] ↓",
+      "test_param": "A[0,2] & B₁[0,2] ~ β_rew",
+      "desc": "Low β_rew (attenuated reward-driven approach) predicts weaker tonic VS→dACC (A[0,2]≈0.10 vs 0.20) and weaker ε₂ modulation. The reward-value signal is constitutively attenuated — separable from a learning deficit."
+    },
+    {
+      "id": "H7",
+      "label": "Both disrupted: AMY↑+VS↓+Δhr broken",
+      "short_desc": "4-group PEB: low β_rew + high β_shk + high ω — compound signature",
+      "color": "#6B7280",
+      "hl_nodes": ["dacc", "amy", "vs", "vacc"],
+      "hl_edges": ["e-amy-dacc", "e-vs-dacc", "e-vacc-amy"],
+      "b_overlays": ["b1-overlay", "b3a-overlay", "b3b-overlay"],
+      "hl_cells": {"A": [[0, 1], [0, 2]], "B1": [[0, 2]], "B3": [[0, 1], [0, 2]]},
+      "modulator": "All (4-group PEB model)",
+      "mat_param": "A[0,1]↑  A[0,2]↓  B₃ broken",
+      "test_param": "4-group PEB: β_rew × β_shk/ω factorial",
+      "desc": "Compound disruption: A[0,1]=0.45 (AMY dominant), A[0,2]=0.10 (VS weak), both B₃ terms attenuated. Circuit is AMY-locked and unresponsive to autonomic state. Tests non-additive interaction (avoidance spiral)."
+    }
+  ],
+
+  "phenotypes": [
+    {
+      "id": "P1",
+      "label": "Balanced",
+      "sub": "β_rew=2.5 · β_shk=2.5 · ω=−3.0",
+      "color": "#534AB7",
+      "hgf_params": {"beta_rew": 2.5, "beta_shk": 2.5, "omega": -3.0, "gamma": -0.3},
+      "hl_nodes": ["dacc", "amy", "vs", "vacc"],
+      "hl_edges": ["e-amy-dacc", "e-vs-dacc", "e-vacc-amy", "e-dacc-vacc"],
+      "b_overlays": ["b1-overlay", "b2-overlay", "b3a-overlay", "b3b-overlay"],
+      "hl_cells": {"A": [[0,1],[0,2],[0,3],[1,0],[1,3],[2,0],[2,1],[3,0]], "B1": [[0,2]], "B2": [[0,1]], "B3": [[0,1],[0,2]]},
+      "desc": "β_rew=2.5, β_shk=2.5, ω=−3.0, γ=−0.3. Parasympathetic dominance (ACh-VS): ε₂→B₁[0,2] drives incremental VS→dACC sampling. NE-AMY balanced: ε₃→B₂[0,1] modulates phasic AMY→dACC. Bradycardia (Δhr)→B₃ reconfigures circuit: AMY↓ (B₃[0,1]) + VS↑ (B₃[0,2]). Balanced v/n ratio — noise correctly attributed to chance, volatility to environment. HGF μ₃ drops after volatile phase.",
+      "dcm_signature": {
+        "A_overrides": {},
+        "B1_scale": 1.0,
+        "B2_scale": 1.0,
+        "B3_scale": 1.0
+      }
+    },
+    {
+      "id": "P2",
+      "label": "Low β_rew",
+      "sub": "β_rew=0.8 · β_shk=2.5 · ω=−3.0",
+      "color": "#1D9E75",
+      "hgf_params": {"beta_rew": 0.8, "beta_shk": 2.5, "omega": -3.0, "gamma": -0.1},
+      "hl_nodes": ["vs", "dacc"],
+      "hl_edges": ["e-vs-dacc"],
+      "b_overlays": ["b1-overlay"],
+      "hl_cells": {"A": [[0,2]], "B1": [[0,2]]},
+      "desc": "β_rew=0.8, β_shk=2.5, ω=−3.0, γ=−0.1. ACh-VS pathway selectively impaired: ε₂→B₁[0,2] reduced — reward PEs fail to drive VS→dACC incremental sampling. Threat pathway intact (ε₃→B₂, Δhr→B₃ functional). Learning rate ω unchanged — the problem is reward valuation, not volatility estimation.",
+      "dcm_signature": {
+        "A_overrides": {"0,2": 0.10},
+        "B1_scale": 0.4,
+        "B2_scale": 1.0,
+        "B3_scale": 1.0
+      }
+    },
+    {
+      "id": "P3",
+      "label": "High β_shk + High ω",
+      "sub": "β_shk=4.5 · ω=−2.0 · μ₃⁰=2.0",
+      "color": "#D85A30",
+      "hgf_params": {"beta_rew": 2.5, "beta_shk": 4.5, "omega": -2.0, "mu3_0": 2.0, "gamma": -0.1},
+      "hl_nodes": ["amy", "dacc"],
+      "hl_edges": ["e-amy-dacc"],
+      "b_overlays": ["b2-overlay", "b3b-overlay"],
+      "hl_cells": {"A": [[0,1]], "B2": [[0,1]], "B3": [[0,1]]},
+      "desc": "β_rew=2.5, β_shk=4.5, ω=−2.0, μ₃⁰=2.0, γ=−0.1. NE-AMY sympathetic overdrive: high ω → large ε₃(t) fluctuations → B₂[0,1] overdriven (AMY→dACC amplified). Failure to reach parasympathetic dominance: Δhr→B₃[0,1] attenuated — bradycardia cannot quiet AMY. High v/n ratio: noise misread as volatility, μ₃ stays elevated after volatile phase.",
+      "dcm_signature": {
+        "A_overrides": {"0,1": 0.45},
+        "B1_scale": 1.0,
+        "B2_scale": 1.5,
+        "B3_scale": 0.4
+      }
+    },
+    {
+      "id": "P4",
+      "label": "Low β_rew + High β_shk + High ω",
+      "sub": "β_rew=0.8 · β_shk=4.5 · ω=−2.0",
+      "color": "#6B7280",
+      "hgf_params": {"beta_rew": 0.8, "beta_shk": 4.5, "omega": -2.0, "mu3_0": 2.0, "gamma": -0.05},
+      "hl_nodes": ["dacc", "amy", "vs"],
+      "hl_edges": ["e-amy-dacc", "e-vs-dacc"],
+      "b_overlays": ["b1-overlay", "b2-overlay", "b3a-overlay", "b3b-overlay"],
+      "hl_cells": {"A": [[0,1],[0,2]], "B1": [[0,2]], "B2": [[0,1]], "B3": [[0,1],[0,2]]},
+      "desc": "β_rew=0.8, β_shk=4.5, ω=−2.0, μ₃⁰=2.0, γ=−0.05. Full autonomic imbalance: ACh-VS pathway impaired (ε₂→B₁[0,2] reduced) + NE-AMY overdrive (ε₃→B₂[0,1] amplified). Δhr→B₃ fails both directions — bradycardia neither quiets AMY (B₃[0,1]) nor boosts VS (B₃[0,2]). Circuit locked AMY-dominant, unresponsive to autonomic reconfiguration.",
+      "dcm_signature": {
+        "A_overrides": {"0,1": 0.45, "0,2": 0.10},
+        "B1_scale": 0.4,
+        "B2_scale": 1.5,
+        "B3_scale": 0.2
+      }
+    }
+  ],
+
+  "drugs": [
+    {
+      "id": "PILO",
+      "label": "Pilocarpine",
+      "sub": "ACh agonist — enhances VS pathway",
+      "color": "#1D9E75",
+      "hl_nodes": ["vs", "dacc"],
+      "hl_edges": ["e-vs-dacc"],
+      "b_overlays": ["b1-overlay", "b3a-overlay"],
+      "hl_cells": {"B1": [[0, 2]], "B3": [[0, 2]]},
+      "predictions": [
+        {"dir": "+", "param": "B₁[0,2] ↑", "note": "enhanced VS incremental sampling"},
+        {"dir": "+", "param": "B₃[0,2] ↑", "note": "stronger bradycardia→VS pathway"},
+        {"dir": "-", "param": "ω ↓",        "note": "slower, more precise learning"}
+      ],
+      "crit_note": "Critical test: does biperiden in healthy subjects produce the same DCM signature as the high-ω phenotype? If yes, the mechanism is cholinergic."
+    },
+    {
+      "id": "BIP",
+      "label": "Biperiden",
+      "sub": "ACh antagonist — mimics high-ω phenotype",
+      "color": "#D85A30",
+      "hl_nodes": ["amy", "vs", "dacc"],
+      "hl_edges": ["e-amy-dacc", "e-vs-dacc"],
+      "b_overlays": [],
+      "hl_cells": {"B1": [[0, 2]], "B3": [[0, 1], [0, 2]]},
+      "predictions": [
+        {"dir": "-", "param": "B₁[0,2] ↓",    "note": "impaired VS pathway"},
+        {"dir": "-", "param": "B₃ attenuated", "note": "bradycardia occurs but doesn't help"},
+        {"dir": "+", "param": "ω ↑",            "note": "noisier learning — mimics high-ω phenotype"}
+      ],
+      "crit_note": ""
+    }
+  ],
+
+  "node_info": {
+    "dacc": {
+      "name": "dACC — dorsal anterior cingulate cortex",
+      "role": "Integration hub. Receives competing inputs from AMY (threat) and VS (value). Resolves approach-avoidance conflict via a competition between the two afferent pathways. Conflict output drives vACC for autonomic adjustment.",
+      "afferent": "AMY 0.30 (strongest) · VS 0.20 · vACC 0.10",
+      "efferent": "vACC 0.20 · AMY 0.10 · VS 0.10",
+      "bold": "BOLD ↑ during high-conflict trials. ψ₂ (effective learning rate) correlates with dACC activation. Key target for whole-brain GLM with ε₂/ε₃ as parametric modulators."
+    },
+    "amy": {
+      "name": "AMY — amygdala",
+      "role": "Phasic threat and shift detection. Sends threat signal to dACC. Receives top-down regulation from vACC. Deep subcortical — primary reason fMRI is required over MEG/EEG.",
+      "afferent": "dACC 0.10 · vACC 0.15 (inhibitory/regulatory)",
+      "efferent": "dACC 0.30 (dominant) · VS 0.10",
+      "bold": "BOLD ↑ on high-shock anticipation. B₂ > 0 predicts AMY BOLD scales with volatility PEs. TUS target: inhibitory TUS to AMY if A[0,1] is over-strong in anxiety group."
+    },
+    "vs": {
+      "name": "VS — ventral striatum / NAcc",
+      "role": "Incremental reward prediction error signal. Drives approach behaviour via value-based updating. Deepest node — invisible to MEG/EEG. Core reason DCM over fMRI is needed.",
+      "afferent": "dACC 0.10 · AMY 0.10",
+      "efferent": "dACC 0.20",
+      "bold": "BOLD tracks ε₂ PEs. B₁ > 0 predicts VS→dACC coupling scales with PE magnitude. Pharmacological target: pilocarpine (ACh agonist) expected to boost VS pathway (WP2)."
+    },
+    "vacc": {
+      "name": "vACC / sgACC — ventral/subgenual ACC",
+      "role": "Top-down autonomic regulation node. Receives conflict signal from dACC; sends inhibitory feedback to AMY. Mediates interoceptive (cardiac/respiratory) state effects on the circuit.",
+      "afferent": "dACC 0.20",
+      "efferent": "dACC 0.10 · AMY 0.15 (inhibitory)",
+      "bold": "BOLD correlates with bradycardia magnitude. Weak vACC→AMY predicts reduced top-down regulation in high-β_shk participants. TUS excitatory target to enhance AMY inhibition."
+    }
+  },
+
+  "peb": {
+    "description": "Two-layer parametric empirical Bayes. Layer 1: per-subject DCM θᵢ. Layer 2: θᵢ = μ + X·β + εᵢ.",
+    "covariates": [
+      {"name": "beta_rew", "display": "β_rew", "desc": "reward sensitivity (HGF softmax)"},
+      {"name": "beta_shk", "display": "β_shk", "desc": "shock/threat sensitivity"},
+      {"name": "omega",    "display": "ω",      "desc": "meta-volatility learning rate"},
+      {"name": "mean_delta_hr", "display": "mean Δhr̄", "desc": "mean cardiac anticipatory response"},
+      {"name": "STAI_T",  "display": "STAI-T", "desc": "trait anxiety score"}
+    ]
+  },
+
+  "fitted_params": null
+}
