@@ -17,7 +17,6 @@ Marker usage::
 from __future__ import annotations
 
 import logging
-import warnings
 
 import pyro
 import pytest
@@ -226,6 +225,172 @@ class TestFitBilinearWithRetry:
             )
 
 
+class TestSeedPoolCorruptSkip:
+    """Seed-pool rejection behavior on corrupt (NaN BOLD) fixtures.
+
+    Post cluster job 54902455 the root cause of the step-0-NaN failures was
+    traced to ground-truth fixtures whose ``A + B_true`` is unstable under
+    sustained modulator activation, producing NaN BOLD silently. The runner
+    now filters those seeds via a pool loop. These unit tests stub the
+    fixture generator to drive the skip branch deterministically without
+    running the full ODE simulator.
+    """
+
+    def test_corrupt_seed_is_skipped_and_next_seed_is_used(
+        self, monkeypatch,
+    ) -> None:
+        """1 corrupt + 1 clean fixture -> skip 1st, use 2nd, n_success=1."""
+        from benchmarks.runners import task_bilinear as tb
+
+        N = 3
+
+        def make_clean(n_regions, seed_i):
+            return {
+                "A_true": torch.eye(N, dtype=torch.float64) * -0.5,
+                "C": torch.zeros(N, 1, dtype=torch.float64),
+                "B_true": torch.zeros(1, N, N, dtype=torch.float64),
+                "b_mask_0": torch.zeros(N, N, dtype=torch.float64),
+                "stim": {
+                    "times": torch.tensor([0.0], dtype=torch.float64),
+                    "values": torch.zeros(1, 1, dtype=torch.float64),
+                },
+                "stimulus": _FakePiecewise(),
+                "stim_mod": _FakePiecewise(J=1),
+                "bold": torch.zeros(50, N, dtype=torch.float64),
+            }
+
+        def make_corrupt(n_regions, seed_i):
+            d = make_clean(n_regions, seed_i)
+            d["bold"] = torch.full((50, N), float("nan"), dtype=torch.float64)
+            return d
+
+        calls = {"i": 0}
+
+        def dispatch(n_regions, seed_i):
+            calls["i"] += 1
+            # First seed: corrupt. Second seed onward: clean.
+            return (make_corrupt if calls["i"] == 1 else make_clean)(
+                n_regions, seed_i,
+            )
+
+        # Patch the inline generator used by the runner (the default path).
+        monkeypatch.setattr(tb, "_make_bilinear_ground_truth", dispatch)
+
+        # Stub the SVI fit paths so the test stays fast and deterministic.
+        def fake_fit_with_retry(model_args, model_kwargs, *,
+                                num_steps, elbo_type):
+            return (
+                {
+                    "A_free": {
+                        "mean": torch.zeros(N, N, dtype=torch.float64),
+                        "std": torch.zeros(N, N, dtype=torch.float64),
+                        "samples": torch.zeros(1, N, N, dtype=torch.float64),
+                    },
+                    "B_free_0": {
+                        "mean": torch.zeros(N, N, dtype=torch.float64),
+                        "std": torch.ones(N, N, dtype=torch.float64),
+                        "samples": torch.zeros(1, N, N, dtype=torch.float64),
+                    },
+                    "final_losses": [],
+                },
+                1.0,
+                tb._BILINEAR_INIT_SCALE,
+            )
+
+        def fake_fit_and_extract(
+            model_args, model_kwargs, *, guide_type,
+            init_scale, num_steps, elbo_type,
+        ):
+            return (
+                {
+                    "A_free": {
+                        "mean": torch.zeros(N, N, dtype=torch.float64),
+                        "std": torch.zeros(N, N, dtype=torch.float64),
+                        "samples": torch.zeros(1, N, N, dtype=torch.float64),
+                    },
+                    "final_losses": [],
+                },
+                1.0,
+            )
+
+        monkeypatch.setattr(
+            tb, "_fit_bilinear_with_retry", fake_fit_with_retry,
+        )
+        monkeypatch.setattr(tb, "_fit_and_extract", fake_fit_and_extract)
+
+        config = BenchmarkConfig(
+            variant="task_bilinear", method="svi",
+            n_datasets=1, n_svi_steps=1, seed=42,
+            n_regions=3, quick=True, elbo_type="trace_elbo",
+        )
+        result = tb.run_task_bilinear_svi(config)
+
+        assert result.get("n_success") == 1
+        # First seed (42) skipped as corrupt; second (43) accepted.
+        assert result["seeds_skipped_corrupt"] == [42]
+        assert result["seeds_used"] == [43]
+        # Metadata tracks skips for SUMMARY visibility.
+        assert result["metadata"]["n_seeds_skipped_corrupt"] == 1
+
+    def test_pool_exhausted_returns_insufficient_data(
+        self, monkeypatch,
+    ) -> None:
+        """All-corrupt pool -> pool exhausts; returns insufficient_data."""
+        from benchmarks.runners import task_bilinear as tb
+
+        N = 3
+
+        def always_corrupt(n_regions, seed_i):
+            return {
+                "A_true": torch.eye(N, dtype=torch.float64) * -0.5,
+                "C": torch.zeros(N, 1, dtype=torch.float64),
+                "B_true": torch.zeros(1, N, N, dtype=torch.float64),
+                "b_mask_0": torch.zeros(N, N, dtype=torch.float64),
+                "stim": {
+                    "times": torch.tensor([0.0], dtype=torch.float64),
+                    "values": torch.zeros(1, 1, dtype=torch.float64),
+                },
+                "stimulus": _FakePiecewise(),
+                "stim_mod": _FakePiecewise(J=1),
+                "bold": torch.full((50, N), float("nan"), dtype=torch.float64),
+            }
+
+        monkeypatch.setattr(
+            tb, "_make_bilinear_ground_truth", always_corrupt,
+        )
+
+        config = BenchmarkConfig(
+            variant="task_bilinear", method="svi",
+            n_datasets=2, n_svi_steps=1, seed=100,
+            n_regions=3, quick=True, elbo_type="trace_elbo",
+        )
+        result = tb.run_task_bilinear_svi(config)
+
+        # With n_datasets=2 and multiplier=3, pool tries 6 seeds; all corrupt.
+        assert result.get("status") == "insufficient_data"
+        assert result.get("n_success", 0) == 0
+        assert len(result["seeds_skipped_corrupt"]) == (
+            2 * tb._MAX_POOL_MULTIPLIER
+        )
+        assert result["pool_exhausted"] is True
+
+
+class _FakePiecewise:
+    """Minimal stand-in for PiecewiseConstantInput in seed-pool unit tests.
+
+    The runner's SVI call path is stubbed, so the actual ``.values`` / call
+    semantics never matter; we just need an object that duck-types enough
+    to be stored in the fixture dict and printed in diagnostic messages.
+    """
+
+    def __init__(self, J: int = 1) -> None:
+        self.values = torch.zeros(1, J, dtype=torch.float64)
+        self.times = torch.zeros(1, dtype=torch.float64)
+
+    def __call__(self, t):  # noqa: ANN001
+        return torch.zeros(self.values.shape[1], dtype=torch.float64)
+
+
 # ------------------------------------------------------------------
 # Phase 16 acceptance gate (RECOV-03..08) -- @pytest.mark.slow
 # ------------------------------------------------------------------
@@ -308,41 +473,39 @@ class TestTaskBilinearAcceptance:
 
         result = run_task_bilinear_svi(config)
 
-        # FIX 1 (orchestrator revision): enforce a minimum n_success BEFORE
-        # trusting gates. Pooled RECOV-05/06 aggregation tolerates missing
-        # seeds cleanly, but we still need enough seeds for the RECOV means
-        # to be statistically meaningful. Relaxed from >=10 to >=8 after the
-        # NaN-retry landed in task_bilinear.py: the retry handles the
-        # init-scale-overflow seeds observed on cluster job 54901072 (3/10
-        # NaN at step 0), but other failure modes may still drop a seed or
-        # two. <8 still fails the test (that's a real regression). A warning
-        # is emitted at 8-9 so the reviewer notices, and the metadata-reported
-        # init_scale_bilinear_n_retries is printed for post-hoc analysis.
+        # Enforce the original >=10 seed floor. The post-cluster-54902455
+        # investigation traced the step-0 NaN failures to ground-truth fixture
+        # corruption (some seeds produce A + B_true with max Re(eig) >= 0,
+        # causing simulate_task_dcm to emit NaN BOLD during sustained
+        # u_mod=1 epochs). The runner now filters those seeds via a pool loop
+        # (see _MAX_POOL_MULTIPLIER in task_bilinear.py), so any seed that
+        # makes it into seeds_used has a clean fixture and SHOULD complete
+        # SVI without a step-0 NaN. n_success < 10 therefore indicates either
+        # (a) too many corrupt seeds exhausted the pool (raise
+        # _MAX_POOL_MULTIPLIER) or (b) an unrelated SVI regression.
         n_success = result.get(
             "n_success", len(result.get("a_rmse_bilinear_list", [])),
         )
         n_retries = result.get("metadata", {}).get(
             "init_scale_bilinear_n_retries", 0,
         )
-        assert n_success >= 8, (
-            f"Expected >=8 successful seeds, got n_success={n_success} "
+        seeds_used = result.get("seeds_used", [])
+        seeds_skipped = result.get("seeds_skipped_corrupt", [])
+        pool_exhausted = result.get("pool_exhausted", False)
+        assert n_success >= 10, (
+            f"Expected >=10 successful seeds, got n_success={n_success} "
             f"(n_failed={result.get('n_failed', '?')}, "
             f"n_datasets={result.get('n_datasets', '?')}, "
             f"status={result.get('status', 'success')}, "
+            f"seeds_used={seeds_used}, "
+            f"seeds_skipped_corrupt={seeds_skipped}, "
+            f"pool_exhausted={pool_exhausted}, "
             f"init_scale_bilinear_n_retries={n_retries}). "
-            f"Likely causes: bilinear SVI instability (increase n_svi_steps "
-            f"to 1500 per L8) or fixture generation regression. Inspect "
-            f"posterior_list[*]['final_losses'] tails for convergence hints."
+            f"Likely causes: (a) corruption rate higher than "
+            f"_MAX_POOL_MULTIPLIER=3 can absorb (raise it in "
+            f"benchmarks/runners/task_bilinear.py); or (b) SVI regression "
+            f"(inspect posterior_list[*]['final_losses'] tails)."
         )
-        if n_success < 10:
-            warnings.warn(
-                f"Acceptance run had n_success={n_success} (<10); "
-                f"init_scale_bilinear_n_retries={n_retries}. Gates computed "
-                f"on {n_success} seeds; RECOV means are still valid but "
-                f"variance is higher. Inspect final_losses tails.",
-                UserWarning,
-                stacklevel=2,
-            )
 
         # Convert torch tensors in posterior_list to the serialized shape that
         # compute_acceptance_gates expects (runner already does this via

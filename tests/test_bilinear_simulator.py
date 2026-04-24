@@ -217,3 +217,65 @@ def test_dt_invariance_linear() -> None:
     )
     # Also confirm linear-mode return-dict sanity.
     assert r_01["B_list"] is None and r_005["B_list"] is None
+
+
+def test_simulation_diverged_flag_false_on_stable_ground_truth() -> None:
+    """simulate_task_dcm sets simulation_diverged=False on a stable A+B.
+
+    Regression for the Phase-16 fix (post cluster job 54902455): the return
+    dict must expose a divergence flag callers can key off, and it MUST
+    remain False when BOLD is clean so the seed-pool runner does not skip
+    good fixtures.
+    """
+    N = 3
+    A = make_random_stable_A(n_regions=N, density=0.5, seed=42)
+    C = torch.tensor([[0.5], [0.0], [0.0]], dtype=torch.float64)
+    stim_drive = make_block_stimulus(
+        n_blocks=3, block_duration=20.0, rest_duration=20.0, n_inputs=1,
+    )
+    result = simulate_task_dcm(
+        A, C, stim_drive, duration=120.0, TR=2.0, SNR=-1,
+        solver="rk4", seed=42,
+    )
+    assert "simulation_diverged" in result
+    assert result["simulation_diverged"] is False
+    assert not torch.isnan(result["bold"]).any()
+
+
+def test_simulation_diverged_flag_true_on_unstable_bilinear_A_plus_B() -> None:
+    """simulate_task_dcm flags divergence when A+B is unstable.
+
+    Synthesizes a worst-case bilinear ground truth: stable A (diag=-0.5),
+    large B that pushes A+B to a positive real eigenvalue, and a sustained
+    modulator of u_mod=1 across the entire duration so the ODE grows
+    unbounded. Nonzero C + an early driving-stimulus block inject energy
+    into x so the unstable A+B has something to amplify (homogeneous
+    system with x(0)=0 would stay at zero forever regardless of eig).
+    The returned dict should set simulation_diverged=True and bold must
+    contain NaN/Inf.
+    """
+    N = 3
+    A = torch.eye(N, dtype=torch.float64) * -0.5
+    C = torch.tensor([[1.0], [0.0], [0.0]], dtype=torch.float64)
+    stim_drive = make_block_stimulus(
+        n_blocks=1, block_duration=1.0, rest_duration=1.0, n_inputs=1,
+    )
+    # Large off-diagonal B that drives A+B max Re eig strongly positive.
+    B = torch.zeros(1, N, N, dtype=torch.float64)
+    B[0, 1, 0] = 2.0
+    B[0, 0, 1] = 2.0
+    # Sustained u_mod=1 across the entire 200s sim.
+    times = torch.tensor([0.0, 200.0], dtype=torch.float64)
+    values = torch.tensor([[1.0], [1.0]], dtype=torch.float64)
+    stim_mod = PiecewiseConstantInput(times, values)
+
+    result = simulate_task_dcm(
+        A, C, stim_drive, duration=200.0, TR=2.0, SNR=-1,
+        solver="rk4", seed=42,
+        B_list=B, stimulus_mod=stim_mod,
+    )
+    assert result["simulation_diverged"] is True
+    assert (
+        torch.isnan(result["bold"]).any()
+        or torch.isinf(result["bold"]).any()
+    )

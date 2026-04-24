@@ -67,15 +67,26 @@ _DRIVING_BLOCK_DURATION = 20.0
 _DRIVING_REST_DURATION = 20.0
 
 # Bilinear init-scale retry policy.
-# Cluster job 54901072 observed 3/10 seeds NaN at SVI step 0 with
-# init_scale=0.005: the initial posterior sample + ground truth combine to
-# overflow the bilinear ODE forward model before any gradient update. A one-
-# shot retry at half the init_scale collapses the initial posterior tightly
-# enough around the prior mean to avoid the overflow on nearly all such seeds
-# (Pitfall B1/B6). The original scale is preferred when it works so that
-# retries do not bias the posterior-variance estimates that feed RECOV-06.
+# Kept as defensive depth even though the root-cause of cluster job
+# 54902455's 3/10 step-0 NaN failure is now understood to be fixture
+# corruption rather than init-scale overflow: specific ground-truth seeds
+# (44, 49, 50) produce ``A + B_true`` with ``max Re(eig) >= 0`` which causes
+# ``simulate_task_dcm`` to silently emit NaN BOLD, and the Gaussian
+# likelihood then NaN's at step 0 regardless of init_scale. The real fix is
+# the seed-pool skip loop below (``_MAX_POOL_MULTIPLIER``). This retry path
+# remains for rare unrelated step-0 NaN cases.
 _BILINEAR_INIT_SCALE = 0.005
 _BILINEAR_INIT_SCALE_RETRY = 0.001
+
+# Seed-pool rejection policy.
+# When a seed's bilinear fixture diverges (``data['bold']`` contains NaN/Inf
+# because ``A + B_true`` is unstable under sustained u_mod=1 epochs), the
+# runner skips that seed and tries the next one from a contiguous pool. The
+# pool is capped to ``config.n_datasets * _MAX_POOL_MULTIPLIER`` candidate
+# seeds to avoid unbounded loops if the corruption rate is pathologically
+# high. On the cluster-observed topology the rejection rate is ~30% (3/10 at
+# seeds 42..51), so a 3x multiplier gives ample headroom.
+_MAX_POOL_MULTIPLIER = 3
 
 
 # ---------------------------------------------------------------------------
@@ -587,6 +598,23 @@ def run_task_bilinear_svi(
     N = config.n_regions
     num_steps = config.n_svi_steps
 
+    if (
+        config.fixtures_dir is not None
+        and stimulus_mod_factory is None
+    ):
+        # The seed-pool rejection loop (_MAX_POOL_MULTIPLIER) is incompatible
+        # with the index-keyed .npz cache from plan 16-01 L7: skipping a
+        # corrupt seed at slot i would leave slot (i+1)'s .npz pointing at a
+        # different ground truth. v0.3.1 should re-key the .npz cache by
+        # seed rather than slot index and add cache-aware pool filtering.
+        raise NotImplementedError(
+            "run_task_bilinear_svi: fixtures_dir .npz cache is not compatible "
+            "with the v0.3.0 seed-pool rejection loop (corrupt-seed skipping "
+            "breaks index->seed correspondence). Use fixtures_dir=None "
+            "(inline generation) for the Phase 16 acceptance gate, or defer "
+            "to v0.3.1 for cache-by-seed support."
+        )
+
     a_rmse_bilinear_list: list[float] = []
     a_rmse_linear_list: list[float] = []
     time_bilinear_list: list[float] = []
@@ -597,6 +625,8 @@ def run_task_bilinear_svi(
     a_inferred_bilinear_list: list[list[float]] = []
     a_inferred_linear_list: list[list[float]] = []
     init_scale_used_bilinear_list: list[float] = []
+    seeds_used: list[int] = []
+    seeds_skipped_corrupt: list[int] = []
     n_failed = 0
 
     # Silence pyro_dcm.stability WARNING spam during bilinear early-SVI draws
@@ -605,11 +635,18 @@ def run_task_bilinear_svi(
     prev_stability_level = stability_logger.level
     stability_logger.setLevel(logging.ERROR)
 
+    max_pool = config.n_datasets * _MAX_POOL_MULTIPLIER
     try:
-        for i in range(config.n_datasets):
-            seed_i = config.seed + i
+        pool_idx = 0
+        while (
+            len(seeds_used) < config.n_datasets
+            and pool_idx < max_pool
+        ):
+            seed_i = config.seed + pool_idx
+            pool_idx += 1
+            slot = len(seeds_used) + 1
             print(
-                f"Running dataset {i + 1}/{config.n_datasets} "
+                f"Running dataset {slot}/{config.n_datasets} "
                 f"(seed {seed_i})..."
             )
             try:
@@ -626,8 +663,45 @@ def run_task_bilinear_svi(
                         config.n_regions, seed_i, stimulus_mod_factory,
                     )
                 else:
-                    # Default path: plan 16-01 fixture-or-inline dispatch.
-                    data = _load_or_make_fixture(i, config)
+                    # Pool-based inline generation. NOTE: the prior .npz
+                    # fixture cache keyed by index i is bypassed here because
+                    # the seed-pool decouples slot index from seed value;
+                    # re-enabling the cache would require indexing by seed
+                    # rather than slot and is deferred to v0.3.1.
+                    data = _make_bilinear_ground_truth(
+                        config.n_regions, seed_i,
+                    )
+
+                # Pre-flight corruption check (root cause of cluster job
+                # 54902455's step-0 NaN): some ground-truth seeds produce
+                # A + B_true with max Re(eig) >= 0, which causes the
+                # neural-hemodynamic ODE to overflow during sustained u_mod=1
+                # epochs and emit NaN BOLD silently. Feeding NaN BOLD into
+                # the Gaussian likelihood produces a step-0 NaN regardless of
+                # init_scale. Skip the seed and draw the next one from the
+                # pool; the test's acceptance floor (n_success >= 10) is
+                # preserved because the pool is capped at
+                # n_datasets * _MAX_POOL_MULTIPLIER.
+                if (
+                    torch.isnan(data["bold"]).any().item()
+                    or torch.isinf(data["bold"]).any().item()
+                ):
+                    A_true = data["A_true"]
+                    B_sum = data["B_true"].sum(dim=0)
+                    max_re = torch.linalg.eigvals(
+                        A_true + B_sum,
+                    ).real.max().item()
+                    seeds_skipped_corrupt.append(seed_i)
+                    print(
+                        f"  SKIPPED seed {seed_i}: fixture BOLD contains "
+                        f"NaN/Inf (neural-hemodynamic ODE diverged during "
+                        f"epoch-modulated simulation; diagnostic max Re "
+                        f"eig(A+sum(B_j))={max_re:+.4f} -- note this "
+                        f"eigenvalue condition is not a reliable predictor, "
+                        f"some corrupt seeds have max Re < 0). Drawing next "
+                        f"seed from pool."
+                    )
+                    continue
 
                 # Model args (positional, shared between bilinear and linear).
                 a_mask = torch.ones(N, N, dtype=torch.float64)
@@ -679,6 +753,7 @@ def run_task_bilinear_svi(
                 a_inferred_linear_list.append(A_lin.flatten().tolist())
                 b_true_list.append(data["B_true"].flatten().tolist())
                 init_scale_used_bilinear_list.append(init_scale_used_bi)
+                seeds_used.append(seed_i)
                 posterior_list.append(
                     _posterior_to_numpy(posterior_bi, data["B_true"]),
                 )
@@ -704,6 +779,9 @@ def run_task_bilinear_svi(
             "n_success": n_success,
             "n_failed": n_failed,
             "n_datasets": config.n_datasets,
+            "seeds_used": list(seeds_used),
+            "seeds_skipped_corrupt": list(seeds_skipped_corrupt),
+            "pool_exhausted": pool_idx >= max_pool,
         }
 
     return {
@@ -725,6 +803,8 @@ def run_task_bilinear_svi(
         "a_rmse_linear_stats": compute_summary_stats(a_rmse_linear_list),
         "n_success": n_success,
         "n_failed": n_failed,
+        "seeds_used": list(seeds_used),
+        "seeds_skipped_corrupt": list(seeds_skipped_corrupt),
         "metadata": {
             "variant": "task_bilinear",
             "method": "svi",
@@ -755,5 +835,7 @@ def run_task_bilinear_svi(
                 "custom" if stimulus_mod_factory is not None
                 else "default_epochs"
             ),
+            "seed_pool_max_multiplier": _MAX_POOL_MULTIPLIER,
+            "n_seeds_skipped_corrupt": len(seeds_skipped_corrupt),
         },
     }

@@ -236,6 +236,12 @@ def simulate_task_dcm(
         - ``'stimulus_mod'``: The constructed modulator
           ``PiecewiseConstantInput`` (bilinear mode) or ``None`` (linear
           mode). Added in Phase 14 (SIM-04).
+        - ``'simulation_diverged'``: ``bool``. ``True`` when the
+          neural-hemodynamic ODE overflowed during integration and the
+          returned ``bold`` / ``bold_clean`` contain NaN/Inf. Callers
+          running batches of simulations (e.g. benchmark runners) should
+          inspect this flag to skip corrupted fixtures instead of feeding
+          NaN BOLD into downstream inference.
 
     Notes
     -----
@@ -383,6 +389,20 @@ def simulate_task_dcm(
     bold_clean_ds = clean_bold[indices]    # shape (T_TR, N)
     times_TR = t_eval[indices]              # shape (T_TR,)
 
+    # Divergence diagnostic. If the neural-hemodynamic ODE blew up (e.g. a
+    # bilinear ground truth with sustained modulator pushes max Re(eig(A_eff))
+    # >= 0 and v=exp(lnv) overflows, producing NaN in bold_signal's q/v
+    # ratio), the returned bold_clean_ds will contain NaN/Inf. Noise addition
+    # below does NOT surface the issue (signal_std would propagate NaN into
+    # every region, masking the root cause). Expose the flag at the return
+    # level so callers (e.g. benchmark runners doing seed-pool rejection)
+    # can skip corrupted fixtures without downstream consumers (Gaussian
+    # likelihood) failing with an opaque step-0 NaN.
+    simulation_diverged = bool(
+        torch.isnan(bold_clean_ds).any().item()
+        or torch.isinf(bold_clean_ds).any().item()
+    )
+
     # 11. Add Gaussian noise
     if SNR > 0:
         # Per-region noise: noise_std = std(signal) / SNR
@@ -419,6 +439,7 @@ def simulate_task_dcm(
         "stimulus": driving_input_fn,  # driving input only (Phase 1 contract)
         "B_list": B_stacked,           # Phase 14 (SIM-04): None in linear mode
         "stimulus_mod": stimulus_mod_input_fn,  # Phase 14 (SIM-04)
+        "simulation_diverged": simulation_diverged,
     }
 
 
