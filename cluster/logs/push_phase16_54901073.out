@@ -1,0 +1,53 @@
+============================================================
+Auto-Push Phase 16 Acceptance Results
+============================================================
+Job ID:      54901073
+Node:        m3e116
+Project:     /fs04/fc37/adam/projects/dcm_pytorch
+Remote:      origin
+Strategy:    branch: results/phase16-acceptance-20260419-220922
+Parent jobs: 54901072
+Start:       Sun Apr 19 10:09:22 PM AEST 2026
+============================================================
+
+Checking git configuration...
+Testing push access to origin...
+  Remote accessible: git@github.com:adammanoogian/dcm_pytorch.git
+  Current branch: gsd/phase-16-bilinear-recovery-benchmark
+  HEAD:           b902a70
+
+Staging Phase 16 result files...
+  + Phase 16 SLURM stdout logs (1 files)
+  + Phase 16 SLURM stderr logs (1 files)
+  + Phase 16 pytest tee logs (1 files)
+  + Phase 16 acceptance result summaries (1 files)
+  + Phase 16 acceptance markdown reports (1 files)
+
+Staged changes:
+ cluster/logs/phase16_54901072.err                |   0
+ cluster/logs/phase16_54901072.out                | 116 +++++++++++++++++++++++
+ cluster/logs/pytest_phase16_54901072.log         |  81 ++++++++++++++++
+ cluster/results/phase16_acceptance_54901072.json |  12 +++
+ cluster/results/phase16_acceptance_54901072.md   |  16 ++++
+ 5 files changed, 225 insertions(+)
+
+Creating results branch: results/phase16-acceptance-20260419-220922
+[results/phase16-acceptance-20260419-220922 c981b4a] results(phase16): acceptance gate outputs (SLURM jobs: 54901072)
+ 5 files changed, 225 insertions(+)
+ create mode 100644 cluster/logs/phase16_54901072.err
+ create mode 100644 cluster/logs/phase16_54901072.out
+ create mode 100644 cluster/logs/pytest_phase16_54901072.log
+ create mode 100644 cluster/results/phase16_acceptance_54901072.json
+ create mode 100644 cluster/results/phase16_acceptance_54901072.md
+Pushing branch to origin...
+branch 'results/phase16-acceptance-20260419-220922' set up to track 'origin/results/phase16-acceptance-20260419-220922'.
+STATUS: PUSHED TO BRANCH results/phase16-acceptance-20260419-220922
+Returning to branch: gsd/phase-16-bilinear-recovery-benchmark
+Your branch is up to date with 'origin/gsd/phase-16-bilinear-recovery-benchmark'.
+
+============================================================
+Git Push Complete!
+============================================================
+End time: Sun Apr 19 10:09:32 PM AEST 2026
+Merge locally: git fetch origin && git merge origin/results/phase16-acceptance-20260419-220922
+============================================================
