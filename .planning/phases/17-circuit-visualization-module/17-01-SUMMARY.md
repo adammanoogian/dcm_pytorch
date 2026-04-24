@@ -66,9 +66,9 @@ completed: 2026-04-24
 
 ## Performance
 
-- **Duration:** ~50 min
+- **Duration:** ~55 min (implementation + tests + verification; full-regression ran in background during final stages)
 - **Started:** 2026-04-24T12:03:30Z
-- **Completed:** 2026-04-24T12:55:00Z (approx.)
+- **Completed:** 2026-04-24T12:58:23Z
 - **Tasks:** 2 code-change tasks (Tasks 1 + 2) + 1 no-op verification task (Task 3, pre-applied by planner)
 - **Files modified:** 3 (one new NEW, one NEW, one additive re-export edit)
 - **LOC:** 659 `circuit_viz.py` + 506 `test_circuit_viz.py` = 1,165 total (plan allowance: 150-300 LOC module + >=200 LOC tests -- module is larger than the top-of-range due to NumPy-style docstrings on every public surface, as required by CLAUDE.md + pyproject ruff pydocstyle)
