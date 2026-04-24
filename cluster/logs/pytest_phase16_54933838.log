@@ -1,0 +1,154 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.20, pytest-9.0.3, pluggy-1.6.0 -- /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/bin/python3.10
+cachedir: .pytest_cache
+rootdir: /fs04/fc37/adam/projects/dcm_pytorch
+configfile: pyproject.toml
+collecting ... collected 7 items / 6 deselected / 1 selected
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds Running dataset 1/10 (seed 42)...
+  a_rmse_bi=0.0873, a_rmse_lin=0.0880, t_bi=389.2s, t_lin=439.9s, init_scale_bi=0.005
+Running dataset 2/10 (seed 43)...
+  a_rmse_bi=0.0854, a_rmse_lin=0.0863, t_bi=378.5s, t_lin=312.4s, init_scale_bi=0.005
+Running dataset 3/10 (seed 44)...
+  SKIPPED seed 44: fixture BOLD contains NaN/Inf (neural-hemodynamic ODE diverged during epoch-modulated simulation; diagnostic max Re eig(A+sum(B_j))=-0.1561 -- note this eigenvalue condition is not a reliable predictor, some corrupt seeds have max Re < 0). Drawing next seed from pool.
+Running dataset 3/10 (seed 45)...
+  a_rmse_bi=0.0652, a_rmse_lin=0.0649, t_bi=566.0s, t_lin=330.1s, init_scale_bi=0.005
+Running dataset 4/10 (seed 46)...
+  a_rmse_bi=0.1321, a_rmse_lin=0.1321, t_bi=371.7s, t_lin=313.9s, init_scale_bi=0.005
+Running dataset 5/10 (seed 47)...
+  a_rmse_bi=0.1145, a_rmse_lin=0.1144, t_bi=496.4s, t_lin=315.2s, init_scale_bi=0.005
+Running dataset 6/10 (seed 48)...
+  a_rmse_bi=0.1379, a_rmse_lin=0.1380, t_bi=392.9s, t_lin=323.4s, init_scale_bi=0.005
+Running dataset 7/10 (seed 49)...
+  SKIPPED seed 49: fixture BOLD contains NaN/Inf (neural-hemodynamic ODE diverged during epoch-modulated simulation; diagnostic max Re eig(A+sum(B_j))=-0.5000 -- note this eigenvalue condition is not a reliable predictor, some corrupt seeds have max Re < 0). Drawing next seed from pool.
+Running dataset 7/10 (seed 50)...
+  SKIPPED seed 50: fixture BOLD contains NaN/Inf (neural-hemodynamic ODE diverged during epoch-modulated simulation; diagnostic max Re eig(A+sum(B_j))=-0.3644 -- note this eigenvalue condition is not a reliable predictor, some corrupt seeds have max Re < 0). Drawing next seed from pool.
+Running dataset 7/10 (seed 51)...
+  a_rmse_bi=0.1103, a_rmse_lin=0.1115, t_bi=367.6s, t_lin=367.2s, init_scale_bi=0.005
+Running dataset 8/10 (seed 52)...
+  a_rmse_bi=0.1157, a_rmse_lin=0.1155, t_bi=406.6s, t_lin=383.1s, init_scale_bi=0.005
+Running dataset 9/10 (seed 53)...
+  SKIPPED seed 53: fixture BOLD contains NaN/Inf (neural-hemodynamic ODE diverged during epoch-modulated simulation; diagnostic max Re eig(A+sum(B_j))=-0.5000 -- note this eigenvalue condition is not a reliable predictor, some corrupt seeds have max Re < 0). Drawing next seed from pool.
+Running dataset 9/10 (seed 54)...
+  a_rmse_bi=0.1179, a_rmse_lin=0.1184, t_bi=364.2s, t_lin=328.6s, init_scale_bi=0.005
+Running dataset 10/10 (seed 55)...
+  a_rmse_bi=0.0976, a_rmse_lin=0.0978, t_bi=366.9s, t_lin=438.1s, init_scale_bi=0.005
+
+=== Phase 16 Acceptance Gates ===
+RECOV-03 (A RMSE ratio): observed=0.9972 threshold=1.25 pass=True
+RECOV-04 (B RMSE nonnull): observed=0.3424 threshold=0.2 pass=False
+RECOV-05 (sign recovery): observed=0.8500 threshold=0.8 pass=True
+RECOV-06 (coverage of zero): observed=1.0000 threshold=0.85 pass=True
+RECOV-07 (shrinkage nonnull means): [0.008406706526875496, 0.008506189472973347]
+RECOV-08 (wall-time ratio): 1.15x (bilinear=410.0s, linear=355.2s) flag_over_10x=False
+Warning: SciencePlots not installed, trying seaborn fallback
+FAILED
+
+=================================== FAILURES ===================================
+______ TestTaskBilinearAcceptance.test_acceptance_gates_pass_at_10_seeds _______
+tests/test_task_bilinear_benchmark.py:568: in test_acceptance_gates_pass_at_10_seeds
+    assert gates["RECOV-04"]["pass"], (
+E   AssertionError: RECOV-04 FAILED: B-RMSE 0.3424 > threshold 0.2. per_seed: [0.3474244293899992, 0.34211208672195526, 0.3477407113893392, 0.3353997210158378, 0.3408304734563404, 0.34297229756392467, 0.3410715513590765, 0.34233955134682026, 0.3435872476250476, 0.3407219714741579]
+E   assert False
+------------------------------ Captured log call -------------------------------
+WARNING  matplotlib.style.core:core.py:213 In /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/mpl-data/stylelib/classic.mplstyle: 'parseString' deprecated - use 'parse_string'
+WARNING  matplotlib.style.core:core.py:213 In /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/mpl-data/stylelib/classic.mplstyle: 'resetCache' deprecated - use 'reset_cache'
+WARNING  matplotlib.style.core:core.py:213 In /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/mpl-data/stylelib/classic.mplstyle: 'parseString' deprecated - use 'parse_string'
+WARNING  matplotlib.style.core:core.py:213 In /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/mpl-data/stylelib/classic.mplstyle: 'resetCache' deprecated - use 'reset_cache'
+WARNING  matplotlib.style.core:core.py:213 In /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/mpl-data/stylelib/classic.mplstyle: 'parseString' deprecated - use 'parse_string'
+WARNING  matplotlib.style.core:core.py:213 In /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/mpl-data/stylelib/classic.mplstyle: 'resetCache' deprecated - use 'reset_cache'
+WARNING  matplotlib.style.core:core.py:213 In /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/mpl-data/stylelib/classic.mplstyle: 'parseString' deprecated - use 'parse_string'
+WARNING  matplotlib.style.core:core.py:213 In /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/mpl-data/stylelib/classic.mplstyle: 'resetCache' deprecated - use 'reset_cache'
+=============================== warnings summary ===============================
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_fontconfig_pattern.py:64: PyparsingDeprecationWarning: 'oneOf' deprecated - use 'one_of'
+    prop = Group((name + Suppress("=") + comma_separated(value)) | oneOf(_CONSTANTS))
+
+tests/test_task_bilinear_benchmark.py: 31 warnings
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_fontconfig_pattern.py:85: PyparsingDeprecationWarning: 'parseString' deprecated - use 'parse_string'
+    parse = parser.parseString(pattern)
+
+tests/test_task_bilinear_benchmark.py: 31 warnings
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_fontconfig_pattern.py:89: PyparsingDeprecationWarning: 'resetCache' deprecated - use 'reset_cache'
+    parser.resetCache()
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:45: PyparsingDeprecationWarning: 'enablePackrat' deprecated - use 'enable_packrat'
+    ParserElement.enablePackrat()
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:2010: PyparsingDeprecationWarning: 'oneOf' deprecated - use 'one_of'
+    p.space          = oneOf(self._space_widths)("space")
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:2012: PyparsingDeprecationWarning: 'oneOf' deprecated - use 'one_of'
+    p.style_literal  = oneOf(
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:2020: PyparsingDeprecationWarning: 'leaveWhitespace' deprecated - use 'leave_whitespace'
+    )("sym").leaveWhitespace()
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:2024: PyparsingDeprecationWarning: 'oneOf' deprecated - use 'one_of'
+    p.start_group    = Optional(r"\math" + oneOf(self._fontnames)("font")) + "{"
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:2027: PyparsingDeprecationWarning: 'oneOf' deprecated - use 'one_of'
+    p.delim          = oneOf(self._delims)
+
+tests/test_task_bilinear_benchmark.py: 47 warnings
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:1984: PyparsingDeprecationWarning: 'setName' deprecated - use 'set_name'
+    val.setName(key)
+
+tests/test_task_bilinear_benchmark.py: 44 warnings
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:1987: PyparsingDeprecationWarning: 'setParseAction' deprecated - use 'set_parse_action'
+    val.setParseAction(getattr(self, key))
+
+tests/test_task_bilinear_benchmark.py: 16 warnings
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:1748: PyparsingDeprecationWarning: 'setParseAction' deprecated - use 'set_parse_action'
+    return Empty().setParseAction(raise_error)
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:2088: PyparsingDeprecationWarning: 'endQuoteChar' argument is deprecated, use 'end_quote_char'
+    p.text = cmd(r"\text", QuotedString('{', '\\', endQuoteChar="}"))
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:2097: PyparsingDeprecationWarning: 'oneOf' deprecated - use 'one_of'
+    + OneOrMore(oneOf(["_", "^"]) - p.placeable)("subsuper")
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:2146: PyparsingDeprecationWarning: 'unquoteResults' argument is deprecated, use 'unquote_results'
+    p.math_string   = QuotedString('$', '\\', unquoteResults=False)
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:2147: PyparsingDeprecationWarning: 'leaveWhitespace' deprecated - use 'leave_whitespace'
+    p.non_math      = Regex(r"(?:(?:\\[$])|[^$])*").leaveWhitespace()
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:2170: PyparsingDeprecationWarning: 'parseString' deprecated - use 'parse_string'
+    result = self._expression.parseString(s)
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:2197: PyparsingDeprecationWarning: 'parseString' deprecated - use 'parse_string'
+    return self._math_expression.parseString(toks[0][1:-1], parseAll=True)
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/pyparsing/util.py:466: PyparsingDeprecationWarning: 'parseAll' argument is deprecated, use 'parse_all'
+    return fn(self, *args, **kwargs)
+
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+  /scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/matplotlib/_mathtext.py:2178: PyparsingDeprecationWarning: 'resetCache' deprecated - use 'reset_cache'
+    ParserElement.resetCache()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds
+========== 1 failed, 6 deselected, 192 warnings in 8708.72s (2:25:08) ==========
