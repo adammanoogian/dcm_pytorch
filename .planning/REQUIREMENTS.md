@@ -59,6 +59,23 @@ Requirements for Bilinear DCM Extension. Each maps to a roadmap phase.
 - [ ] **RECOV-07**: Identifiability diagnostic: posterior-shrinkage metric `std_post / std_prior <= 0.7` for each free B_ij; reported alongside RMSE (does not block acceptance but documented per dataset).
 - [ ] **RECOV-08**: Wall-time benchmark: bilinear DCM (3-region, J=1) runtime reported vs linear 3-region baseline (~235s/500 steps). Expected 3-6x slowdown (Pitfall B10); flagged if >10x.
 
+## v0.4.0 Requirements
+
+Requirements for Circuit Explorer (v0.4.0). Each maps to a phase in the v0.4.0 milestone.
+
+### Circuit Visualization (v0.4.0)
+
+- [ ] **VIZ-01**: `CircuitVizConfig` dataclass exists at `src/pyro_dcm/utils/circuit_viz.py` with the 13 handoff-spec fields (`schema`, `status`, `meta`, `palette`, `regions`, `region_colors`, `matrices`, `mat_order`, `phenotypes`, `hypotheses`, `drugs`, `peb`, `fitted_params`) PLUS a pass-through `extras: dict` field (V1 decision) and `to_dict()` / `export()` methods.
+- [ ] **VIZ-02**: `CircuitViz.from_model_config(model_cfg, *, phenotypes=None, hypotheses=None, drugs=None, peb=None, palette=None)` produces a `CircuitVizConfig` with `status='planned'` and `fitted_params=None`. Requires `regions`, `region_colors` (length-matched to regions — V2 decision; raises `ValueError` otherwise), and `A_prior_mean` in `model_cfg`.
+- [ ] **VIZ-03**: `CircuitViz.from_posterior(planned, posterior_means)` returns a NEW `CircuitVizConfig` (deepcopy; does not mutate `planned`) with `status='fitted'` and `fitted_params=posterior_means`. Validates `posterior_means` contains no NaN/Inf BEFORE deepcopy (V6 decision; raises `ValueError` with offending `(key, i, j)` tuple).
+- [ ] **VIZ-04**: `CircuitViz.load(path)` reads `dcm_circuit_explorer/v1` JSON and reconstructs a `CircuitVizConfig`. All top-level JSON keys NOT in the 13-key first-class set are preserved in `cfg.extras` (V1; enables round-trip of `_study`, `_description`, `node_info`, `node_positions`, `svg_edges`, `b_overlays`).
+- [ ] **VIZ-05**: `mat_order` is deterministic: `['A'] + sorted(B_matrices.keys()) + (['C'] if C_matrix present and non-empty else [])` (V7 decision). Never relies on caller dict insertion order.
+- [ ] **VIZ-06**: `from_model_config` accepts `torch.Tensor`, `numpy.ndarray`, and `list[list[float]]` as matrix values via `_to_list_of_list` helper (V8). All emitted `matrices[key]['vals']` are `list[list[float]]` (never tensor, never ndarray).
+- [ ] **VIZ-07**: Module-level helper `flatten_posterior_for_viz(posterior, mat_order, b_masks=None)` is exported (V4). Consumes `extract_posterior_params(...)` output and returns the `dict[str, list[list[float]]]` payload `from_posterior` expects. Handles A / C / B_j flattening with `B_free_{j}` + `parameterize_B` fallback when the `B` deterministic site is absent.
+- [ ] **VIZ-08**: Round-trip equality: `CircuitViz.load(cfg.export(path)).to_dict() == cfg.to_dict()` for any `cfg` produced by `from_model_config` or `from_posterior`, including `configs/heart2adapt_dcm_config.json` via `extras` pass-through.
+- [ ] **VIZ-09**: `pyro_dcm.utils` package re-exports `CircuitViz`, `CircuitVizConfig`, and `flatten_posterior_for_viz` (consistent with the existing `ode_integrator` re-export precedent in `src/pyro_dcm/utils/__init__.py`).
+- [ ] **VIZ-10**: Zero upstream edits — no changes to `task_dcm_model`, `extract_posterior_params`, `parameterize_A`, `parameterize_B`, `create_guide`, `run_svi`, or any file outside `src/pyro_dcm/utils/`, `tests/`, and `.planning/`. Verified by `git diff --name-only main...HEAD` matching the allowed path set.
+
 ## Future Requirements (deferred)
 
 ### v0.3.1 Candidates
@@ -125,10 +142,23 @@ Explicitly excluded from v0.3.0 (and often permanently).
 | RECOV-06 | Phase 16 | Pending |
 | RECOV-07 | Phase 16 | Pending |
 | RECOV-08 | Phase 16 | Pending |
+| VIZ-01 | Phase 17 | Pending |
+| VIZ-02 | Phase 17 | Pending |
+| VIZ-03 | Phase 17 | Pending |
+| VIZ-04 | Phase 17 | Pending |
+| VIZ-05 | Phase 17 | Pending |
+| VIZ-06 | Phase 17 | Pending |
+| VIZ-07 | Phase 17 | Pending |
+| VIZ-08 | Phase 17 | Pending |
+| VIZ-09 | Phase 17 | Pending |
+| VIZ-10 | Phase 17 | Pending |
 
 **Coverage:**
 - v0.3.0 requirements: 27 total
 - Mapped to phases: 27/27 (all mapped)
+- Unmapped: 0
+- v0.4.0 requirements: 10 total
+- Mapped to phases: 10/10 (all mapped)
 - Unmapped: 0
 
 **Per-phase distribution:**
@@ -136,7 +166,8 @@ Explicitly excluded from v0.3.0 (and often permanently).
 - Phase 14 (Stimulus Utilities & Bilinear Simulator): 5 requirements (SIM-01..05)
 - Phase 15 (Pyro Generative Model): 7 requirements (MODEL-01..07)
 - Phase 16 (Recovery Benchmark): 8 requirements (RECOV-01..08)
+- Phase 17 (Circuit Visualization Module): 10 requirements (VIZ-01..10)
 
 ---
 *Requirements defined: 2026-04-17*
-*Last updated: 2026-04-18 after Phase 15 verification passed (MODEL-01..07 Complete; 19/27 v0.3.0 reqs done; Phase 16 RECOV-01..08 pending)*
+*Last updated: 2026-04-24 — v0.4.0 milestone opened; VIZ-01..10 appended for Phase 17 (Circuit Visualization Module). v0.3.0 Phase 16 RECOV-01..08 still pending cluster re-run.*

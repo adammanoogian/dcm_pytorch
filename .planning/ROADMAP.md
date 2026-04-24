@@ -5,6 +5,7 @@
 - **v0.1.0 Foundation** - Phases 1-8 (shipped 2026-04-03)
 - **v0.2.0 Cross-Backend Inference Benchmarking** - Phases 9-12 (shipped 2026-04-13)
 - **v0.3.0 Bilinear DCM Extension** - Phases 13-16 (in progress; started 2026-04-17)
+- **v0.4.0 Circuit Explorer** - Phase 17+ (defined 2026-04-24; not yet started)
 
 <details>
 <summary>v0.1.0 Foundation (Phases 1-8) - SHIPPED 2026-04-03</summary>
@@ -195,6 +196,47 @@ RECOV-08
 
 ---
 
+## Next Milestone: v0.4.0 Circuit Explorer
+
+**Status:** Defined 2026-04-24 (not yet started; may run in parallel with v0.3.0 Phase 16 cluster re-run since Phase 17 depends only on Phase 15 APIs).
+**Phases:** 17+
+**Theme:** Interactive serialization + rendering tooling for DCM model configs and fitted posteriors. Distinct from v0.3.0's fitting/recovery scope — acceptance is structural (JSON schema validity, round-trip equality, planned↔fitted toggle semantics) rather than RECOV-style RMSE/coverage gates.
+
+### Overview
+
+v0.4.0 delivers a Python-side serializer (`CircuitViz` in `src/pyro_dcm/utils/circuit_viz.py`) that converts a Pyro-DCM model config and/or fitted SVI posterior into the `dcm_circuit_explorer/v1` JSON schema consumed by `docs/dcm_circuit_explorer_template.html`. The renderer is already fully specified and shipped; the handoff doc (`docs/HANDOFF_viz.md`) contains the complete class interface, including verbatim implementations of `from_posterior()` and `load()`. Only `from_model_config()` is a stub. Research (MEDIUM-HIGH confidence) confirms zero upstream API changes are required; Phase 17 is purely additive.
+
+**Milestone acceptance gate:** `CircuitViz.from_model_config(...).to_dict()` and `CircuitViz.from_posterior(...).to_dict()` both produce dicts that serialize to valid `dcm_circuit_explorer/v1` JSON, round-trip through `load()` with equality, and set `_status` correctly (`"planned"` vs `"fitted"`). No fitting metrics gated.
+
+### Phases
+
+#### Phase 17: Circuit Visualization Module
+
+**Goal:** Implement `src/pyro_dcm/utils/circuit_viz.py` — a `CircuitViz` class with `from_model_config`, `from_posterior`, `to_dict`, `save`, and `load` methods producing `dcm_circuit_explorer/v1` JSON from Pyro-DCM model configs and/or SVI posteriors, verified by structural unit tests and a Pyro smoke integration test.
+
+**Branch:** `gsd/phase-17-circuit-visualization-module` (proposed)
+**Depends on:** Phase 15 (`extract_posterior_params` from MODEL-05). Does NOT depend on Phase 16.
+**Requirements:** VIZ-01, VIZ-02, VIZ-03, VIZ-04, VIZ-05, VIZ-06, VIZ-07, VIZ-08, VIZ-09, VIZ-10 (derived from `docs/HANDOFF_viz.md` during /gsd:plan-phase 17 on 2026-04-24; see `.planning/REQUIREMENTS.md` v0.4.0 Requirements section).
+**Plans:** 1 plan (1 wave)
+Plans:
+- [ ] 17-01-PLAN.md — CircuitViz core (`CircuitVizConfig` + `from_model_config` + `from_posterior` + `load` + `flatten_posterior_for_viz` helper) + 12 structural/integration tests (A-01..A-10 + B-01/B-02) + utils re-export + REQUIREMENTS.md VIZ-01..10 append (VIZ-01..10)
+
+**Success Criteria** (what must be TRUE — provisional, finalized during planning):
+
+  1. `CircuitViz.from_model_config(...)` produces a dict matching `dcm_circuit_explorer/v1` schema with `_status == "planned"` and `fitted_params is None`.
+  2. `CircuitViz.from_posterior(extract_posterior_params(...))` produces a dict with `_status == "fitted"` and populated `fitted_params` (per-matrix means or medians, shape-matched to A/B_j/C).
+  3. Round-trip test: `CircuitViz.load(viz.save(path))` reads back equal to the original on a reference 3-region bilinear fixture.
+  4. Schema tolerance: `from_model_config` works for a bare bilinear DCM with no HEART2ADAPT metadata (empty `phenotypes`/`hypotheses`/`drugs`); renderer handles missing optional fields without JS errors (verified structurally, not via headless browser per research recommendation).
+  5. Zero upstream API changes — no edits to `task_dcm_model`, `extract_posterior_params`, `parameterize_A`, `parameterize_B`, or any file outside `src/pyro_dcm/utils/` and `tests/`.
+
+### Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 17. Circuit Visualization Module | 0/1 | Planned (1 plan; ready to execute) | -- |
+
+---
+
 ## Cumulative Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -208,7 +250,8 @@ RECOV-08
 | 14. Stimulus Utilities & Bilinear Simulator | v0.3.0 | 2/2 | Complete | 2026-04-18 |
 | 15. Pyro Generative Model with B Priors and Masks | v0.3.0 | 3/3 | Complete | 2026-04-18 |
 | 16. 3-Region Bilinear Recovery Benchmark | v0.3.0 | 0/TBD | Pending | -- |
+| 17. Circuit Visualization Module | v0.4.0 | 0/1 | Planned | -- |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-04-18 after Phase 15 completion (3/3 plans; 14/14 must-haves verified passed; MODEL-01..07 Complete; 12 new commits on branch gsd/phase-15-pyro-bilinear-model)*
+*Last updated: 2026-04-24 — Phase 17 moved from v0.3.0 into new v0.4.0 Circuit Explorer milestone (acceptance is serialization/schema-structural, not fitting-metric; no dependency on Phase 16 RECOV). Phase 17 planned as single-plan 17-01 covering VIZ-01..10.*

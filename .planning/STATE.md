@@ -138,6 +138,32 @@ None currently.
   mapping). Coverage 27/27. Execution order enforced by data dependency chain:
   13 (forward model) -> 14 (simulator produces ground truth) -> 15 (Pyro model
   needs both) -> 16 (benchmark integrates everything).
+- 2026-04-24: Phase 17 (Circuit Visualization Module) appended to v0.3.0 via
+  /gsd:add-phase. Implements `src/pyro_dcm/utils/circuit_viz.py` per
+  `docs/HANDOFF_viz.md`: Python class that serialises a DCM model config
+  (+ optional fitted posterior means) into the `dcm_circuit_explorer/v1`
+  JSON schema consumed by `docs/dcm_circuit_explorer_template.html`.
+  Reference config `configs/heart2adapt_dcm_config.json` with
+  `fitted_params: null` slot for SVI posterior means. Only
+  `CircuitViz.from_model_config()` remains to implement; `from_posterior`
+  and `load` fully specified in handoff.
+- 2026-04-24 (SAME DAY REORG): Phase 17 MOVED from v0.3.0 into new v0.4.0
+  Circuit Explorer milestone. Rationale: Phase 17 acceptance is strictly
+  serialization/schema-structural (round-trip equality, `_status` toggle
+  semantics, renderer compat) per user directive "this phase should be
+  distinct in its acceptances from the rest of the fitting work — it is
+  just a visualizer." No dependency on Phase 16 RECOV; depends only on
+  Phase 15 `extract_posterior_params` (MODEL-05, already shipped). v0.3.0
+  reverts to its original 4-phase scope (13-16) and remains gated on
+  Phase 16 RECOV cluster re-run. v0.4.0 "Circuit Explorer" milestone is
+  defined but not yet started; may run in parallel with v0.3.0 Phase 16
+  slow acceptance-gate re-run since the two are independent. Phase 17
+  research doc (`.planning/phases/17-circuit-visualization-module/17-RESEARCH.md`,
+  MEDIUM-HIGH confidence, committed as cf5bc69) remains valid under the
+  reorg since it was milestone-agnostic. v0.4.0 next step: either
+  /gsd:new-milestone for a full milestone kickoff (PROJECT.md update +
+  REQUIREMENTS.md derivation + research pass) OR resume /gsd:plan-phase 17
+  directly using the existing RESEARCH.md. User to decide.
 
 ## Session Continuity
 
