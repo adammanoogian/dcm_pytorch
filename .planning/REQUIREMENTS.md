@@ -142,16 +142,16 @@ Explicitly excluded from v0.3.0 (and often permanently).
 | RECOV-06 | Phase 16 | Pending |
 | RECOV-07 | Phase 16 | Pending |
 | RECOV-08 | Phase 16 | Pending |
-| VIZ-01 | Phase 17 | Pending |
-| VIZ-02 | Phase 17 | Pending |
-| VIZ-03 | Phase 17 | Pending |
-| VIZ-04 | Phase 17 | Pending |
-| VIZ-05 | Phase 17 | Pending |
-| VIZ-06 | Phase 17 | Pending |
-| VIZ-07 | Phase 17 | Pending |
-| VIZ-08 | Phase 17 | Pending |
-| VIZ-09 | Phase 17 | Pending |
-| VIZ-10 | Phase 17 | Pending |
+| VIZ-01 | Phase 17 | Complete |
+| VIZ-02 | Phase 17 | Complete |
+| VIZ-03 | Phase 17 | Complete |
+| VIZ-04 | Phase 17 | Complete |
+| VIZ-05 | Phase 17 | Complete |
+| VIZ-06 | Phase 17 | Complete |
+| VIZ-07 | Phase 17 | Complete |
+| VIZ-08 | Phase 17 | Complete |
+| VIZ-09 | Phase 17 | Complete |
+| VIZ-10 | Phase 17 | Complete |
 
 **Coverage:**
 - v0.3.0 requirements: 27 total
@@ -170,4 +170,4 @@ Explicitly excluded from v0.3.0 (and often permanently).
 
 ---
 *Requirements defined: 2026-04-17*
-*Last updated: 2026-04-24 — v0.4.0 milestone opened; VIZ-01..10 appended for Phase 17 (Circuit Visualization Module). v0.3.0 Phase 16 RECOV-01..08 still pending cluster re-run.*
+*Last updated: 2026-04-24 — Phase 17 complete; VIZ-01..10 flipped to Complete after gsd-verifier confirmed 15/15 must-haves against the codebase (commit ef2a8d8 on gsd/phase-17-circuit-visualization-module). v0.3.0 Phase 16 RECOV-01..08 still pending cluster re-run.*

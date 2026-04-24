@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-04-17)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.4.0 Circuit Explorer -- Phase 17 Plan 01 CircuitViz serializer LANDED 2026-04-24 on branch `gsd/phase-17-circuit-visualization-module`. Pure-Python `dcm_circuit_explorer/v1` JSON serializer (`src/pyro_dcm/utils/circuit_viz.py` + `tests/test_circuit_viz.py`) with zero upstream edits; 15 fast tests + 2 slow Pyro-integration smokes green. v0.3.0 Phase 16 cluster-acceptance re-run remains orthogonal and pending.
+**Current focus:** v0.4.0 Circuit Explorer -- Phase 17 COMPLETE 2026-04-24 on branch `gsd/phase-17-circuit-visualization-module` (gsd-verifier passed 15/15 must-haves against codebase at ef2a8d8; VIZ-01..10 flipped to Complete in REQUIREMENTS.md). Single-phase v0.4.0 milestone is functionally shippable pending /gsd:audit-milestone + /gsd:complete-milestone. Pure-Python `dcm_circuit_explorer/v1` JSON serializer (`src/pyro_dcm/utils/circuit_viz.py` 659 LOC + `tests/test_circuit_viz.py` 506 LOC) with zero upstream edits; 15 fast tests + 2 slow Pyro-integration smokes green. v0.3.0 Phase 16 cluster-acceptance re-run remains orthogonal and pending. One pre-existing test failure surfaced during Phase 17 regression (`tests/test_task_simulator.py::TestSimulatorOutputStructure::test_simulator_output_keys` -- broke when Phase 16 commit f7c2ba9 added `simulation_diverged` without updating this test); NOT a Phase 17 blocker; routed as a todo for v0.3.0 Phase 16 follow-up.
 
 ## Current Position
 

@@ -219,7 +219,7 @@ v0.4.0 delivers a Python-side serializer (`CircuitViz` in `src/pyro_dcm/utils/ci
 **Requirements:** VIZ-01, VIZ-02, VIZ-03, VIZ-04, VIZ-05, VIZ-06, VIZ-07, VIZ-08, VIZ-09, VIZ-10 (derived from `docs/HANDOFF_viz.md` during /gsd:plan-phase 17 on 2026-04-24; see `.planning/REQUIREMENTS.md` v0.4.0 Requirements section).
 **Plans:** 1 plan (1 wave)
 Plans:
-- [ ] 17-01-PLAN.md — CircuitViz core (`CircuitVizConfig` + `from_model_config` + `from_posterior` + `load` + `flatten_posterior_for_viz` helper) + 12 structural/integration tests (A-01..A-10 + B-01/B-02) + utils re-export + REQUIREMENTS.md VIZ-01..10 append (VIZ-01..10)
+- [x] 17-01-PLAN.md — CircuitViz core (`CircuitVizConfig` + `from_model_config` + `from_posterior` + `load` + `flatten_posterior_for_viz` helper) + 12 structural/integration tests (A-01..A-10 + B-01/B-02) + utils re-export + REQUIREMENTS.md VIZ-01..10 append (VIZ-01..10)
 
 **Success Criteria** (what must be TRUE — provisional, finalized during planning):
 
@@ -233,7 +233,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 17. Circuit Visualization Module | 0/1 | Planned (1 plan; ready to execute) | -- |
+| 17. Circuit Visualization Module | 1/1 | Complete (verified 15/15 must-haves) | 2026-04-24 |
 
 ---
 
@@ -250,8 +250,8 @@ Plans:
 | 14. Stimulus Utilities & Bilinear Simulator | v0.3.0 | 2/2 | Complete | 2026-04-18 |
 | 15. Pyro Generative Model with B Priors and Masks | v0.3.0 | 3/3 | Complete | 2026-04-18 |
 | 16. 3-Region Bilinear Recovery Benchmark | v0.3.0 | 0/TBD | Pending | -- |
-| 17. Circuit Visualization Module | v0.4.0 | 0/1 | Planned | -- |
+| 17. Circuit Visualization Module | v0.4.0 | 1/1 | Complete | 2026-04-24 |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-04-24 — Phase 17 moved from v0.3.0 into new v0.4.0 Circuit Explorer milestone (acceptance is serialization/schema-structural, not fitting-metric; no dependency on Phase 16 RECOV). Phase 17 planned as single-plan 17-01 covering VIZ-01..10.*
+*Last updated: 2026-04-24 — Phase 17 (Circuit Visualization Module) complete; verified 15/15 must-haves (5 ROADMAP success criteria + VIZ-01..10); 17 tests green (15 fast + 2 slow Pyro smoke); zero upstream edits. v0.4.0 Circuit Explorer milestone is functionally shippable (single-phase scope) pending /gsd:audit-milestone + /gsd:complete-milestone. v0.3.0 Phase 16 RECOV cluster re-run remains the independent outstanding work.*
