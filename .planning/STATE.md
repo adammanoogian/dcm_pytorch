@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-04-17)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.3.0 Bilinear DCM Extension -- Phase 16 step-0-NaN root-cause + seed-pool fix landed 2026-04-24 on branch `fix/phase16-nan-seeds-investigation`. Local reproducer + 10-seed enumeration confirmed the cluster-observed failures on seeds 44/49/50 are **ground-truth fixture corruption**, not init-scale sensitivity: `simulate_task_dcm` silently emits NaN BOLD for ~30% of Phase-16 seeds. Fix: runner seed-pool filter + simulator `simulation_diverged` flag; init-scale retry kept as defensive depth. Next gate: re-submit cluster job `bash cluster/submit_phase16.sh` with the fix landed; passing closes v0.3.0.
+**Current focus:** v0.4.0 Circuit Explorer -- Phase 17 COMPLETE 2026-04-24 on branch `gsd/phase-17-circuit-visualization-module` (gsd-verifier passed 15/15 must-haves against codebase at ef2a8d8; VIZ-01..10 flipped to Complete in REQUIREMENTS.md). Single-phase v0.4.0 milestone is functionally shippable pending /gsd:audit-milestone + /gsd:complete-milestone. Pure-Python `dcm_circuit_explorer/v1` JSON serializer (`src/pyro_dcm/utils/circuit_viz.py` 659 LOC + `tests/test_circuit_viz.py` 506 LOC) with zero upstream edits; 15 fast tests + 2 slow Pyro-integration smokes green. v0.3.0 Phase 16 cluster-acceptance re-run remains orthogonal and pending. One pre-existing test failure surfaced during Phase 17 regression (`tests/test_task_simulator.py::TestSimulatorOutputStructure::test_simulator_output_keys` -- broke when Phase 16 commit f7c2ba9 added `simulation_diverged` without updating this test); NOT a Phase 17 blocker; routed as a todo for v0.3.0 Phase 16 follow-up.
 
 ## Current Position
 
-**Milestone:** v0.3.0 Bilinear DCM Extension (started 2026-04-17)
-**Phase:** Phase 16 -- 3-Region Bilinear Recovery Benchmark (IMPLEMENTATION COMPLETE 2026-04-19; STEP-0 NaN ROOT-CAUSE + SEED-POOL FIX LANDED 2026-04-24 on `fix/phase16-nan-seeds-investigation`; pending slow acceptance-gate re-run on cluster before the phase is CLOSED).
-**Plan:** 16-01 COMPLETE 2026-04-18 (runner infrastructure); 16-03 COMPLETE 2026-04-18 (HGF factory hook + mock + wiring tests); 16-02 COMPLETE 2026-04-19 (metrics + plotting + acceptance gates); 16-FIX COMPLETE 2026-04-24 (step-0 NaN root cause + seed-pool filter; supersedes commit 9c50011).
-**Status:** All 4 Phase 16 plans shipped. Plan 16-02 finalization session wrote `.planning/phases/16-bilinear-recovery-benchmark/16-02-SUMMARY.md` + this STATE update + the Task 4 `docs(16-02): complete bilinear metrics and acceptance plan` metadata commit. `benchmarks/bilinear_metrics.py` ships 5 pure metric helpers (compute_b_rmse_magnitude, compute_sign_recovery_nonzero L5-pooled, compute_coverage_of_zero L5-pooled + L7 95% CI, compute_shrinkage, compute_a_rmse_relative) + `compute_acceptance_gates(runner_result)` as THE single-source-of-truth RECOV-03..08 pass/fail entry point consumed by both the slow acceptance test and the pass/fail table figure. `benchmarks/plotting.py` gains `plot_bilinear_b_forest` (9-row per-element forest with per-seed-median scatter + cross-seed median+IQR + B_true reference dot + inline shrinkage annotation per L6/L7; 95% CI) and `plot_acceptance_gates_table` (6-row pass/fail table with row-tinted PASS/FAIL/INFO/10x-FLAG cells); `generate_all_figures` dispatches to both when a `('task_bilinear', 'svi')` results entry is present (tuple + str-tuple keys). `tests/test_bilinear_metrics.py` has 11 unit tests (5 TestMetricHelpers + 6 TestAcceptanceGates including FIX-2 AND-combination regression gate and FIX-5 insufficient_data guard). `tests/test_task_bilinear_benchmark.py::TestTaskBilinearAcceptance::test_acceptance_gates_pass_at_10_seeds` (@pytest.mark.slow) enforces FIX-1 `n_success >= 10` precondition before gate computation, runs `BenchmarkConfig.full_config('task_bilinear', 'svi')` with `n_svi_steps=500` override (L8), writes both figures to `tmp_path` as artifacts, and asserts all 4 RECOV gates pass with descriptive failure messages. Rule-1 auto-fix on `RECOV_06_NULL_MASK` (0.5 -> 0.1) prevents mis-classifying the 0.3/0.4 non-null elements as null; documented in the SUMMARY. File-ownership contract with parallel plan 16-03 respected: 16-02 only touched `benchmarks/bilinear_metrics.py` (NEW), `benchmarks/plotting.py`, `tests/test_bilinear_metrics.py` (NEW), `tests/test_task_bilinear_benchmark.py`; no modifications to `benchmarks/runners/task_bilinear.py`. Fast pytest regression (103 passed, 3 deselected slow, 0 failed) + ruff clean on the 3 16-02-authored files (pre-existing 3 B905/B007 errors in plotting.py at lines 239/461/1595 from commit 47e850e pre-date Phase 16 and are out of scope). Closes RECOV-03, RECOV-04, RECOV-05, RECOV-06 (acceptance + slow test), RECOV-07 (shrinkage + inline forest annotation), RECOV-08 (wall-time ratio + 10x flag). NEXT: run the slow acceptance gate `pytest tests/test_task_bilinear_benchmark.py -m slow -k acceptance` (~80 min estimated) to confirm RECOV gates pass on real runner output; passing closes Phase 16 and v0.3.0 Bilinear DCM Extension.
-**Last activity:** 2026-04-24 -- Step-0-NaN root cause investigation + seed-pool fix on `fix/phase16-nan-seeds-investigation`. Local reproducer (`scripts/debug_phase16_nan_seeds.py`) pinpointed that cluster job 54902455's "NaN ELBO at step 0" on seeds 44/49/50 originates in **observed_bold (the ground-truth fixture)**, not in init-scale sensitivity: `_make_bilinear_ground_truth` emits BOLD with ~33% NaN for these seeds before SVI starts; the predicted_bold NaN-safe guard zeros the predicted side but cannot rescue a NaN observation, so the Gaussian likelihood NaN's regardless of init_scale. Fixture enumeration across seeds 42-51 (`scripts/debug_phase16_fixture_check.py`) confirmed 44/49/50 corruption matches cluster exactly, AND confirmed the failure is NOT a simple `max Re eig(A+B) >= 0` condition (seeds 49, 50 have max Re = -0.50, -0.36 and still NaN -- likely non-normal matrix transient + Balloon hemodynamic nonlinearity). Fix: (a) `src/pyro_dcm/simulators/task_simulator.py` adds `simulation_diverged: bool` to return dict; (b) `benchmarks/runners/task_bilinear.py` replaces fixed-seed loop with seed pool of size `n_datasets * _MAX_POOL_MULTIPLIER` (default 3) that skips seeds whose fixture BOLD contains NaN/Inf; (c) `run_task_bilinear_svi` raises NotImplementedError when `fixtures_dir is not None` (index-keyed .npz cache incompatible with seed-pool; v0.3.1 will add cache-by-seed); (d) test tightened back to `n_success >= 10` (upstream filter guarantees no step-0 NaN among collected seeds). `_fit_bilinear_with_retry` (commit 9c50011's core helper) kept as defensive depth for unrelated rare step-0 NaN paths. 2 new simulator tests + TestSeedPoolCorruptSkip class (2 tests + `_FakePiecewise` stand-in). Prior pending todo `.planning/todos/pending/2026-04-19-retry-nan-seeds-halved-init-scale.md` moved to `.planning/todos/done/2026-04-23-phase16-nan-seeds-rootcause-and-fix.md` with full root-cause + supersession narrative.
+**Milestone:** v0.4.0 Circuit Explorer (started 2026-04-24; first active milestone work)
+**Phase:** Phase 17 -- Circuit Visualization Module (Plan 17-01 COMPLETE 2026-04-24).
+**Plan:** 17-01 COMPLETE 2026-04-24 (CircuitViz serializer: CircuitVizConfig dataclass + CircuitViz class + flatten_posterior_for_viz helper + 17 tests). Phase 16 history: 16-01 / 16-03 COMPLETE 2026-04-18; 16-02 COMPLETE 2026-04-19; 16-FIX COMPLETE 2026-04-24 (step-0 NaN root cause + seed-pool filter; supersedes commit 9c50011).
+**Status:** Phase 17 Plan 01 CircuitViz serializer shipped (commits `57c5922` feat + `b5af070` test on `gsd/phase-17-circuit-visualization-module`). `src/pyro_dcm/utils/circuit_viz.py` (NEW, 659 LOC) ships `CircuitVizConfig` dataclass with 13 first-class fields (`schema`, `status`, `meta`, `palette`, `regions`, `region_colors`, `matrices`, `mat_order`, `phenotypes`, `hypotheses`, `drugs`, `peb`, `fitted_params`) PLUS a pass-through `extras: dict` field (V1) that collects every top-level JSON key NOT in `_FIRST_CLASS_KEYS` frozenset, enabling byte-identical round-trip of `configs/heart2adapt_dcm_config.json` (`_study`, `_description`, `node_info` preserved). `CircuitViz.from_model_config` requires `regions` + `region_colors` (length-matched per V2, ValueError with expected-vs-actual message otherwise) + `A_prior_mean`; emits sort-deterministic `mat_order = ['A'] + sorted(B_keys) + (['C'] if C else [])` (V7); accepts torch.Tensor / numpy.ndarray / nested list matrix values via private `_to_list_of_list` dispatcher (V8). `CircuitViz.from_posterior` verbatim handoff semantics + V6 pre-deepcopy `_validate_no_nan` guard with `(key, row, col)` localization. `CircuitVizConfig.export` calls `_validate_no_nan(fitted_params)` before `json.dumps` (V6 scope-extension). Module-level helper `flatten_posterior_for_viz(posterior, mat_order, b_masks)` (V4; recommended, not auto-invoked) bridges `extract_posterior_params` output to the `from_posterior` input shape -- handles `'A'` (from deterministic A site or `parameterize_A(A_free)` fallback), `'C'`, and `'B{j}'` (from `'B'` stacked site or `B_free_{j} + parameterize_B(b_mask)` fallback). `src/pyro_dcm/utils/__init__.py` additive re-export of `CircuitViz`, `CircuitVizConfig`, `flatten_posterior_for_viz` with `# Phase 17` markers. `tests/test_circuit_viz.py` (NEW, 506 LOC) ships 10 A-series structural acceptance tests (HEART2ADAPT round-trip, status-flip, no-mutation, 13-key surface, deterministic mat_order, schema version, list-of-list vals, tensor coercion, export round-trip, empty-optional-collections), 5 regression gates (V2 missing, V2 length-mismatch, V6 NaN, V6 Inf, V1 extras round-trip), and 2 slow `TestPyroIntegration` smokes (B-01 end-to-end SVI -> flatten -> fitted with 20-step bare-SVI bilinear loop + `functools.partial`-bound Predictive; B-02 shape contract A (3,3) -> 3x3 nested list). Tests: 15 fast in 2.5s + 2 slow in 12.5s = 17 passed. Ruff + mypy clean on all 3 Phase-17 files. Zero upstream edits: `git diff --name-only 9979b7e..HEAD` shows exactly the 3 allowed files (VIZ-10 gate satisfied). Full repo regression (`pytest tests/ -m "not slow"`) = 483 passed / 1 failed / 37 deselected in 35:30; the single failure is `tests/test_task_simulator.py::TestSimulatorOutputStructure::test_simulator_output_keys` which pre-dates Phase 17 -- it broke when Phase 16 commit `f7c2ba9` added `simulation_diverged` to `simulate_task_dcm`'s return dict without updating this test (unrelated to this plan; orthogonal fix). Task 3 (REQUIREMENTS.md VIZ-01..10 append) was already applied by the planner in commit `9979b7e` before execution started -- grep sentinel verification confirmed every assertion byte-identical; no additional commit (git hygiene forbids empty commits). Closes VIZ-01..10 (pending `/gsd:verify-phase 17` gate flip).
+**Last activity:** 2026-04-24 -- Plan 17-01 execution shipped the CircuitViz v1 serializer on `gsd/phase-17-circuit-visualization-module`. Branch now has 4 commits since `cf5bc69` merge base: `8543992` (docs: handoff spec + renderer template + HEART2ADAPT config), `9979b7e` (docs: plan + VIZ-01..10 requirements), `57c5922` (feat(17-01): CircuitViz core), `b5af070` (test(17-01): acceptance tests + utils re-exports). One Rule-3 deviation auto-fix: B-01 bilinear posterior-extraction path switched from the plan-spec `run_svi(..., model_kwargs=...)` + `extract_posterior_params(guide, model_args, model=task_dcm_model)` to a bare SVI loop + `functools.partial(task_dcm_model, b_masks=b_masks, stim_mod=stim_mod)` bound before Predictive, because Predictive invokes `model(*args)` with no kwarg forwarding so the bilinear branch never activated during posterior sampling. Pattern mirrors `tests/test_posterior_extraction.py::TestBilinearPosteriorExtraction::test_extract_posterior_includes_B_free_and_B`. No V-decision semantics changed. Full SUMMARY: `.planning/phases/17-circuit-visualization-module/17-01-SUMMARY.md`.
 
-Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [██████████] Phases 13 + 14 + 15 complete + Phase 16 IMPLEMENTATION complete (slow acceptance-gate test pending for milestone closure)
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [██████████] Phases 13 + 14 + 15 complete + Phase 16 IMPLEMENTATION complete (cluster acceptance-gate re-run pending for milestone closure) | v0.4.0 [██░░░░░░░░] Phase 17 Plan 17-01 CircuitViz serializer shipped (Phase 17 verification pending)
 
 ## Decisions
 
@@ -87,6 +87,54 @@ Progress: v0.1.0 [██████████] 100% | v0.2.0 [█████
   meaningful.** `make_sinusoid_mod_factory(0.05 Hz, amplitude 0.5)` exists exclusively
   to exercise factory plumbing per CONTEXT.md "the indirection is proven wired, not
   a theoretical API." v0.3.1 SIM-06 HGF factories share the L9 signature.
+- **Plan 17-01 V1 - `CircuitVizConfig.extras: dict = field(default_factory=dict)`
+  pass-through field.** Every top-level JSON key NOT in the 13-key first-class set
+  (`_schema`, `_status`, `meta`, `palette`, `regions`, `region_colors`, `matrices`,
+  `mat_order`, `phenotypes`, `hypotheses`, `drugs`, `peb`, `fitted_params`) is collected
+  by `CircuitViz.load` into `cfg.extras`. `to_dict()` merges extras after first-class
+  fields with first-class winning on collision. Enables byte-identical HEART2ADAPT
+  round-trip without bloating the first-class surface with HEART2ADAPT-specific keys
+  (`_study`, `_description`, `node_info`) the renderer treats as optional.
+- **Plan 17-01 V2 - `from_model_config` REQUIRES `model_cfg['region_colors']` with
+  length-matched assertion.** ValueError with expected-vs-actual message on absence
+  or mismatch. No matplotlib/tab10 fallback: implicit color synthesis produces
+  non-reproducible JSON across matplotlib versions and violates the CLAUDE.md
+  "expected vs actual" convention.
+- **Plan 17-01 V4 - `flatten_posterior_for_viz(posterior, mat_order, b_masks=None)`
+  stays a sibling helper, NOT auto-invoked from `from_posterior`.** Caller retains
+  control over the A vs A_free transform choice and the B (stacked) vs B_free_j + mask
+  source choice. Auto-flattening would hide those decisions. The `from_posterior`
+  signature matches the handoff verbatim (`dict[str, list[list[float]]]` pre-flattened
+  input).
+- **Plan 17-01 V6 - `_validate_no_nan` is called BEFORE `copy.deepcopy` in
+  `from_posterior` AND BEFORE `json.dumps` in `export`.** Error message includes the
+  offending `(key, row, col)` tuple. Catches post-SVI NaN (a known Phase 16 scenario)
+  at the serializer boundary with a clear localization rather than deferring to
+  `json.dumps(allow_nan=False)`'s less-localized error.
+- **Plan 17-01 V7 - `mat_order = ['A'] + sorted(B_matrices.keys()) + (['C'] if C)`
+  is always sort-deterministic.** Never relies on caller dict insertion order.
+  Guarantees reproducible JSON across runs and test seeds even when callers construct
+  `B_matrices` in arbitrary key order.
+- **Plan 17-01 V8 - `_to_list_of_list` private helper dispatches on type.**
+  `torch.Tensor` -> `.detach().cpu().tolist()`, `numpy.ndarray` -> `.tolist()` (numpy
+  import guarded by try/except ImportError), `list`/`tuple` -> nested list pass-through.
+  Other types raise `TypeError` with expected-vs-actual. Keeps the from_model_config
+  API ergonomic for callers building `model_cfg` from live `task_dcm_model` state
+  without sacrificing determinism (tolist is lossless for float64).
+- **Plan 17-01 V3/V5 deferrals.** JSON Schema codification (`.schema.json` file) is
+  DEFERRED to a later v0.4.x patch (avoids `jsonschema` runtime dep + schema-drift
+  risk). Headless-browser SVG-fidelity rendering tests are DEFERRED (disproportionate
+  infra for a ~150-LOC serializer; structural assertions + renderer-safe-fallback
+  coverage per 17-RESEARCH.md "Renderer behavior on missing fields" table are the
+  acceptance surface).
+- **Plan 17-01 B-01 deviation (Rule 3 blocking, auto-fixed).** The plan-spec B-01
+  integration smoke used `run_svi(..., model_kwargs=bilinear_kwargs)` + `extract_posterior_params(guide, model_args, model=task_dcm_model)`. This fails
+  because `Predictive(model, guide, ...)` invokes `model(*args)` with no kwarg
+  forwarding, so the bilinear branch never fires during posterior sampling
+  (posterior has `['A', 'A_free', 'C', 'median', 'noise_prec', 'obs', 'predicted_bold']`
+  -- no `B_free_0`). Fix: bare 20-step SVI loop + `bilinear_model = functools.partial(task_dcm_model, b_masks=b_masks, stim_mod=stim_mod)` passed as `model=bilinear_model` to
+  `extract_posterior_params`. Pattern mirrors `tests/test_posterior_extraction.py::TestBilinearPosteriorExtraction::test_extract_posterior_includes_B_free_and_B`. No
+  V-decision semantics changed.
 
 See `.planning/milestones/v0.2.0-ROADMAP.md` and `.planning/milestones/v0.1.0-ROADMAP.md` for prior milestones.
 
@@ -138,8 +186,101 @@ None currently.
   mapping). Coverage 27/27. Execution order enforced by data dependency chain:
   13 (forward model) -> 14 (simulator produces ground truth) -> 15 (Pyro model
   needs both) -> 16 (benchmark integrates everything).
+- 2026-04-24: Phase 17 (Circuit Visualization Module) appended to v0.3.0 via
+  /gsd:add-phase. Implements `src/pyro_dcm/utils/circuit_viz.py` per
+  `docs/HANDOFF_viz.md`: Python class that serialises a DCM model config
+  (+ optional fitted posterior means) into the `dcm_circuit_explorer/v1`
+  JSON schema consumed by `docs/dcm_circuit_explorer_template.html`.
+  Reference config `configs/heart2adapt_dcm_config.json` with
+  `fitted_params: null` slot for SVI posterior means. Only
+  `CircuitViz.from_model_config()` remains to implement; `from_posterior`
+  and `load` fully specified in handoff.
+- 2026-04-24 (SAME DAY REORG): Phase 17 MOVED from v0.3.0 into new v0.4.0
+  Circuit Explorer milestone. Rationale: Phase 17 acceptance is strictly
+  serialization/schema-structural (round-trip equality, `_status` toggle
+  semantics, renderer compat) per user directive "this phase should be
+  distinct in its acceptances from the rest of the fitting work — it is
+  just a visualizer." No dependency on Phase 16 RECOV; depends only on
+  Phase 15 `extract_posterior_params` (MODEL-05, already shipped). v0.3.0
+  reverts to its original 4-phase scope (13-16) and remains gated on
+  Phase 16 RECOV cluster re-run. v0.4.0 "Circuit Explorer" milestone is
+  defined but not yet started; may run in parallel with v0.3.0 Phase 16
+  slow acceptance-gate re-run since the two are independent. Phase 17
+  research doc (`.planning/phases/17-circuit-visualization-module/17-RESEARCH.md`,
+  MEDIUM-HIGH confidence, committed as cf5bc69) remains valid under the
+  reorg since it was milestone-agnostic. v0.4.0 next step: either
+  /gsd:new-milestone for a full milestone kickoff (PROJECT.md update +
+  REQUIREMENTS.md derivation + research pass) OR resume /gsd:plan-phase 17
+  directly using the existing RESEARCH.md. User to decide.
+- 2026-04-24: **Phase 16.1 INSERTED (URGENT)** after Phase 16 via
+  /gsd:insert-phase. Trigger: cluster acceptance re-run (SLURM job 54933838
+  on `origin/results/phase16-acceptance-20260424-214708`, commit `f7c2ba9`,
+  147 min on m3e103) **FAILED RECOV-04**: B-RMSE = 0.3424 vs <= 0.20
+  threshold, distribution 0.335-0.348 across all 10 seeds (systematic
+  underfit, not outlier noise). RECOV-03 (0.9972 <= 1.25), RECOV-05 (0.85
+  >= 0.80), RECOV-06 (1.00 >= 0.85), RECOV-08 (1.15x wall-time) all PASS.
+  RECOV-07 shrinkage means ~0.008 on nonnull B entries -> SVI guide
+  collapsing B posterior toward zero. Seed-pool fix (f7c2ba9) worked as
+  designed: corrupt seeds 44/49/50/53 correctly skipped and replaced.
+  v0.3.0 milestone closure BLOCKED on Phase 16.1 root-cause + re-run.
+  Phase 16.1 scope hypotheses captured in ROADMAP (prior-variance /
+  init-scale, guide family, B_true magnitude vs prior, stim_mod SNR, step
+  count / LR schedule). Next: /gsd:plan-phase 16.1 to derive
+  requirements + plans. Phase 17 (v0.4.0) remains complete and
+  independently shippable once v0.3.0 closes.
 
 ## Session Continuity
+
+Last session: 2026-04-24 (Plan 17-01 execution)
+Stopped at: Plan 17-01 COMPLETE -- CircuitViz v1 serializer
+shipped on `gsd/phase-17-circuit-visualization-module` as
+the first (and currently only) plan in the v0.4.0 Circuit
+Explorer milestone. `src/pyro_dcm/utils/circuit_viz.py`
+(NEW, 659 LOC) ships `CircuitVizConfig` dataclass with 13
+first-class JSON fields + extras pass-through (V1), the
+`CircuitViz` class with `from_model_config` / `from_posterior`
+/ `load` / `export` static methods, and the module-level
+`flatten_posterior_for_viz` helper bridging
+`extract_posterior_params` output to the `from_posterior`
+input shape (V4; recommended, not auto-invoked).
+`src/pyro_dcm/utils/__init__.py` gains additive re-exports
+with `# Phase 17` markers. `tests/test_circuit_viz.py` (NEW,
+506 LOC) ships 10 A-series structural acceptance tests + 5
+V1/V2/V6 regression gates + 2 slow Pyro-integration smokes
+(B-01 end-to-end SVI->flatten->fitted, B-02 shape contract).
+Fast pytest: 15 passed in 2.5s. Slow pytest: 2 passed in
+12.5s. Ruff + mypy clean on all 3 Phase-17 files (mypy's 61
+pre-existing errors elsewhere unchanged). Full repo fast
+regression: 483 passed / 1 failed / 37 deselected in 35:30;
+the one failure (`tests/test_task_simulator.py::TestSimulatorOutputStructure::test_simulator_output_keys`)
+pre-dates Phase 17 -- it broke when Phase 16 commit `f7c2ba9`
+added `simulation_diverged` to `simulate_task_dcm`'s return
+dict without updating this test. Task 3 (REQUIREMENTS.md
+VIZ-01..10 append) was already landed by the planner in
+commit `9979b7e` before execution started; grep sentinels
+confirmed byte-identical state and no additional commit was
+created (git hygiene forbids empty commits). Two task commits
+on branch since plan: `57c5922` (feat(17-01): CircuitViz
+core) + `b5af070` (test(17-01): acceptance tests + utils
+re-exports). Plan metadata commit + STATE update + SUMMARY
+lands next in this session. One Rule-3 deviation auto-fix:
+B-01 bilinear posterior-extraction path switched from the
+plan-spec `run_svi(..., model_kwargs=...)` +
+`extract_posterior_params(guide, model_args, model=task_dcm_model)`
+to bare SVI + `functools.partial(task_dcm_model, b_masks=b_masks, stim_mod=stim_mod)` bound as
+`model=bilinear_model` in `extract_posterior_params`, because
+Predictive invokes `model(*args)` with no kwarg forwarding so
+the bilinear branch never fired during posterior sampling.
+Pattern mirrors existing
+`tests/test_posterior_extraction.py::TestBilinearPosteriorExtraction::test_extract_posterior_includes_B_free_and_B`.
+No V1-V8 decision semantics changed. SUMMARY path:
+`.planning/phases/17-circuit-visualization-module/17-01-SUMMARY.md`.
+Resume file: None. Next: either (a) `/gsd:verify-phase 17` to
+flip VIZ-01..10 to Complete in REQUIREMENTS.md Traceability,
+or (b) return to v0.3.0 Phase 16 cluster acceptance-gate
+re-run to close v0.3.0.
+
+### 2026-04-19 -- Plan 16-02 complete (prior session)
 
 Last session: 2026-04-19 (Plan 16-02 finalization)
 Stopped at: Plan 16-02 COMPLETE -- all 4 Phase 16 plans
