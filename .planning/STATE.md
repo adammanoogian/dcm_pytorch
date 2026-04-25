@@ -212,6 +212,22 @@ None currently.
   /gsd:new-milestone for a full milestone kickoff (PROJECT.md update +
   REQUIREMENTS.md derivation + research pass) OR resume /gsd:plan-phase 17
   directly using the existing RESEARCH.md. User to decide.
+- 2026-04-24: **Phase 16.1 INSERTED (URGENT)** after Phase 16 via
+  /gsd:insert-phase. Trigger: cluster acceptance re-run (SLURM job 54933838
+  on `origin/results/phase16-acceptance-20260424-214708`, commit `f7c2ba9`,
+  147 min on m3e103) **FAILED RECOV-04**: B-RMSE = 0.3424 vs <= 0.20
+  threshold, distribution 0.335-0.348 across all 10 seeds (systematic
+  underfit, not outlier noise). RECOV-03 (0.9972 <= 1.25), RECOV-05 (0.85
+  >= 0.80), RECOV-06 (1.00 >= 0.85), RECOV-08 (1.15x wall-time) all PASS.
+  RECOV-07 shrinkage means ~0.008 on nonnull B entries -> SVI guide
+  collapsing B posterior toward zero. Seed-pool fix (f7c2ba9) worked as
+  designed: corrupt seeds 44/49/50/53 correctly skipped and replaced.
+  v0.3.0 milestone closure BLOCKED on Phase 16.1 root-cause + re-run.
+  Phase 16.1 scope hypotheses captured in ROADMAP (prior-variance /
+  init-scale, guide family, B_true magnitude vs prior, stim_mod SNR, step
+  count / LR schedule). Next: /gsd:plan-phase 16.1 to derive
+  requirements + plans. Phase 17 (v0.4.0) remains complete and
+  independently shippable once v0.3.0 closes.
 
 ## Session Continuity
 

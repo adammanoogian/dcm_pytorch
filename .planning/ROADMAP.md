@@ -203,7 +203,7 @@ RECOV-07.
 
 **Plans:** 2 plans (2 waves)
 Plans:
-- [ ] 16.1-01-PLAN.md — Single-seed init_scale sweep diagnostic on seed 42 across {0.005, 0.05, 0.1, 0.5} at 500 steps; produces machine + human diagnostic artifacts and a SUMMARY recording the chosen `_BILINEAR_INIT_SCALE` (or escalation if no winner). LOCAL execution (~20 min).
+- [ ] 16.1-01-PLAN.md — Single-seed init_scale sweep diagnostic on seed 42 across {0.005, 0.05, 0.1, 0.5} at 500 steps; produces machine + human diagnostic artifacts (autopushed to a `results/phase16_1-init-scale-sweep-*` branch) and a SUMMARY recording the chosen `_BILINEAR_INIT_SCALE` (or escalation if no winner). CLUSTER execution via sbatch on M3 (~30-40 min walltime); LOCAL harness-faithfulness pre-check (single fit at init_scale=0.005, &lt;5 min) BEFORE submission per cluster policy carve-out.
 - [ ] 16.1-02-PLAN.md — Apply chosen init_scale to `benchmarks/runners/task_bilinear.py`, replace inverted `_BILINEAR_INIT_SCALE_RETRY = 0.001` with "halve once on NaN at step 0", reuse Phase 16 cluster sbatch scaffolding to re-run the 10-seed acceptance gate, then flip RECOV-04 in REQUIREMENTS.md on pass (or document escalation on RECOV-06 degradation / RECOV-04 still-failing). CLUSTER execution (~80-150 min).
 
 **Hypotheses to investigate (planning input, not a plan):**
@@ -238,7 +238,7 @@ Plans:
      (std_post / std_prior <= 0.7) OR the soft target is explicitly revised with
      citation to observed bilinear identifiability limits.
   4. Diagnostic findings captured in a SUMMARY document
-     (`.planning/phases/16.1-recov-04-b-rmse-diagnostic/16.1-SUMMARY.md`) so that
+     (`.planning/phases/16.1-recov-04-b-rmse-diagnostic/16.1-02-SUMMARY.md`) so that
      the v0.3.1 amortized-bilinear work and any future RECOV tuning inherit the
      lessons learned.
   5. If the acceptance threshold itself needs revision (rather than the
