@@ -30,9 +30,9 @@ See `.planning/milestones/v0.2.0-ROADMAP.md` for details. 4 phases, 11 plans, 47
 
 ## Current Milestone: v0.3.0 Bilinear DCM Extension
 
-**Status:** In progress (started 2026-04-17)
-**Phases:** 13-16 (4 phases)
-**Requirements covered:** 27/27 v0.3.0 requirements
+**Status:** In progress (started 2026-04-17; Phase 16.1 inserted 2026-04-24 for RECOV-04 diagnostic)
+**Phases:** 13-16 + 16.1 (4 phases + 1 inserted)
+**Requirements covered:** 27/27 v0.3.0 requirements (Phase 16.1 may tighten or amend RECOV-04 / RECOV-07)
 
 ### Overview
 
@@ -183,16 +183,80 @@ RECOV-08
      3-region baseline (~235s/500 steps); expected 3-6x slowdown (Pitfall B10),
      flagged as a milestone risk if >10x (RECOV-08).
 
+#### Phase 16.1: RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED)
+
+**Goal:** Diagnose and resolve the systematic RECOV-04 acceptance failure observed on
+cluster job 54933838 (2026-04-24): B-RMSE = 0.3424 across all 10 seeds
+(distribution 0.335-0.348, tightly clustered — systematic underfit, not outlier
+noise) vs the <= 0.20 threshold on `|B_true| > 0.1` elements. RECOV-07 shrinkage
+means (~0.008 on nonnull B entries) indicate the SVI guide is collapsing the B
+posterior toward zero. Unblocks v0.3.0 milestone closure without renumbering the
+roadmap.
+
+**Branch:** `gsd/phase-16.1-recov-04-b-rmse-diagnostic` (proposed)
+**Depends on:** Phase 16 (acceptance runner + ground truth fixtures + cluster harness)
+**Requirements:** RECOV-04 (status flip pending cluster re-run); annotation on
+RECOV-07 (shrinkage_nonnull means in [0.05, 0.6] under raised init_scale).
+Plan 16.1 does NOT tighten or relax any RECOV threshold; the only REQUIREMENTS
+edits are the RECOV-04 status flip on cluster pass and a citation note on
+RECOV-07.
+
+**Plans:** 2 plans (2 waves)
+Plans:
+- [ ] 16.1-01-PLAN.md — Single-seed init_scale sweep diagnostic on seed 42 across {0.005, 0.05, 0.1, 0.5} at 500 steps; produces machine + human diagnostic artifacts and a SUMMARY recording the chosen `_BILINEAR_INIT_SCALE` (or escalation if no winner). LOCAL execution (~20 min).
+- [ ] 16.1-02-PLAN.md — Apply chosen init_scale to `benchmarks/runners/task_bilinear.py`, replace inverted `_BILINEAR_INIT_SCALE_RETRY = 0.001` with "halve once on NaN at step 0", reuse Phase 16 cluster sbatch scaffolding to re-run the 10-seed acceptance gate, then flip RECOV-04 in REQUIREMENTS.md on pass (or document escalation on RECOV-06 degradation / RECOV-04 still-failing). CLUSTER execution (~80-150 min).
+
+**Hypotheses to investigate (planning input, not a plan):**
+  1. **Prior-variance / init-scale interaction.** `B_PRIOR_VARIANCE = 1.0` (D1) + auto_normal
+     `init_scale = 0.005` (Plan 16-01 L2) may start the B guide distribution so tight
+     around zero that the ELBO prefers staying there over expanding — gradient signal to
+     B is weaker than to A because B enters multiplicatively through `u_mod`.
+  2. **Guide family insufficient.** AutoNormal may be too restrictive for the bilinear
+     posterior geometry; AutoLowRankMVN or AutoIAFNormal (verified to auto-discover B
+     sites in Plan 15-02) may recover better. Sidebar was explicitly deferred to v0.3.1
+     per Plan 16-01 L2 decision, but may need to move forward.
+  3. **B_true vs prior magnitude mismatch.** If the ground-truth |B_true| magnitudes at
+     the nonnull elements are much larger than `sqrt(B_PRIOR_VARIANCE) = 1.0`, a
+     Normal(0, 1) prior plus strong data likelihood could still pull the posterior
+     partway to zero while a MAP under weak data simply shrinks. Worth verifying the
+     ground-truth generator's B amplitudes against the prior scale.
+  4. **Stim_mod magnitude / SNR interaction.** If the modulatory stimulus amplitude
+     relative to driving input is too small, B is under-identified regardless of guide.
+  5. **Step count / LR schedule.** 500 steps may not be enough for B to escape the
+     near-zero init basin even if the other levers are right.
+
+**Success Criteria** (what must be TRUE — provisional, finalized during planning):
+
+  1. Root cause of the ~0.34 systematic B-RMSE identified with evidence (per-step B
+     trajectory plot, posterior mean vs true-B scatter across seeds, or prior-
+     sensitivity sweep showing which lever moves B-RMSE).
+  2. Fix (parameter change, guide swap, step-count increase, or scope amendment)
+     applied and cluster-re-run passes RECOV-04 (<= 0.20 on |B_true| > 0.1) on >= 10
+     seeds at SNR=3. RECOV-03 / RECOV-05 / RECOV-06 must continue to pass (no
+     regression on currently-passing gates).
+  3. RECOV-07 shrinkage means land in the documented soft-target range
+     (std_post / std_prior <= 0.7) OR the soft target is explicitly revised with
+     citation to observed bilinear identifiability limits.
+  4. Diagnostic findings captured in a SUMMARY document
+     (`.planning/phases/16.1-recov-04-b-rmse-diagnostic/16.1-SUMMARY.md`) so that
+     the v0.3.1 amortized-bilinear work and any future RECOV tuning inherit the
+     lessons learned.
+  5. If the acceptance threshold itself needs revision (rather than the
+     implementation), the revision is justified against research or upstream
+     reference (SPM12 or comparable) and the milestone acceptance-gate line in this
+     ROADMAP is updated accordingly.
+
 ### Progress
 
-**Execution Order:** 13 -> 14 -> 15 -> 16
+**Execution Order:** 13 -> 14 -> 15 -> 16 -> 16.1 (INSERTED)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 13. Bilinear Neural State & Stability Monitor | 4/4 | Complete | 2026-04-17 |
 | 14. Stimulus Utilities & Bilinear Simulator | 2/2 | Complete | 2026-04-18 |
 | 15. Pyro Generative Model with B Priors and Masks | 3/3 | Complete | 2026-04-18 |
-| 16. 3-Region Bilinear Recovery Benchmark | 0/TBD | Pending | -- |
+| 16. 3-Region Bilinear Recovery Benchmark | 3/3 | Implementation complete; acceptance FAILED 2026-04-24 (RECOV-04) | -- |
+| 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | 0/2 | Planned | -- |
 
 ---
 
@@ -249,9 +313,10 @@ Plans:
 | 13. Bilinear Neural State & Stability Monitor | v0.3.0 | 4/4 | Complete | 2026-04-17 |
 | 14. Stimulus Utilities & Bilinear Simulator | v0.3.0 | 2/2 | Complete | 2026-04-18 |
 | 15. Pyro Generative Model with B Priors and Masks | v0.3.0 | 3/3 | Complete | 2026-04-18 |
-| 16. 3-Region Bilinear Recovery Benchmark | v0.3.0 | 0/TBD | Pending | -- |
+| 16. 3-Region Bilinear Recovery Benchmark | v0.3.0 | 3/3 | Implementation complete; acceptance FAILED 2026-04-24 (RECOV-04) | -- |
+| 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | v0.3.0 | 0/2 | Planned | -- |
 | 17. Circuit Visualization Module | v0.4.0 | 1/1 | Complete | 2026-04-24 |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-04-24 — Phase 17 (Circuit Visualization Module) complete; verified 15/15 must-haves (5 ROADMAP success criteria + VIZ-01..10); 17 tests green (15 fast + 2 slow Pyro smoke); zero upstream edits. v0.4.0 Circuit Explorer milestone is functionally shippable (single-phase scope) pending /gsd:audit-milestone + /gsd:complete-milestone. v0.3.0 Phase 16 RECOV cluster re-run remains the independent outstanding work.*
+*Last updated: 2026-04-24 — Phase 16.1 INSERTED to address RECOV-04 B-RMSE acceptance failure (cluster job 54933838: B-RMSE 0.3424 > 0.20 threshold, systematic across all 10 seeds). Phase 17 (Circuit Visualization Module) complete; verified 15/15 must-haves (5 ROADMAP success criteria + VIZ-01..10); 17 tests green (15 fast + 2 slow Pyro smoke); zero upstream edits. v0.4.0 Circuit Explorer milestone is functionally shippable (single-phase scope) pending /gsd:audit-milestone + /gsd:complete-milestone. v0.3.0 blocked on Phase 16.1 completion (diagnostic + RECOV-04 re-pass).*
