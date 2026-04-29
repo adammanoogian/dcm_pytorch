@@ -26,6 +26,7 @@ import tempfile
 import numpy as np
 import torch
 
+from config import TAPAS_RDCM_PATH
 from pyro_dcm.forward_models.rdcm_forward import (
     create_regressors,
     generate_bold,
@@ -62,7 +63,7 @@ def check_tapas_available() -> bool:
     bool
         True if tapas rDCM directory exists at the expected path.
     """
-    tapas_path = "C:/Users/aman0087/Documents/Github/tapas/rDCM"
+    tapas_path = str(TAPAS_RDCM_PATH)
     return os.path.isdir(tapas_path)
 
 
@@ -298,7 +299,7 @@ def run_rdcm_validation(
         "tapas_available": False,
         "reason": (
             "tapas rDCM not found at "
-            "C:/Users/aman0087/Documents/Github/tapas/rDCM. "
+            f"{TAPAS_RDCM_PATH}. "
             "Clone from "
             "https://github.com/translationalneuromodeling/tapas"
         ),

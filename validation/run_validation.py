@@ -26,6 +26,7 @@ import numpy as np
 import pyro
 import torch
 
+from config import TAPAS_RDCM_PATH
 from pyro_dcm.forward_models.csd_computation import (
     bold_to_csd_torch,
 )
@@ -99,7 +100,7 @@ def check_tapas_available() -> bool:
     try:
         cmd = (
             "addpath(genpath("
-            "'C:/Users/aman0087/Documents/Github/tapas/rDCM'"
+            f"'{TAPAS_RDCM_PATH}'"
             ")); disp(exist('tapas_rdcm_estimate','file'))"
         )
         result = subprocess.run(
