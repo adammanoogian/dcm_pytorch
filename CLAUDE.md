@@ -95,9 +95,12 @@ dcm_pytorch/
 │       │   ├── neural_state.py      # dx/dt = Ax + Cu  [REF-001]
 │       │   ├── balloon_model.py     # Balloon-Windkessel ODEs  [REF-002]
 │       │   ├── bold_signal.py       # BOLD observation equation  [REF-002]
+│       │   ├── coupled_system.py    # Coupled neural + hemodynamic system  [REF-002]
 │       │   ├── spectral_transfer.py # H(w) = (iwI - A)^-1  [REF-010]
+│       │   ├── spectral_noise.py    # Innovation/measurement noise spectra  [REF-010]
 │       │   ├── csd_computation.py   # Cross-spectral density  [REF-010]
-│       │   └── rdcm_likelihood.py   # Frequency-domain regression  [REF-020]
+│       │   ├── rdcm_forward.py      # Frequency-domain regression  [REF-020]
+│       │   └── rdcm_posterior.py    # rDCM analytic VB posterior  [REF-020]
 │       ├── models/
 │       │   ├── __init__.py
 │       │   ├── task_dcm_model.py       # Pyro model for task-based DCM [v0.3.0: + bilinear B path]
@@ -107,27 +110,19 @@ dcm_pytorch/
 │       │   └── amortized_wrappers.py   # Amortized task/spectral DCM wrappers
 │       ├── guides/
 │       │   ├── __init__.py
-│       │   ├── meanfield.py         # Baseline Gaussian guide
-│       │   └── amortized_flow.py    # Normalizing flow amortized guide
-│       ├── connectivity/
-│       │   ├── __init__.py
-│       │   ├── static_a.py          # Fixed A matrix prior
-│       │   └── structural_mask.py   # Binary mask for allowed connections
+│       │   ├── amortized_flow.py    # Normalizing flow amortized guide
+│       │   ├── parameter_packing.py # Parameter packing for amortized guide
+│       │   └── summary_networks.py  # Summary networks (CNN/MLP) for amortized guide
 │       ├── simulators/
 │       │   ├── __init__.py
 │       │   ├── task_simulator.py
 │       │   ├── spectral_simulator.py
 │       │   └── rdcm_simulator.py
-│       ├── inference/
-│       │   ├── __init__.py
-│       │   ├── svi_runner.py        # SVI training loop with diagnostics
-│       │   ├── nuts_validator.py    # NumPyro NUTS for posterior validation
-│       │   └── model_comparison.py  # ELBO-based Bayesian model comparison
 │       └── utils/
 │           ├── __init__.py
 │           ├── ode_integrator.py    # Wrapper around torchdiffeq
-│           ├── spectral_utils.py    # FFT, CSD, frequency grids
-│           └── diagnostics.py       # Convergence checks, posterior plots
+│           ├── circuit_viz.py       # CircuitViz JSON serializer for circuit-explorer template
+│           └── templates/           # Static HTML/JS assets (dcm_circuit_explorer_template.html)
 ├── tests/
 │   ├── conftest.py
 │   ├── test_balloon.py
@@ -172,7 +167,7 @@ Follows `project_utils/CODING_STANDARDS.md`:
 - **Fitted attributes**: Trailing underscore (`K_`, `x_post_`, `P_post_`)
 - **Line length**: 88 characters
 - **Function size**: Target 20 lines, hard limit 50
-- **Tensor shapes**: Documented in docstrings as `# shape: (n_regions, n_timepoints)`
+- **Tensor shapes**: Documented in NumPy-style ``Parameters`` blocks with explicit shape annotations (e.g., ``A : torch.Tensor, shape (N, N)``)
 - **No global mutable state**: All config via function arguments or dataclasses
 
 ## Tensor Shape Conventions
