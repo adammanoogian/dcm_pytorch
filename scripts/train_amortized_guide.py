@@ -16,7 +16,7 @@ Task DCM::
         --variant task \
         --data-path data/training/task_3regions_100sims.pt \
         --n-train-steps 1000 \
-        --output-dir models/task/
+        --output-dir checkpoints/task/
 
 Spectral DCM::
 
@@ -24,7 +24,7 @@ Spectral DCM::
         --variant spectral \
         --data-path data/training/spectral_3regions_100sims.pt \
         --n-train-steps 5000 \
-        --output-dir models/spectral/
+        --output-dir checkpoints/spectral/
 
 Notes
 -----
@@ -121,8 +121,8 @@ def parse_args() -> argparse.Namespace:
         help="Total SVI steps (default: 50000)",
     )
     parser.add_argument(
-        "--output-dir", type=str, default="models/",
-        help="Output directory (default: models/)",
+        "--output-dir", type=str, default="checkpoints/",
+        help="Output directory (default: checkpoints/)",
     )
     parser.add_argument(
         "--seed", type=int, default=42,

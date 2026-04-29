@@ -214,7 +214,7 @@ def run_task_amortized(config: BenchmarkConfig) -> dict[str, Any]:
     M = 1
 
     # Check for pre-trained guide
-    guide_paths = ["models/task_final.pt", "models/task_ci.pt"]
+    guide_paths = ["checkpoints/task_final.pt", "checkpoints/task_ci.pt"]
     pretrained_path = None
     for p in guide_paths:
         if os.path.exists(p):

@@ -235,8 +235,8 @@ def run_spectral_amortized(
 
     # Check for pre-trained guide
     guide_paths = [
-        "models/spectral_final.pt",
-        "models/spectral_ci.pt",
+        "checkpoints/spectral_final.pt",
+        "checkpoints/spectral_ci.pt",
     ]
     pretrained_path = None
     for p in guide_paths:
