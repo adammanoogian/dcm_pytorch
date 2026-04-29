@@ -1,7 +1,7 @@
 """DCM Circuit Explorer JSON serializer (``dcm_circuit_explorer/v1``).
 
 Serializes a Pyro-DCM model config and/or fitted SVI posterior into the JSON
-schema consumed by ``docs/dcm_circuit_explorer_template.html``. See
+schema consumed by ``src/pyro_dcm/utils/templates/dcm_circuit_explorer_template.html``. See
 ``docs/HANDOFF_viz.md`` for the authoritative schema and Phase 17 PLAN for
 design decisions V1-V8.
 

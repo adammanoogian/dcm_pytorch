@@ -5,14 +5,14 @@
 | File | Location | Purpose |
 |------|----------|---------|
 | `dcm_circuit_explorer.html` | `Approach Avoid Anxiety/` | Fully baked HEART2ADAPT explorer (hardcoded, standalone, final) |
-| `dcm_circuit_explorer_template.html` | `docs/` | Generic config-driven template — loads any DCM config JSON |
+| `dcm_circuit_explorer_template.html` | `src/pyro_dcm/utils/templates/` | Generic config-driven template — loads any DCM config JSON |
 | `heart2adapt_dcm_config.json` | `configs/` | HEART2ADAPT config (planned params, `fitted_params: null`) |
 
 ---
 
 ## Goal
 
-Implement `src/pyro_dcm/utils/circuit_viz.py` — a Python class that serialises a DCM model config (and optionally fitted posterior means) into the JSON schema consumed by `dcm_circuit_explorer_template.html`.
+Implement `src/pyro_dcm/utils/circuit_viz.py` — a Python class that serialises a DCM model config (and optionally fitted posterior means) into the JSON schema consumed by `src/pyro_dcm/utils/templates/dcm_circuit_explorer_template.html`.
 
 ---
 
@@ -265,7 +265,7 @@ planned = CircuitViz.from_model_config(
     peb=PEB_CFG,
 )
 planned.export("configs/heart2adapt_planned.json")
-# → open docs/dcm_circuit_explorer_template.html, load this JSON
+# → open src/pyro_dcm/utils/templates/dcm_circuit_explorer_template.html, load this JSON
 
 # 2. After fitting — attach posterior means
 posterior = {
@@ -294,7 +294,7 @@ fitted.export("configs/heart2adapt_fitted.json")
 ```bash
 # serve locally so fetch() works for demo config
 python -m http.server 8080 --directory dcm_pytorch/
-# then open: http://localhost:8080/docs/dcm_circuit_explorer_template.html
+# then open: http://localhost:8080/src/pyro_dcm/utils/templates/dcm_circuit_explorer_template.html
 # click "Load demo (HEART2ADAPT)" → loads configs/heart2adapt_dcm_config.json
 ```
 

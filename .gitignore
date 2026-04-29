@@ -21,7 +21,7 @@ env/
 # OS
 .DS_Store
 Thumbs.db
-bash.exe.stackdump
+*.stackdump
 
 # Generated data and model weights
 /data/
