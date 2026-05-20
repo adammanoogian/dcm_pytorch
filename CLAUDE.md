@@ -78,6 +78,8 @@ No module is integrated into the pipeline until it passes its own standalone tes
 - **Zuko** -- normalizing flows for amortized guides
 - **NumPyro** -- NUTS validation only (JAX backend)
 - **scipy** -- signal processing (CSD computation), validation
+- **MNE-Python 1.6+** -- M/EEG data loading, CSD computation, source reconstruction (optional: `pip install pyro-dcm[mne]`)
+- **mne-bids 0.14+** -- BIDS dataset loading (optional, included in `[mne]` extra)
 - **matplotlib** -- plotting for diagnostics and benchmarks
 - **pytest** -- testing framework
 - **ruff** -- linting + formatting (line-length 88, NumPy docstrings)
@@ -105,6 +107,10 @@ dcm_pytorch/
 │       │   ├── rdcm_model.py           # Pyro model for regression DCM
 │       │   ├── guides.py               # SVI guide factory (AutoNormal/AutoLowRankMVN/AutoIAF/...)
 │       │   └── amortized_wrappers.py   # Amortized task/spectral DCM wrappers
+│       ├── io/
+│       │   ├── __init__.py
+│       │   ├── mne_loader.py        # MNE Epochs/Raw/STC → DCM tensors
+│       │   └── bids_loader.py       # BIDS dataset → MNE objects
 │       ├── guides/
 │       │   ├── __init__.py
 │       │   ├── meanfield.py         # Baseline Gaussian guide
