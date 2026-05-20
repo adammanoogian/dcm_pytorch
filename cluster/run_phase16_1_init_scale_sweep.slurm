@@ -21,7 +21,7 @@
 #   # Override scratch project code:
 #   sbatch --export=PROJECT=ft29 cluster/run_phase16_1_init_scale_sweep.slurm
 #
-#   # Recommended: use the submit wrapper which also chains a push job:
+#   # Recommended: use the submit wrapper:
 #   bash cluster/submit_phase16_1_init_scale_sweep.sh
 #
 # Env contract:
@@ -35,9 +35,8 @@
 #   cluster/logs/phase16_1_init_scale_sweep_<jobid>.out     SLURM stdout
 #   cluster/logs/phase16_1_init_scale_sweep_<jobid>.err     SLURM stderr
 #   cluster/logs/pytest_phase16_1_init_scale_sweep_<jobid>.log  Diagnostic tee log
-#     NOTE: the tee log uses the `pytest_phase16_1_*` prefix even though it is a
-#     python script (not pytest) so it matches the autopush script's glob
-#     `cluster/logs/pytest_phase16_*.log`. Intentional for autopush compat.
+#     NOTE: the tee log uses the `pytest_phase16_1_*` prefix for consistency
+#     with existing cluster log naming conventions.
 #   cluster/results/phase16_1_init_scale_sweep_<jobid>.json   Diagnostic JSON
 #   cluster/results/phase16_1_init_scale_sweep_<jobid>.md     Diagnostic MD
 #   cluster/results/phase16_1_init_scale_sweep_status_<jobid>.json  SLURM status JSON
