@@ -6,6 +6,7 @@
 - **v0.2.0 Cross-Backend Inference Benchmarking** - Phases 9-12 (shipped 2026-04-13)
 - **v0.3.0 Bilinear DCM Extension** - Phases 13-16.1 (shipped 2026-05-21)
 - **v0.4.0 Circuit Explorer** - Phase 17 (shipped 2026-05-21)
+- **v0.5.0 MNE-Python Integration** - Phases 18-19 (in progress)
 
 <details>
 <summary>v0.1.0 Foundation (Phases 1-8) - SHIPPED 2026-04-03</summary>
@@ -26,9 +27,8 @@ See `.planning/milestones/v0.2.0-ROADMAP.md` for details. 4 phases, 11 plans, 47
 
 </details>
 
----
-
-## Current Milestone: v0.3.0 Bilinear DCM Extension
+<details>
+<summary>v0.3.0 Bilinear DCM Extension (Phases 13-16.1) - SHIPPED 2026-05-21</summary>
 
 **Status:** Complete (started 2026-04-17; closed 2026-05-21 with VL as bilinear inference engine)
 **Phases:** 13-16 + 16.1 (4 phases + 1 inserted)
@@ -37,7 +37,7 @@ See `.planning/milestones/v0.2.0-ROADMAP.md` for details. 4 phases, 11 plans, 47
 ### Overview
 
 v0.3.0 extends the neural state equation from the shipping linear form `dx/dt = Ax + Cu`
-to the full Friston 2003 bilinear form `dx/dt = Ax + Σ_j u_j(t)·B_j·x + Cu`, propagating
+to the full Friston 2003 bilinear form `dx/dt = Ax + Sigma_j u_j(t)B_jx + Cu`, propagating
 B-matrix modulatory inputs end-to-end through the forward model, simulator, Pyro
 generative model + priors, and a 3-region recovery benchmark. Research (MEDIUM-HIGH
 confidence) confirms the extension is a narrow, well-bounded mathematical superset of
@@ -57,7 +57,7 @@ reported.
 #### Phase 13: Bilinear Neural State & Stability Monitor
 
 **Goal:** The neural state equation computes the Friston 2003 bilinear form
-`A_eff(t)·x + C·u` with a documented eigenvalue stability monitor, while preserving
+`A_eff(t)x + Cu` with a documented eigenvalue stability monitor, while preserving
 bit-exact linear behavior when bilinear arguments are omitted.
 
 **Branch:** `gsd/phase-13-bilinear-neural-state`
@@ -187,7 +187,7 @@ RECOV-08
 
 **Goal:** Diagnose and resolve the systematic RECOV-04 acceptance failure observed on
 cluster job 54933838 (2026-04-24): B-RMSE = 0.3424 across all 10 seeds
-(distribution 0.335-0.348, tightly clustered — systematic underfit, not outlier
+(distribution 0.335-0.348, tightly clustered -- systematic underfit, not outlier
 noise) vs the <= 0.20 threshold on `|B_true| > 0.1` elements. RECOV-07 shrinkage
 means (~0.008 on nonnull B entries) indicate the SVI guide is collapsing the B
 posterior toward zero. Unblocks v0.3.0 milestone closure without renumbering the
@@ -203,13 +203,13 @@ RECOV-07.
 
 **Plans:** 2 plans (2 waves)
 Plans:
-- [ ] 16.1-01-PLAN.md — Single-seed init_scale sweep diagnostic on seed 42 across {0.005, 0.05, 0.1, 0.5} at 500 steps; produces machine + human diagnostic artifacts (autopushed to a `results/phase16_1-init-scale-sweep-*` branch) and a SUMMARY recording the chosen `_BILINEAR_INIT_SCALE` (or escalation if no winner). CLUSTER execution via sbatch on M3 (~30-40 min walltime); LOCAL harness-faithfulness pre-check (single fit at init_scale=0.005, &lt;5 min) BEFORE submission per cluster policy carve-out.
+- [ ] 16.1-01-PLAN.md — Single-seed init_scale sweep diagnostic on seed 42 across {0.005, 0.05, 0.1, 0.5} at 500 steps; produces machine + human diagnostic artifacts (autopushed to a `results/phase16_1-init-scale-sweep-*` branch) and a SUMMARY recording the chosen `_BILINEAR_INIT_SCALE` (or escalation if no winner). CLUSTER execution via sbatch on M3 (~30-40 min walltime); LOCAL harness-faithfulness pre-check (single fit at init_scale=0.005, <5 min) BEFORE submission per cluster policy carve-out.
 - [ ] 16.1-02-PLAN.md — Apply chosen init_scale to `benchmarks/runners/task_bilinear.py`, replace inverted `_BILINEAR_INIT_SCALE_RETRY = 0.001` with "halve once on NaN at step 0", reuse Phase 16 cluster sbatch scaffolding to re-run the 10-seed acceptance gate, then flip RECOV-04 in REQUIREMENTS.md on pass (or document escalation on RECOV-06 degradation / RECOV-04 still-failing). CLUSTER execution (~80-150 min).
 
 **Hypotheses to investigate (planning input, not a plan):**
   1. **Prior-variance / init-scale interaction.** `B_PRIOR_VARIANCE = 1.0` (D1) + auto_normal
      `init_scale = 0.005` (Plan 16-01 L2) may start the B guide distribution so tight
-     around zero that the ELBO prefers staying there over expanding — gradient signal to
+     around zero that the ELBO prefers staying there over expanding -- gradient signal to
      B is weaker than to A because B enters multiplicatively through `u_mod`.
   2. **Guide family insufficient.** AutoNormal may be too restrictive for the bilinear
      posterior geometry; AutoLowRankMVN or AutoIAFNormal (verified to auto-discover B
@@ -225,7 +225,7 @@ Plans:
   5. **Step count / LR schedule.** 500 steps may not be enough for B to escape the
      near-zero init basin even if the other levers are right.
 
-**Success Criteria** (what must be TRUE — provisional, finalized during planning):
+**Success Criteria** (what must be TRUE -- provisional, finalized during planning):
 
   1. Root cause of the ~0.34 systematic B-RMSE identified with evidence (per-step B
      trajectory plot, posterior mean vs true-B scatter across seeds, or prior-
@@ -258,13 +258,14 @@ Plans:
 | 16. 3-Region Bilinear Recovery Benchmark | 3/3 | Complete (SVI runner + metrics + fixtures) | 2026-04-19 |
 | 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | 1/1 | Complete (VL proves B recoverable; RECOV-04 amended) | 2026-05-21 |
 
----
+</details>
 
-## Next Milestone: v0.4.0 Circuit Explorer
+<details>
+<summary>v0.4.0 Circuit Explorer (Phase 17) - SHIPPED 2026-05-21</summary>
 
-**Status:** Defined 2026-04-24 (not yet started; may run in parallel with v0.3.0 Phase 16 cluster re-run since Phase 17 depends only on Phase 15 APIs).
-**Phases:** 17+
-**Theme:** Interactive serialization + rendering tooling for DCM model configs and fitted posteriors. Distinct from v0.3.0's fitting/recovery scope — acceptance is structural (JSON schema validity, round-trip equality, planned↔fitted toggle semantics) rather than RECOV-style RMSE/coverage gates.
+**Status:** Complete (Phase 17 shipped 2026-04-24; milestone closed 2026-05-21).
+**Phases:** 17
+**Theme:** Interactive serialization + rendering tooling for DCM model configs and fitted posteriors. Distinct from v0.3.0's fitting/recovery scope -- acceptance is structural (JSON schema validity, round-trip equality, planned/fitted toggle semantics) rather than RECOV-style RMSE/coverage gates.
 
 ### Overview
 
@@ -276,28 +277,127 @@ v0.4.0 delivers a Python-side serializer (`CircuitViz` in `src/pyro_dcm/utils/ci
 
 #### Phase 17: Circuit Visualization Module
 
-**Goal:** Implement `src/pyro_dcm/utils/circuit_viz.py` — a `CircuitViz` class with `from_model_config`, `from_posterior`, `to_dict`, `save`, and `load` methods producing `dcm_circuit_explorer/v1` JSON from Pyro-DCM model configs and/or SVI posteriors, verified by structural unit tests and a Pyro smoke integration test.
+**Goal:** Implement `src/pyro_dcm/utils/circuit_viz.py` -- a `CircuitViz` class with `from_model_config`, `from_posterior`, `to_dict`, `save`, and `load` methods producing `dcm_circuit_explorer/v1` JSON from Pyro-DCM model configs and/or SVI posteriors, verified by structural unit tests and a Pyro smoke integration test.
 
 **Branch:** `gsd/phase-17-circuit-visualization-module` (proposed)
 **Depends on:** Phase 15 (`extract_posterior_params` from MODEL-05). Does NOT depend on Phase 16.
 **Requirements:** VIZ-01, VIZ-02, VIZ-03, VIZ-04, VIZ-05, VIZ-06, VIZ-07, VIZ-08, VIZ-09, VIZ-10 (derived from `docs/HANDOFF_viz.md` during /gsd:plan-phase 17 on 2026-04-24; see `.planning/REQUIREMENTS.md` v0.4.0 Requirements section).
 **Plans:** 1 plan (1 wave)
 Plans:
-- [x] 17-01-PLAN.md — CircuitViz core (`CircuitVizConfig` + `from_model_config` + `from_posterior` + `load` + `flatten_posterior_for_viz` helper) + 12 structural/integration tests (A-01..A-10 + B-01/B-02) + utils re-export + REQUIREMENTS.md VIZ-01..10 append (VIZ-01..10)
+- [x] 17-01-PLAN.md -- CircuitViz core (`CircuitVizConfig` + `from_model_config` + `from_posterior` + `load` + `flatten_posterior_for_viz` helper) + 12 structural/integration tests (A-01..A-10 + B-01/B-02) + utils re-export + REQUIREMENTS.md VIZ-01..10 append (VIZ-01..10)
 
-**Success Criteria** (what must be TRUE — provisional, finalized during planning):
+**Success Criteria** (what must be TRUE -- provisional, finalized during planning):
 
   1. `CircuitViz.from_model_config(...)` produces a dict matching `dcm_circuit_explorer/v1` schema with `_status == "planned"` and `fitted_params is None`.
   2. `CircuitViz.from_posterior(extract_posterior_params(...))` produces a dict with `_status == "fitted"` and populated `fitted_params` (per-matrix means or medians, shape-matched to A/B_j/C).
   3. Round-trip test: `CircuitViz.load(viz.save(path))` reads back equal to the original on a reference 3-region bilinear fixture.
   4. Schema tolerance: `from_model_config` works for a bare bilinear DCM with no HEART2ADAPT metadata (empty `phenotypes`/`hypotheses`/`drugs`); renderer handles missing optional fields without JS errors (verified structurally, not via headless browser per research recommendation).
-  5. Zero upstream API changes — no edits to `task_dcm_model`, `extract_posterior_params`, `parameterize_A`, `parameterize_B`, or any file outside `src/pyro_dcm/utils/` and `tests/`.
+  5. Zero upstream API changes -- no edits to `task_dcm_model`, `extract_posterior_params`, `parameterize_A`, `parameterize_B`, or any file outside `src/pyro_dcm/utils/` and `tests/`.
 
 ### Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 17. Circuit Visualization Module | 1/1 | Complete (verified 15/15 must-haves) | 2026-04-24 |
+
+</details>
+
+---
+
+## Current Milestone: v0.5.0 MNE-Python Integration
+
+**Status:** In progress (started 2026-05-21)
+**Phases:** 18-19 (2 phases)
+**Requirements covered:** 18/18 v0.5.0 requirements
+
+### Overview
+
+v0.5.0 validates the existing MNE-Python IO loaders (`src/pyro_dcm/io/mne_loader.py`,
+`bids_loader.py`) which shipped in v0.4.0 but have zero test coverage, then demonstrates
+end-to-end usage via pipeline scripts. The IO code already exists; this milestone proves
+it works correctly by encoding critical scientific pitfalls (CSD frequency conventions,
+Hermitian symmetry, channel picks inconsistency) as explicit test cases, and by building
+two demo scripts showing the full path from synthetic MNE data through DCM fitting to
+posterior A matrices. Research (HIGH confidence) confirms all test fixtures are synthetic
+(MNE's `RawArray`, `EpochsArray`, `create_info`), no data downloads required, and the
+`stc_to_roi_timeseries` path uses `unittest.mock.patch` on `mne.extract_label_time_course`.
+The critical path is strictly linear: **Phase 18 (tests) -> Phase 19 (pipeline scripts).**
+
+**Milestone acceptance gate:** All 18 requirements pass. Test suite runs cleanly with
+`pytest -m mne` (when MNE installed) and is fully skipped with `pytest -m "not mne"`
+(when MNE absent). Both pipeline scripts execute end-to-end on synthetic data and produce
+fitted posterior A matrices.
+
+### Phases
+
+#### Phase 18: MNE/BIDS IO Test Suite
+
+**Goal:** The MNE and BIDS IO loaders have a comprehensive test suite that validates
+shape contracts, mathematical properties, error handling, and critical scientific
+pitfalls, runnable via `pytest -m mne` and cleanly skipped when MNE is not installed.
+
+**Branch:** `gsd/phase-18-mne-io-test-suite`
+**Depends on:** v0.4.0 shipping IO code (`src/pyro_dcm/io/mne_loader.py`,
+`src/pyro_dcm/io/bids_loader.py`).
+**Requirements:** TEST-01, TEST-02, TEST-03, TEST-04, TEST-05, TEST-06, TEST-07,
+TEST-08, TEST-09, TEST-10, TEST-11, TEST-12, TEST-13, BIDS-01, BIDS-02, BIDS-03
+**Success Criteria** (what must be TRUE):
+
+  1. `pytest tests/test_mne_loader.py` passes with all shape validations green:
+     `epochs_to_csd` returns `(F, N, N)` complex tensor, `epochs_to_timeseries`
+     returns `(T, N)` float tensor (both averaged and unaveraged), `raw_to_timeseries`
+     returns `(T, N)` float tensor, and `stc_to_roi_timeseries` returns `(T, N)`
+     float tensor via mocked `extract_label_time_course` (TEST-01 through TEST-04).
+  2. Channel picks subsetting works correctly: loaders given explicit channel name
+     lists or type strings produce output tensors whose N dimension matches the pick
+     count, not the full channel count; channels marked as `info['bads']` are excluded
+     from output when using default picks (TEST-05, TEST-06, pitfall P3).
+  3. CSD mathematical properties hold: `csd[f,i,j] == conj(csd[f,j,i])` for all
+     frequency bins (Hermitian symmetry), `csd[f,i,i].real >= 0` for all auto-spectra
+     (non-negative diagonal), and a 10 Hz sine injection produces a CSD peak at the
+     10 Hz bin within 1-bin tolerance (TEST-07, TEST-08, TEST-09).
+  4. Error and skip paths work: `_require_mne()` raises `ImportError` with install
+     instructions when MNE is absent, `epochs_to_csd` raises `ValueError` for invalid
+     `method` argument, `pytest.importorskip("mne")` at module level skips the entire
+     test file when MNE is not installed, and `@pytest.mark.mne` is registered in
+     `pyproject.toml` (TEST-10, TEST-11, TEST-12, TEST-13).
+  5. `pytest tests/test_bids_loader.py` passes: `load_bids_raw` returns a valid
+     `mne.io.BaseRaw` from a synthetic BIDS dataset written via `write_raw_bids` to
+     `tmp_path`, `load_bids_epochs` returns valid `mne.Epochs`, and `BAD_ACQ_SKIP`
+     annotation edge cases are handled without error (BIDS-01, BIDS-02, BIDS-03).
+
+#### Phase 19: End-to-End Pipeline Demos
+
+**Goal:** Users can follow two self-contained demo scripts that show the complete path
+from synthetic MNE data through Pyro-DCM model fitting to posterior connectivity
+matrices, serving as copy-pasteable starting points for real neuroimaging workflows.
+
+**Branch:** `gsd/phase-19-pipeline-demos`
+**Depends on:** Phase 18 (confirmed IO contracts via passing tests).
+**Requirements:** PIPE-01, PIPE-02
+**Success Criteria** (what must be TRUE):
+
+  1. `scripts/demo_spectral_dcm_from_epochs.py` executes end-to-end without error:
+     creates synthetic MNE Epochs, calls `epochs_to_csd` to produce `(F, N, N)` CSD
+     tensor, fits a `SpectralDCMModel` via SVI, and prints the posterior A matrix
+     with uncertainty estimates (PIPE-01).
+  2. `scripts/demo_task_dcm_from_epochs.py` executes end-to-end without error: creates
+     synthetic MNE Epochs, calls `epochs_to_timeseries` to produce `(T, N)` time
+     series tensor, fits a `TaskDCMModel` via SVI, and prints the posterior A and B
+     matrices (PIPE-02).
+  3. Both scripts include inline comments explaining preprocessing prerequisites
+     (filtering, artifact rejection, referencing) that users must complete in MNE
+     before calling Pyro-DCM loaders, and a dtype/device note about float64/MPS
+     incompatibility (pitfall P4, P10).
+
+### Progress
+
+**Execution Order:** 18 -> 19
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 18. MNE/BIDS IO Test Suite | 0/TBD | Not started | - |
+| 19. End-to-End Pipeline Demos | 0/TBD | Not started | - |
 
 ---
 
@@ -316,7 +416,9 @@ Plans:
 | 16. 3-Region Bilinear Recovery Benchmark | v0.3.0 | 3/3 | Complete | 2026-04-19 |
 | 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | v0.3.0 | 1/1 | Complete (VL resolution) | 2026-05-21 |
 | 17. Circuit Visualization Module | v0.4.0 | 1/1 | Complete | 2026-04-24 |
+| 18. MNE/BIDS IO Test Suite | v0.5.0 | 0/TBD | Not started | - |
+| 19. End-to-End Pipeline Demos | v0.5.0 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-05-21 — v0.3.0 COMPLETE. Phase 16.1 resolved: VL recovers B (RMSE=0.0170 vs SVI's 0.3467); RECOV-04 amended to accept VL as bilinear inference engine; 27/27 requirements closed. VL module shipped: `src/pyro_dcm/inference/variational_laplace.py` + `vl_dcm.py`. v0.4.0 Circuit Explorer functionally complete (Phase 17, 17/17 tests).*
+*Last updated: 2026-05-21 -- v0.5.0 roadmap added. 2 phases (18-19), 18 requirements mapped. Tests gate pipeline scripts.*
