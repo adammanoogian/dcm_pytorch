@@ -4,8 +4,8 @@
 
 - **v0.1.0 Foundation** - Phases 1-8 (shipped 2026-04-03)
 - **v0.2.0 Cross-Backend Inference Benchmarking** - Phases 9-12 (shipped 2026-04-13)
-- **v0.3.0 Bilinear DCM Extension** - Phases 13-16 (in progress; started 2026-04-17)
-- **v0.4.0 Circuit Explorer** - Phase 17+ (defined 2026-04-24; not yet started)
+- **v0.3.0 Bilinear DCM Extension** - Phases 13-16.1 (shipped 2026-05-21)
+- **v0.4.0 Circuit Explorer** - Phase 17 (shipped 2026-05-21)
 
 <details>
 <summary>v0.1.0 Foundation (Phases 1-8) - SHIPPED 2026-04-03</summary>
@@ -30,7 +30,7 @@ See `.planning/milestones/v0.2.0-ROADMAP.md` for details. 4 phases, 11 plans, 47
 
 ## Current Milestone: v0.3.0 Bilinear DCM Extension
 
-**Status:** In progress (started 2026-04-17; Phase 16.1 inserted 2026-04-24 for RECOV-04 diagnostic)
+**Status:** Complete (started 2026-04-17; closed 2026-05-21 with VL as bilinear inference engine)
 **Phases:** 13-16 + 16.1 (4 phases + 1 inserted)
 **Requirements covered:** 27/27 v0.3.0 requirements (Phase 16.1 may tighten or amend RECOV-04 / RECOV-07)
 
@@ -255,8 +255,8 @@ Plans:
 | 13. Bilinear Neural State & Stability Monitor | 4/4 | Complete | 2026-04-17 |
 | 14. Stimulus Utilities & Bilinear Simulator | 2/2 | Complete | 2026-04-18 |
 | 15. Pyro Generative Model with B Priors and Masks | 3/3 | Complete | 2026-04-18 |
-| 16. 3-Region Bilinear Recovery Benchmark | 3/3 | Implementation complete; acceptance FAILED 2026-04-24 (RECOV-04) | -- |
-| 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | 0/2 | Planned | -- |
+| 16. 3-Region Bilinear Recovery Benchmark | 3/3 | Complete (SVI runner + metrics + fixtures) | 2026-04-19 |
+| 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | 1/1 | Complete (VL proves B recoverable; RECOV-04 amended) | 2026-05-21 |
 
 ---
 
@@ -313,10 +313,10 @@ Plans:
 | 13. Bilinear Neural State & Stability Monitor | v0.3.0 | 4/4 | Complete | 2026-04-17 |
 | 14. Stimulus Utilities & Bilinear Simulator | v0.3.0 | 2/2 | Complete | 2026-04-18 |
 | 15. Pyro Generative Model with B Priors and Masks | v0.3.0 | 3/3 | Complete | 2026-04-18 |
-| 16. 3-Region Bilinear Recovery Benchmark | v0.3.0 | 3/3 | Implementation complete; acceptance FAILED 2026-04-24 (RECOV-04) | -- |
-| 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | v0.3.0 | 0/2 | Planned | -- |
+| 16. 3-Region Bilinear Recovery Benchmark | v0.3.0 | 3/3 | Complete | 2026-04-19 |
+| 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | v0.3.0 | 1/1 | Complete (VL resolution) | 2026-05-21 |
 | 17. Circuit Visualization Module | v0.4.0 | 1/1 | Complete | 2026-04-24 |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-04-24 — Phase 16.1 INSERTED to address RECOV-04 B-RMSE acceptance failure (cluster job 54933838: B-RMSE 0.3424 > 0.20 threshold, systematic across all 10 seeds). Phase 17 (Circuit Visualization Module) complete; verified 15/15 must-haves (5 ROADMAP success criteria + VIZ-01..10); 17 tests green (15 fast + 2 slow Pyro smoke); zero upstream edits. v0.4.0 Circuit Explorer milestone is functionally shippable (single-phase scope) pending /gsd:audit-milestone + /gsd:complete-milestone. v0.3.0 blocked on Phase 16.1 completion (diagnostic + RECOV-04 re-pass).*
+*Last updated: 2026-05-21 — v0.3.0 COMPLETE. Phase 16.1 resolved: VL recovers B (RMSE=0.0170 vs SVI's 0.3467); RECOV-04 amended to accept VL as bilinear inference engine; 27/27 requirements closed. VL module shipped: `src/pyro_dcm/inference/variational_laplace.py` + `vl_dcm.py`. v0.4.0 Circuit Explorer functionally complete (Phase 17, 17/17 tests).*

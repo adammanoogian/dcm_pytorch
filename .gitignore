@@ -53,3 +53,10 @@ htmlcov/
 
 # Ruff
 .ruff_cache/
+
+# Cluster logs and results (synced via Mutagen, not version-controlled)
+cluster/logs/
+cluster/results/
+
+# Checkpoints (training artifacts)
+checkpoints/
