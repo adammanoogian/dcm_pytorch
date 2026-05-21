@@ -1,142 +1,90 @@
-# Requirements: Pyro-DCM v0.3.0
+# Requirements: Pyro-DCM v0.5.0 MNE-Python Integration
 
-**Defined:** 2026-04-17
+**Defined:** 2026-05-21
 **Core Value:** The A matrix (effective connectivity) remains an explicit, interpretable object with full posterior uncertainty throughout inference
 
-## Milestone Decisions (finalized 2026-04-17)
+## v0.5.0 Requirements
 
-These design decisions were resolved during milestone initialization and are baked into the
-requirements below. Future re-opening requires explicit milestone revision.
+Requirements for MNE-Python Integration testing and pipeline demonstrations. The IO
+loaders already exist (`src/pyro_dcm/io/`); this milestone validates them via tests,
+demonstrates usage via end-to-end pipeline scripts, and encodes critical scientific
+pitfalls (CSD conventions, channel picks) as explicit test cases.
 
-| # | Decision | Rationale |
-|---|----------|-----------|
-| D1 | `B_free` prior variance = **1.0** (SPM12 one-state match) | Required for future DCM.V2 cross-validation; auditably correct per `spm_dcm_fmri_priors.m`. Corrects the factually wrong YAML claim of "1/16 SPM12 convention." |
-| D2 | Variable-amplitude semantics = **per-event piecewise-constant amplitudes** | Reuses existing `PiecewiseConstantInput`; matches standard SPM parametric-modulation convention. `LinearInterpolatedInput` deferred to v0.3.1 if continuous-ramp modulators are needed. |
-| D3 | Recovery sign metric = **split by magnitude** | `sign_recovery_nonzero >= 80%` on `|B_true| > 0.1` AND `coverage_of_zero >= 85%` on `|B_true| < 0.5*prior_std`. Unambiguous Bayesian practice; avoids the "sign of zero" degeneracy. |
-| D4 | Eigenvalue stability monitor = **strict `max Re > 0`, log-warn only** | Never raises during SVI (divergent draws are expected; hard-stop corrupts gradients). Logged for diagnostics. |
-| D5 | Amortized-guide bilinear support = **deferred to v0.3.1** | `amortized_wrappers.py` and `TaskDCMPacker` remain linear-only in v0.3.0. DCM.V1 acceptance uses SVI paths. Isolates packer-versioning risk (Pitfall B3). |
+### IO Loader Tests
 
-## v0.3.0 Requirements
+- [ ] **TEST-01**: Shape validation for `epochs_to_csd` — output `(F, N, N)` complex CSD tensor matches expected dimensions from synthetic Epochs
+- [ ] **TEST-02**: Shape validation for `epochs_to_timeseries` — output `(T, N)` float tensor matches expected dimensions, both averaged and unaveraged paths
+- [ ] **TEST-03**: Shape validation for `raw_to_timeseries` — output `(T, N)` float tensor matches expected dimensions from synthetic Raw
+- [ ] **TEST-04**: Shape validation for `stc_to_roi_timeseries` — output `(T, N)` float tensor matches expected dimensions (mocked `extract_label_time_course`)
+- [ ] **TEST-05**: Channel picks subsetting — loaders correctly subset channels by name list and by type string; output shape matches picks, not full channel count
+- [ ] **TEST-06**: Bad channel annotation handling — output shape excludes channels marked as `info['bads']` when using default picks (critical pitfall P3)
+- [ ] **TEST-07**: CSD Hermitian symmetry — `csd[f,i,j] == conj(csd[f,j,i])` for all frequency bins
+- [ ] **TEST-08**: CSD non-negative auto-spectra diagonal — `csd[f,i,i].real >= 0` for all frequency bins and channels
+- [ ] **TEST-09**: CSD sine-injection round-trip — inject 10 Hz sine into synthetic Epochs, verify CSD peak at 10 Hz bin (within 1 bin tolerance)
+- [ ] **TEST-10**: `_require_mne()` raises ImportError with install instructions when MNE not installed
+- [ ] **TEST-11**: `epochs_to_csd` raises ValueError for invalid `method` argument
+- [ ] **TEST-12**: `pytest.importorskip("mne")` at module level — test file skips entirely when MNE absent
+- [ ] **TEST-13**: `@pytest.mark.mne` marker registered in pyproject.toml for `pytest -m "not mne"` exclusion
 
-Requirements for Bilinear DCM Extension. Each maps to a roadmap phase.
+### BIDS Loader Tests
 
-### Bilinear Forward Model
+- [ ] **BIDS-01**: `load_bids_raw` returns valid `mne.io.BaseRaw` from synthetic BIDS dataset written via `write_raw_bids` to `tmp_path`
+- [ ] **BIDS-02**: `load_bids_epochs` returns valid `mne.Epochs` from synthetic BIDS dataset
+- [ ] **BIDS-03**: BIDS annotation edge case — handle `BAD_ACQ_SKIP` spans and non-trivial annotations without error
 
-- [ ] **BILIN-01**: `parameterize_B(B_free, b_mask)` utility returns a masked B matrix with safe diagonal default (diagonal = 0 unless explicitly set in `b_mask`).
-- [ ] **BILIN-02**: `compute_effective_A(A, B_list, u_mod) -> A_eff` implements `A_eff = A + sum_j u_j * B_j` with documented tensor shapes `(N,N)`, `list[(N,N)]`, `(J,)` -> `(N,N)`.
-- [ ] **BILIN-03**: `NeuralStateEquation.derivatives` accepts optional `B_list` and `u_mod` kwargs; when both are None, output is bit-exact equal to current linear form `A @ x + C @ u` (verified at `atol=1e-10`).
-- [ ] **BILIN-04**: `CoupledDCMSystem` accepts optional `B_list` (stacked `(J,N,N)` buffer) and `input_mod_fn` (callable `t -> (J,)` modulator values); None defaults preserve exact linear behavior for all existing callers.
-- [ ] **BILIN-05**: A_eff eigenvalue stability monitor logs a warning when `max(Re(eig(A_eff(t)))) > 0` at a subsample of ODE steps (default every 10 steps); never raises.
-- [ ] **BILIN-06**: Worst-case stability test: bilinear ODE at `B = 3*sigma_prior`, sustained `u_mod = 1`, 500s integration, no NaN in output.
-- [ ] **BILIN-07**: Docstring rename -- `NeuralStateEquation` class and `neural_state.py` module header stop calling the A+Cu form "bilinear" (it is linear); the true bilinear form is in the new branch.
+### Pipeline Scripts
 
-### Simulator & Stimulus Utilities
+- [ ] **PIPE-01**: Spectral DCM demo script — end-to-end: synthetic MNE Epochs → `epochs_to_csd` → SpectralDCMModel → SVI → posterior A matrix, with preprocessing guidance as comments
+- [ ] **PIPE-02**: Task DCM demo script — end-to-end: synthetic MNE Epochs → `epochs_to_timeseries` → TaskDCMModel → SVI → posterior A + B matrices, with preprocessing guidance as comments
 
-- [x] **SIM-01**: `make_event_stimulus(event_times, event_amplitudes, duration, dt) -> (T, J)` constructs variable-amplitude stick-function stimuli via piecewise-constant interpolation.
-- [x] **SIM-02**: `make_epoch_stimulus(event_times, event_durations, event_amplitudes, duration, dt) -> (T, J)` constructs boxcar-shaped modulatory inputs for sustained-amplitude regimes. Documented as preferred primitive for modulators (stick functions are blurred by rk4 mid-steps; see Pitfall B12).
-- [x] **SIM-03**: `simulate_task_dcm(..., B_list=None, stimulus_mod=None, ...)` accepts optional bilinear arguments. When `B_list=None`, output is exactly the current linear simulator output (regression test required).
-- [x] **SIM-04**: Simulator return dict gains `B_list` and `stimulus_mod` keys (set to `None` in linear mode for forward compatibility).
-- [x] **SIM-05**: `dt`-invariance test for stimulus utilities: ODE integration at `dt=0.01` and `dt=0.005` produce equivalent BOLD within `atol=1e-4` under a fixed bilinear ground truth.
+---
 
-### Pyro Generative Model
+## Deferred to Future Milestone
 
-- [x] **MODEL-01**: `task_dcm_model(..., b_masks=None, stim_mod=None, ...)` samples `B_free_j ~ Normal(0, 1.0)` per modulator via per-modulator loop (`pyro.sample(f"B_free_{j}", ...)`) with site-specific `b_mask` application. Rationale: matches rDCM precedent; preserves per-modulator model comparison.
-- [x] **MODEL-02**: B-prior variance is parameterized as a module-level constant `B_PRIOR_VARIANCE = 1.0` with docstring citing D1 decision; unit-tested to match documented value.
-- [x] **MODEL-03**: `b_masks[j]` default shape `(N,N)` with diagonal zeroed; explicit non-zero diagonal triggers a `DeprecationWarning` with rationale (Pitfall B5).
-- [x] **MODEL-04**: API edge cases handled: `b_masks=None` (reduces to linear), `b_masks=[]` (J=0; equivalent to None), `stim_mod` shape `(T_fine, J)` validated against `len(b_masks)`.
-- [x] **MODEL-05**: `extract_posterior_params` returns per-modulator `B_j` medians alongside existing `A`, `C`, `noise_prec`.
-- [x] **MODEL-06**: Pyro guide factory (`create_guide`) auto-discovers new `B_free_j` sample sites via `AutoGuide._setup_prototype` without factory changes; verified by trace test on `AutoNormal`, `AutoLowRankMVN`, and `AutoIAFNormal`.
-- [x] **MODEL-07**: Documentation note in `amortized_wrappers.py` and `TaskDCMPacker`: bilinear support is out of scope for v0.3.0; packer refuses bilinear sample sites with a clear error message referencing v0.3.1.
-
-### Recovery Benchmark
-
-- [x] **RECOV-01**: `benchmarks/runners/task_bilinear.py` runner implements 3-region network, 1 driving input (block design), 1 modulatory input (event-related, variable amplitude), 2 non-zero B elements.
-- [x] **RECOV-02**: Benchmark integrates with v0.2.0 shared `.npz` fixture infrastructure and existing `BenchmarkConfig` / figure pipeline.
-- [x] **RECOV-03**: Acceptance criterion (A-matrix recovery): A RMSE <= 1.25 * linear-baseline RMSE (relative threshold; accounts for Bayesian parameter pricing per Pitfall B13), on >=10 seeds at SNR=3. *SVI: PASS (0.9972 <= 1.25 on cluster job 54933838).*
-- [x] **RECOV-04**: Acceptance criterion (B-matrix recovery magnitude): B RMSE <= 0.20 on `|B_true| > 0.1` elements. *AMENDED 2026-05-21: SVI+AutoNormal FAILS (0.3467); Variational Laplace PASSES (0.0170). Phase 16.1 diagnostic proved forward model correct — B is identifiable via 2nd-order optimization. Root cause: 1st-order mean-field SVI cannot navigate the B posterior geometry (weak multiplicative gradient). VL shipped as recommended bilinear inference engine. SVI guide-family exploration deferred.*
-- [x] **RECOV-05**: Acceptance criterion (B sign recovery, non-null): sign_recovery_nonzero >= 80% on `|B_true| > 0.1` across seeds. *SVI: PASS (0.85 >= 0.80 on cluster job 54933838).*
-- [x] **RECOV-06**: Acceptance criterion (B null coverage): coverage_of_zero >= 85% on `|B_true| < 0.5 * prior_std` across seeds. *SVI: PASS (1.00 >= 0.85 on cluster job 54933838).*
-- [x] **RECOV-07**: Identifiability diagnostic: posterior-shrinkage metric `std_post / std_prior <= 0.7` for each free B_ij; reported alongside RMSE (does not block acceptance but documented per dataset). *SVI shrinkage ~0.008 (guide collapsed); VL posterior covariance provides meaningful uncertainty estimates.*
-- [x] **RECOV-08**: Wall-time benchmark: bilinear DCM (3-region, J=1) runtime reported vs linear 3-region baseline (~235s/500 steps). Expected 3-6x slowdown (Pitfall B10); flagged if >10x. *SVI: 1.15x (PASS on cluster job 54933838). VL: ~5.5 min for 14 GN iterations.*
-
-## Future Requirements (deferred)
-
-### v0.3.1 Candidates
-
-- **AMORT-01**: `TaskBilinearDCMPacker` with packer-version tag and checkpoint compatibility assertion.
-- **AMORT-02**: Amortized bilinear guide training pipeline with re-fit standardization.
-- **AMORT-03**: Refusal of v0.2.0 linear-amortized warm-start with clear error message.
-- **SIM-06**: `LinearInterpolatedInput` for smooth-ramp modulatory inputs (e.g., HGF belief-update trajectories).
-
-### v0.4.0 Candidates
-
-- **PEB-01..N**: PEB-lite group GLM on DCM parameters.
-- **SPMVAL-01..N**: SPM12 cross-validation of bilinear DCM (requires MATLAB).
-- **CIRCUIT-01..N**: HEART2ADAPT 4-node circuit benchmark (study-specific).
-- **BILIN-08**: Two-state prior flag (variance 1/4) as alternative to D1.
+- Documentation: IO quickstart doc, Sphinx build setup, docstring examples, DCM variant guide
+- Input validation warnings in loaders (sfreq, highpass, channel count, reference, epoch count)
+- Source-space integration test with real SourceSpaces + Labels
+- End-to-end SVI recovery tests through MNE IO path (>3 min, cluster work)
+- Full hosted API reference site
+- BIDS round-trip integration test (BIDS → CSD → model)
 
 ## Out of Scope
 
-Explicitly excluded from v0.3.0 (and often permanently).
+- Wrapping MNE preprocessing (filtering, ICA, artifact rejection) — MNE owns this
+- Building a parallel BIDS parser — mne-bids already solves this
+- Downloading MNE sample data (1.9 GB) in tests — synthetic fixtures only
+- Auto-detecting DCM variant from data properties — researcher's scientific judgment
 
-| Feature | Reason |
-|---------|--------|
-| Nonlinear DCM (second-order terms x * x) | Anti-feature; PROJECT.md explicitly cites Nozari et al. 2024 -- bilinear suffices for macroscopic BOLD |
-| Time-varying A(t) beyond modulatory form | Anti-feature; deferred per PROJECT.md Out-of-Scope list |
-| Trial-by-trial Bayesian updating | Anti-feature; scope creep away from batch DCM |
-| HRF-convolved stimulus pre-processing inside utilities | Would double-count hemodynamics (Balloon model already does neural->BOLD transform) |
-| `pyro.plate` around B_j sampling | Breaks some AutoGuides; per-site loop is the right pattern |
-| Amortized-guide bilinear support | Deferred to v0.3.1 per D5 |
-| Group-level PEB analysis | Deferred to v0.4+; HEART2ADAPT-specific, not scoped to single-subject toolbox |
-| SPM12 cross-validation | Deferred to v0.4+; requires MATLAB access |
-| 4-node HEART2ADAPT circuit benchmark | Deferred; study-specific |
-| NumPyro bilinear backend | v0.4+; multiplies scope |
-| Real-time / clinical deployment | PROJECT.md permanent Out-of-Scope |
-| GUI / web interface | PROJECT.md permanent Out-of-Scope |
+---
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BILIN-01 | Phase 13 | Complete |
-| BILIN-02 | Phase 13 | Complete |
-| BILIN-03 | Phase 13 | Complete |
-| BILIN-04 | Phase 13 | Complete |
-| BILIN-05 | Phase 13 | Complete |
-| BILIN-06 | Phase 13 | Complete |
-| BILIN-07 | Phase 13 | Complete |
-| SIM-01 | Phase 14 | Complete |
-| SIM-02 | Phase 14 | Complete |
-| SIM-03 | Phase 14 | Complete |
-| SIM-04 | Phase 14 | Complete |
-| SIM-05 | Phase 14 | Complete |
-| MODEL-01 | Phase 15 | Complete |
-| MODEL-02 | Phase 15 | Complete |
-| MODEL-03 | Phase 15 | Complete |
-| MODEL-04 | Phase 15 | Complete |
-| MODEL-05 | Phase 15 | Complete |
-| MODEL-06 | Phase 15 | Complete |
-| MODEL-07 | Phase 15 | Complete |
-| RECOV-01 | Phase 16 | Complete |
-| RECOV-02 | Phase 16 | Complete |
-| RECOV-03 | Phase 16 | Complete |
-| RECOV-04 | Phase 16 + 16.1 | Complete (amended: VL passes; SVI limitation documented) |
-| RECOV-05 | Phase 16 | Complete |
-| RECOV-06 | Phase 16 | Complete |
-| RECOV-07 | Phase 16 + 16.1 | Complete |
-| RECOV-08 | Phase 16 | Complete |
+| TEST-01 | — | Pending |
+| TEST-02 | — | Pending |
+| TEST-03 | — | Pending |
+| TEST-04 | — | Pending |
+| TEST-05 | — | Pending |
+| TEST-06 | — | Pending |
+| TEST-07 | — | Pending |
+| TEST-08 | — | Pending |
+| TEST-09 | — | Pending |
+| TEST-10 | — | Pending |
+| TEST-11 | — | Pending |
+| TEST-12 | — | Pending |
+| TEST-13 | — | Pending |
+| BIDS-01 | — | Pending |
+| BIDS-02 | — | Pending |
+| BIDS-03 | — | Pending |
+| PIPE-01 | — | Pending |
+| PIPE-02 | — | Pending |
 
 **Coverage:**
-- v0.3.0 requirements: 27 total
-- Mapped to phases: 27/27 (all mapped)
-- Unmapped: 0
-
-**Per-phase distribution:**
-- Phase 13 (Bilinear Neural State & Stability Monitor): 7 requirements (BILIN-01..07)
-- Phase 14 (Stimulus Utilities & Bilinear Simulator): 5 requirements (SIM-01..05)
-- Phase 15 (Pyro Generative Model): 7 requirements (MODEL-01..07)
-- Phase 16 (Recovery Benchmark): 8 requirements (RECOV-01..08)
+- v0.5.0 requirements: 18 total
+- Mapped to phases: 0/18 (roadmap pending)
+- Unmapped: 18
 
 ---
-*Requirements defined: 2026-04-17*
-*Last updated: 2026-05-21 — All 27/27 v0.3.0 requirements complete. RECOV-04 amended: VL passes (B-RMSE=0.0170); SVI+AutoNormal limitation documented. Phase 16.1 diagnostic closed.*
+*Requirements defined: 2026-05-21*
+*Last updated: 2026-05-21*
