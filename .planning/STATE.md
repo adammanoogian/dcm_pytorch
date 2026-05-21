@@ -2,20 +2,20 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-17)
+See: .planning/PROJECT.md (updated 2026-05-21)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.3.0 and v0.4.0 COMPLETE as of 2026-05-21. v0.3.0 closed with VL as bilinear inference engine (RECOV-04 amended; 27/27 requirements done). v0.4.0 Circuit Explorer closed (Phase 17 CircuitViz 17/17 tests, VIZ-01..10 complete). Next: v0.5.0 MNE-Python Integration milestone scoping.
+**Current focus:** v0.5.0 MNE-Python Integration — test/validate IO loaders, build end-to-end pipelines, write documentation.
 
 ## Current Position
 
-**Milestone:** v0.3.0 Bilinear DCM Extension — COMPLETE 2026-05-21. v0.4.0 Circuit Explorer — COMPLETE 2026-05-21.
-**Phase:** All phases complete. v0.3.0: Phases 13-16.1 (5 phases). v0.4.0: Phase 17 (1 phase).
-**Plan:** All plans complete. 16.1-01 resolved via VL (Plan 16.1-02 cancelled — premise falsified). Phase 17: 17-01 COMPLETE 2026-04-24.
-**Status:** v0.3.0 closed with hybrid resolution: VL (Gauss-Newton) recovers B with RMSE=0.0170 (cluster job 55554876), proving forward model correct. SVI+AutoNormal limitation documented (B-RMSE=0.3467 — 1st-order mean-field cannot navigate B posterior geometry). RECOV-04 amended to accept VL as bilinear inference engine. 27/27 requirements complete. VL module: `src/pyro_dcm/inference/variational_laplace.py` (core GN optimizer) + `vl_dcm.py` (DCM bridge) + `__init__.py` (exports). v0.4.0 closed: CircuitViz v1 serializer shipped (17/17 tests, VIZ-01..10).
-**Last activity:** 2026-05-21 — v0.3.0 and v0.4.0 milestones closed. VL smoke test passed (B-RMSE=0.0170). Planning artifacts updated. Ready for v0.5.0 MNE-Python Integration milestone scoping.
+**Milestone:** v0.5.0 MNE-Python Integration (started 2026-05-21)
+**Phase:** Not started (defining requirements)
+**Plan:** —
+**Status:** Defining requirements. IO loaders already coded (`src/pyro_dcm/io/mne_loader.py`, `bids_loader.py`) but untested. Need test suite, end-to-end pipeline scripts, and documentation.
+**Last activity:** 2026-05-21 — Milestone v0.5.0 started. v0.3.0 (27/27 reqs) and v0.4.0 (VIZ-01..10) closed.
 
-Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [██████████] 100% | v0.4.0 [██████████] 100%
+Progress: v0.1.0 [██████████] 100% | v0.2.0 [██████████] 100% | v0.3.0 [██████████] 100% | v0.4.0 [██████████] 100% | v0.5.0 [░░░░░░░░░░] Defining requirements
 
 ## Decisions
 

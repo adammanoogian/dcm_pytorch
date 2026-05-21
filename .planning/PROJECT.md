@@ -43,39 +43,38 @@ point estimate. This is the scientific meaning that must be preserved above all 
 - 9 publication-quality figure types (calibration, scaling, comparison, violin, Pareto, timing) — v0.2.0
 - Practical recommendation guide with Mermaid decision tree — v0.2.0
 - Benchmark narrative with zero TBD entries — v0.2.0
+- Bilinear neural state equation dx/dt = Ax + Σ u_j·B_j·x + Cu (Friston 2003) — v0.3.0
+- Bilinear CoupledDCMSystem with eigenvalue stability monitor — v0.3.0
+- Variable-amplitude event/epoch stimulus utilities — v0.3.0
+- Bilinear simulator with B_list + stimulus_mod — v0.3.0
+- Pyro bilinear model with B_free_j ~ Normal(0, 1.0) per-modulator priors — v0.3.0
+- Variational Laplace (Gauss-Newton) inference engine for bilinear B recovery — v0.3.0
+- Bilinear recovery benchmark (RECOV-01..08; VL B-RMSE=0.017) — v0.3.0
+- CircuitViz v1 JSON serializer for DCM model configs and fitted posteriors — v0.4.0
 
 ### Active
 
-## Current Milestone: v0.3.0 Bilinear DCM Extension
+## Current Milestone: v0.5.0 MNE-Python Integration
 
-**Goal:** Extend the neural state equation from the linear form `dx/dt = Ax + Cu` to
-the full bilinear form `dx/dt = Ax + Σ_j u_j·B_j·x + Cu` (Friston, Harrison & Penny
-2003, Eq. 1), propagating B-matrix modulatory inputs through the forward model,
-Pyro generative model + priors, simulator, and recovery benchmark.
+**Goal:** Test and validate the existing MNE-Python IO loaders, build end-to-end pipeline
+scripts demonstrating real neuroimaging data → DCM fit → results, and write user-facing
+documentation (tutorial + API reference) for the MNE integration.
 
 **Target features:**
 
-- Bilinear neural state equation with `compute_effective_A(A, B_list, u_mod)`
-- Bilinear `CoupledDCMSystem` accepting `B_list` and a modulatory input interpolant
-- Pyro model sampling `B_free_j ~ N(0, 1/16)` per modulator with per-modulator masking
-- Variable-amplitude event/epoch stimulus utilities (stick & boxcar)
-- Bilinear simulator accepting `B_list` + `stimulus_mod`
-- Bilinear recovery benchmark (3-region, 1 driving + 1 modulatory input)
-
-**Explicitly deferred out of v0.3.0:**
-
-- Group-level PEB-lite GLM (HEART2ADAPT-specific; not scoped to this single-subject toolbox)
-- 4-node HEART2ADAPT circuit benchmark (study-specific)
-- SPM12 cross-validation of bilinear DCM (requires MATLAB; v0.4+ candidate)
-- NumPyro backends, regularization study, semi-amortized pipeline, amortized calibration (deferred to v0.4.0+)
+- Test suite for existing IO loaders (epochs_to_csd, epochs_to_timeseries, raw_to_timeseries, stc_to_roi_timeseries)
+- BIDS loader tests (load_bids_raw, load_bids_epochs)
+- End-to-end pipeline script: MNE Epochs → spectral DCM → fitted A matrix
+- End-to-end pipeline script: MNE Raw/Epochs → task DCM → fitted A + B matrices
+- User-facing tutorial documentation with worked examples
+- API reference documentation for the IO module
 
 ### Out of Scope
 
-- Non-stationary A(t) extensions — deferred to v0.2, requires separate contribution
+- Non-stationary A(t) extensions — deferred, requires separate contribution
 - Neural ODE replacements for biophysical forward model — deferred pending Nozari et al. (2024) evidence
 - Clinical deployment or real-time processing — research tool only
 - GUI or web interface — CLI/API only
-- Multi-modal (EEG/MEG) DCM — different observation models entirely
 - Structural connectivity integration (tractography priors) — future work
 
 ## Context
@@ -108,7 +107,9 @@ Pyro generative model + priors, simulator, and recovery benchmark.
 | src/ layout | project_utils standard, prevents import confusion | -- Pending |
 | Static A first | Clean first paper; non-stationary A(t) is second contribution | -- Pending |
 | NumPyro for NUTS only | JAX speed for validation sampling, not primary inference | -- Pending |
-| v0.3.0 scoped to bilinear only | Keeps milestone focused and shippable; HEART2ADAPT/PEB/SPM12 extensions land in v0.4+ | -- Pending |
+| v0.3.0 scoped to bilinear only | Keeps milestone focused and shippable; HEART2ADAPT/PEB/SPM12 extensions land in v0.4+ | ✓ Good |
+| VL as bilinear inference engine | SVI+AutoNormal cannot recover B (weak multiplicative gradient); VL (Gauss-Newton) recovers B with RMSE=0.017 | ✓ Good |
+| MNE-Python as optional dep | `pip install pyro-dcm[mne]` keeps core lightweight; IO module in `src/pyro_dcm/io/` | -- Pending |
 
 ---
-*Last updated: 2026-04-17 after v0.3.0 milestone started*
+*Last updated: 2026-05-21 after v0.5.0 milestone started*
