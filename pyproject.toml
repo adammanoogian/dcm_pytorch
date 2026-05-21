@@ -30,6 +30,10 @@ benchmark = [
     "matplotlib",
     "tabulate",
 ]
+mne = [
+    "mne>=1.6",
+    "mne-bids>=0.14",
+]
 dev = [
     "pytest",
     "ruff",
@@ -70,4 +74,5 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "spm: marks tests requiring MATLAB + SPM12 (deselect with '-m \"not spm\"')",
     "tapas: marks tests requiring tapas rDCM MATLAB toolbox",
+    "mne: marks tests requiring MNE-Python (run with '-m mne', skip with '-m \"not mne\"')",
 ]
