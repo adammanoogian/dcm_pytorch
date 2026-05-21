@@ -6,6 +6,7 @@
 - **v0.2.0 Cross-Backend Inference Benchmarking** - Phases 9-12 (shipped 2026-04-13)
 - **v0.3.0 Bilinear DCM Extension** - Phases 13-16 (in progress; started 2026-04-17)
 - **v0.4.0 Circuit Explorer** - Phase 17+ (defined 2026-04-24; not yet started)
+- **v0.5.0 MNE-Python Integration** - Phases 18-19 (in progress; started 2026-05-21)
 
 <details>
 <summary>v0.1.0 Foundation (Phases 1-8) - SHIPPED 2026-04-03</summary>
@@ -301,6 +302,82 @@ Plans:
 
 ---
 
+## Current Milestone: v0.5.0 MNE-Python Integration
+
+**Status:** In progress (started 2026-05-21)
+**Phases:** 18-19 (2 phases)
+**Requirements covered:** 18/18 v0.5.0 requirements
+
+### Overview
+
+v0.5.0 validates the existing MNE-Python IO loaders (`src/pyro_dcm/io/mne_loader.py`,
+`bids_loader.py`) which shipped in v0.4.0 but have zero test coverage, then demonstrates
+end-to-end usage via pipeline scripts. The IO code already exists; this milestone proves
+it works correctly by encoding critical scientific pitfalls (CSD frequency conventions,
+Hermitian symmetry, channel picks inconsistency) as explicit test cases, and by building
+two demo scripts showing the full path from synthetic MNE data through DCM fitting to
+posterior A matrices. Research (HIGH confidence) confirms all test fixtures are synthetic
+(MNE's `RawArray`, `EpochsArray`, `create_info`), no data downloads required, and the
+`stc_to_roi_timeseries` path uses `unittest.mock.patch` on `mne.extract_label_time_course`.
+The critical path is strictly linear: **Phase 18 (tests) -> Phase 19 (pipeline scripts).**
+
+**Milestone acceptance gate:** All 18 requirements pass. Test suite runs cleanly with
+`pytest -m mne` (when MNE installed) and is fully skipped with `pytest -m "not mne"`
+(when MNE absent). Both pipeline scripts execute end-to-end on synthetic data and produce
+fitted posterior A matrices.
+
+### Phases
+
+#### Phase 18: MNE/BIDS IO Test Suite
+
+**Goal:** The MNE and BIDS IO loaders have a comprehensive test suite that validates
+shape contracts, mathematical properties, error handling, and critical scientific
+pitfalls, runnable via `pytest -m mne` and cleanly skipped when MNE is not installed.
+
+**Branch:** `gsd/phase-18-mne-io-test-suite`
+**Depends on:** v0.4.0 shipping IO code (`src/pyro_dcm/io/mne_loader.py`,
+`src/pyro_dcm/io/bids_loader.py`).
+**Requirements:** TEST-01..13, BIDS-01..03
+**Plans:** 2 plans (2 waves)
+Plans:
+- [x] 18-01-PLAN.md -- Register mne pytest marker + MNE loader test suite (12 tests, TEST-01..13)
+- [x] 18-02-PLAN.md -- BIDS loader round-trip test suite (3 tests, BIDS-01..03)
+
+**Success Criteria** (what must be TRUE):
+
+  1. `pytest tests/test_mne_loader.py` passes with all shape validations green:
+     `epochs_to_csd` returns `(F, N, N)` complex tensor, `epochs_to_timeseries`
+     returns `(T, N)` float tensor (both averaged and unaveraged), `raw_to_timeseries`
+     returns `(T, N)` float tensor, and `stc_to_roi_timeseries` returns `(T, N)`
+     float tensor via mocked `extract_label_time_course` (TEST-01 through TEST-04).
+  2. Channel picks subsetting works correctly (TEST-05, TEST-06).
+  3. CSD mathematical properties hold: Hermitian symmetry, non-negative auto-spectra,
+     10 Hz sine injection peak detection (TEST-07, TEST-08, TEST-09).
+  4. Error and skip paths work (TEST-10, TEST-11, TEST-12, TEST-13).
+  5. `pytest tests/test_bids_loader.py` passes: BIDS round-trip and BAD_ACQ_SKIP
+     annotation handling (BIDS-01, BIDS-02, BIDS-03).
+
+#### Phase 19: End-to-End Pipeline Demos
+
+**Goal:** Users can follow two self-contained demo scripts that show the complete path
+from synthetic MNE data through Pyro-DCM model fitting to posterior connectivity
+matrices, serving as copy-pasteable starting points for real neuroimaging workflows.
+
+**Branch:** `gsd/phase-19-pipeline-demos`
+**Depends on:** Phase 18 (confirmed IO contracts via passing tests).
+**Requirements:** PIPE-01, PIPE-02
+
+### Progress
+
+**Execution Order:** 18 -> 19
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 18. MNE/BIDS IO Test Suite | 2/2 | Complete (verified 17/17 must-haves) | 2026-05-21 |
+| 19. End-to-End Pipeline Demos | 0/TBD | Not started | -- |
+
+---
+
 ## Cumulative Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -316,7 +393,9 @@ Plans:
 | 16. 3-Region Bilinear Recovery Benchmark | v0.3.0 | 3/3 | Implementation complete; acceptance FAILED 2026-04-24 (RECOV-04) | -- |
 | 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | v0.3.0 | 0/2 | Planned | -- |
 | 17. Circuit Visualization Module | v0.4.0 | 1/1 | Complete | 2026-04-24 |
+| 18. MNE/BIDS IO Test Suite | v0.5.0 | 2/2 | Complete (verified 17/17 must-haves) | 2026-05-21 |
+| 19. End-to-End Pipeline Demos | v0.5.0 | 0/TBD | Not started | -- |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-04-24 — Phase 16.1 INSERTED to address RECOV-04 B-RMSE acceptance failure (cluster job 54933838: B-RMSE 0.3424 > 0.20 threshold, systematic across all 10 seeds). Phase 17 (Circuit Visualization Module) complete; verified 15/15 must-haves (5 ROADMAP success criteria + VIZ-01..10); 17 tests green (15 fast + 2 slow Pyro smoke); zero upstream edits. v0.4.0 Circuit Explorer milestone is functionally shippable (single-phase scope) pending /gsd:audit-milestone + /gsd:complete-milestone. v0.3.0 blocked on Phase 16.1 completion (diagnostic + RECOV-04 re-pass).*
+*Last updated: 2026-05-21 — Phase 18 (MNE/BIDS IO Test Suite) complete; verified 17/17 must-haves; 15 tests green (12 MNE loader + 3 BIDS loader). v0.5.0 milestone section added. Phase 19 (End-to-End Pipeline Demos) is next.*

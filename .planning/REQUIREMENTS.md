@@ -160,6 +160,9 @@ Explicitly excluded from v0.3.0 (and often permanently).
 - v0.4.0 requirements: 10 total
 - Mapped to phases: 10/10 (all mapped)
 - Unmapped: 0
+- v0.5.0 requirements: 18 total
+- Mapped to phases: 18/18 (all mapped)
+- Unmapped: 0
 
 **Per-phase distribution:**
 - Phase 13 (Bilinear Neural State & Stability Monitor): 7 requirements (BILIN-01..07)
@@ -167,7 +170,66 @@ Explicitly excluded from v0.3.0 (and often permanently).
 - Phase 15 (Pyro Generative Model): 7 requirements (MODEL-01..07)
 - Phase 16 (Recovery Benchmark): 8 requirements (RECOV-01..08)
 - Phase 17 (Circuit Visualization Module): 10 requirements (VIZ-01..10)
+- Phase 18 (MNE/BIDS IO Test Suite): 16 requirements (TEST-01..13, BIDS-01..03)
+- Phase 19 (End-to-End Pipeline Demos): 2 requirements (PIPE-01, PIPE-02)
+
+## v0.5.0 Requirements
+
+Requirements for MNE-Python Integration. Validates IO loaders and demonstrates
+end-to-end usage with pipeline scripts. All test fixtures are synthetic -- no
+data downloads. Critical scientific pitfalls (CSD frequency conventions, Hermitian
+symmetry, channel picks inconsistency) are encoded as explicit test cases.
+
+### IO Loader Tests
+
+- [x] **TEST-01**: Shape validation for `epochs_to_csd` -- output `(F, N, N)` complex CSD tensor matches expected dimensions from synthetic Epochs
+- [x] **TEST-02**: Shape validation for `epochs_to_timeseries` -- output `(T, N)` float tensor matches expected dimensions, both averaged and unaveraged paths
+- [x] **TEST-03**: Shape validation for `raw_to_timeseries` -- output `(T, N)` float tensor matches expected dimensions from synthetic Raw
+- [x] **TEST-04**: Shape validation for `stc_to_roi_timeseries` -- output `(T, N)` float tensor matches expected dimensions (mocked `extract_label_time_course`)
+- [x] **TEST-05**: Channel picks subsetting -- loaders correctly subset channels by name list and by type string; output shape matches picks, not full channel count
+- [x] **TEST-06**: Bad channel annotation handling -- documents behavior when channels marked as `info['bads']`; explicit picks required to exclude bads (pitfall P3)
+- [x] **TEST-07**: CSD Hermitian symmetry -- `csd[f,i,j] == conj(csd[f,j,i])` for all frequency bins
+- [x] **TEST-08**: CSD non-negative auto-spectra diagonal -- `csd[f,i,i].real >= 0` for all frequency bins and channels
+- [x] **TEST-09**: CSD sine-injection round-trip -- inject 10 Hz sine into synthetic Epochs, verify CSD peak at 10 Hz bin (within 1 bin tolerance)
+- [x] **TEST-10**: `_require_mne()` raises ImportError with install instructions when MNE not installed
+- [x] **TEST-11**: `epochs_to_csd` raises ValueError for invalid `method` argument
+- [x] **TEST-12**: `pytest.importorskip("mne")` at module level -- test file skips entirely when MNE absent
+- [x] **TEST-13**: `@pytest.mark.mne` marker registered in pyproject.toml for `pytest -m "not mne"` exclusion
+
+### BIDS Loader Tests
+
+- [x] **BIDS-01**: `load_bids_raw` returns valid `mne.io.BaseRaw` from synthetic BIDS dataset written via `write_raw_bids` to `tmp_path`
+- [x] **BIDS-02**: `load_bids_epochs` returns valid `mne.Epochs` from synthetic BIDS dataset
+- [x] **BIDS-03**: BIDS annotation edge case -- handle `BAD_ACQ_SKIP` spans and non-trivial annotations without error
+
+### Pipeline Scripts
+
+- [ ] **PIPE-01**: Spectral DCM demo script -- end-to-end: synthetic MNE Epochs -> `epochs_to_csd` -> SpectralDCMModel -> SVI -> posterior A matrix
+- [ ] **PIPE-02**: Task DCM demo script -- end-to-end: synthetic MNE Epochs -> `epochs_to_timeseries` -> TaskDCMModel -> SVI -> posterior A + B matrices
+
+## v0.5.0 Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| TEST-01 | Phase 18 | Complete |
+| TEST-02 | Phase 18 | Complete |
+| TEST-03 | Phase 18 | Complete |
+| TEST-04 | Phase 18 | Complete |
+| TEST-05 | Phase 18 | Complete |
+| TEST-06 | Phase 18 | Complete |
+| TEST-07 | Phase 18 | Complete |
+| TEST-08 | Phase 18 | Complete |
+| TEST-09 | Phase 18 | Complete |
+| TEST-10 | Phase 18 | Complete |
+| TEST-11 | Phase 18 | Complete |
+| TEST-12 | Phase 18 | Complete |
+| TEST-13 | Phase 18 | Complete |
+| BIDS-01 | Phase 18 | Complete |
+| BIDS-02 | Phase 18 | Complete |
+| BIDS-03 | Phase 18 | Complete |
+| PIPE-01 | Phase 19 | Pending |
+| PIPE-02 | Phase 19 | Pending |
 
 ---
 *Requirements defined: 2026-04-17*
-*Last updated: 2026-04-24 — Phase 17 complete; VIZ-01..10 flipped to Complete after gsd-verifier confirmed 15/15 must-haves against the codebase (commit ef2a8d8 on gsd/phase-17-circuit-visualization-module). v0.3.0 Phase 16 RECOV-01..08 still pending cluster re-run.*
+*Last updated: 2026-05-21 — v0.5.0 requirements added (18 total). Phase 18 complete: TEST-01..13 and BIDS-01..03 flipped to Complete after gsd-verifier confirmed 17/17 must-haves. Phase 19 PIPE-01..02 pending.*
