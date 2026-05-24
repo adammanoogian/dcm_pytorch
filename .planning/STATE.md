@@ -11,21 +11,24 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 
 **Milestone:** v0.6.0 Latent Circuit DCM (defined 2026-05-24)
 **Phase:** 20 of 25 (Direct Observation Forward Model, Simulator & Synthetic Validation)
-**Plan:** --
-**Status:** Roadmap created; Phase 20 ready to plan
-**Last activity:** 2026-05-24 -- v0.6.0 roadmap created. 6 phases (20-25), 38 requirements mapped across 10 categories. Inside-out build order: forward model + synthetic validation first (Phase 20), RNN pipeline in parallel (Phase 21), then integration + comparison (Phase 22), BMR (Phase 23), TRIBE (Phase 24), publication (Phase 25).
+**Plan:** 02 of 05
+**Status:** In progress (plans 01-02 complete)
+**Last activity:** 2026-05-24 -- Completed 20-02-PLAN.md (multi-start SVI). Extended run_svi() with n_restarts and guide_factory parameters. MODEL-05 requirement satisfied.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 pending
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==--------] Phase 18 complete; 19 pending | v0.6.0 [----------] Roadmap defined
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==--------] Phase 18 complete; 19 pending | v0.6.0 [==--------] Phase 20: 2/5 plans complete
 
 ## Decisions
 
 - **v0.6.0 phase structure = 6 phases (20-25).** Derived from 10 requirement categories clustered into 6 delivery boundaries. Phase 20 (14 reqs) is the scientific core; Phases 20 and 21 can run in parallel.
 - **C_obs fixed at identity for v0.6.0.** Addresses pitfall LC5 (rotation ambiguity). Learned C_obs deferred to v0.7.0+.
-- **Multi-start SVI (>=10 restarts) non-optional.** Addresses pitfall LC11; L&E uses 100.
+- **Multi-start SVI (>=10 restarts) non-optional.** Addresses pitfall LC11; L&E uses 100. Implemented in Plan 20-02.
+- **n_restarts=1 preserves exact backward-compatible code path.** No structural changes to single-restart behavior (D20-02-01).
+- **guide_factory required for n_restarts>1.** Safe re-initialization needs fresh guide instances (D20-02-02).
+- **NaN restarts get inf penalty and are skipped.** One bad init doesn't abort entire multi-start (D20-02-03).
 - **Prior recalibration mandatory.** LC_A_PRIOR_VARIANCE separate from BOLD priors. Addresses pitfall LC4.
 - Prior v0.3.0/v0.4.0/v0.5.0 decisions: see earlier STATE.md history in git log.
 
@@ -55,7 +58,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-24 (v0.6.0 roadmap creation)
-Stopped at: ROADMAP.md updated with v0.6.0 Phases 20-25. REQUIREMENTS-v0.6.0.md traceability updated.
-Next: `/gsd:plan-phase 20` to derive plans for the forward model + simulator + synthetic validation phase.
+Last session: 2026-05-24T16:29Z
+Stopped at: Completed 20-02-PLAN.md (multi-start SVI)
+Next: Execute 20-03-PLAN.md (latent circuit DCM Pyro model)
 Resume file: None
