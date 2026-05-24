@@ -36,6 +36,7 @@ from pyro_dcm.forward_models.rdcm_posterior import (
     rigid_inversion,
     sparse_inversion,
 )
+from pyro_dcm.forward_models.latent_observation import direct_observation
 from pyro_dcm.forward_models.spectral_transfer import (
     compute_transfer_function,
     default_frequency_grid,
@@ -44,6 +45,8 @@ from pyro_dcm.forward_models.spectral_transfer import (
 )
 
 __all__ = [
+    # Phase 20: Latent-circuit direct observation
+    "direct_observation",
     # Phase 1: Neural-hemodynamic forward model
     "BalloonWindkessel",
     "CoupledDCMSystem",
