@@ -1,0 +1,475 @@
+"""Latent-circuit DCM metrics and acceptance gates (v0.6.0 Phase 20).
+
+Provides latent-circuit-specific metrics that extend the Phase 16 bilinear
+recovery infrastructure for the latent-circuit model (Plan 20-04):
+
+- ``compute_trajectory_r_squared``: Held-out R-squared for SYNTH-02
+  trajectory reconstruction gate.
+- ``compute_elbo_model_selection``: ELBO-based model order selection
+  across candidate latent dimensionalities (for future ELBO selection
+  experiments).
+- ``compute_latent_circuit_acceptance_gates``: Aggregates per-seed
+  metrics from the runner into pass/fail acceptance gates with median
+  aggregation.
+- ``compute_coverage_multi_level``: Multi-level CI coverage (re-exported
+  wrapper with tensor-input interface).
+
+Phase 16 bilinear metric functions are reused directly:
+``compute_b_rmse_magnitude``, ``compute_sign_recovery_nonzero``,
+``compute_coverage_of_zero``, ``compute_shrinkage``.
+
+**Provisional thresholds.** All gate thresholds in this module are
+provisional values set for Plan 20-04. They will be empirically
+recalibrated in Plan 20-05 using a prior-variance sweep on synthetic
+data. The constants are named ``LC_*_THRESHOLD`` and carry docstrings
+explaining their provenance. Do NOT use these thresholds as hard gates
+before Plan 20-05 calibration.
+
+References
+----------
+.planning/phases/20-latent-circuit-forward-model/20-CONTEXT.md
+    SYNTH-01 (A-RMSE, B-RMSE, sign recovery), SYNTH-02 (trajectory R2).
+.planning/phases/20-latent-circuit-forward-model/20-RESEARCH.md
+    Prior recalibration rationale (Sections 3, 4).
+.planning/REQUIREMENTS.md -- RECOV-03..08 (bilinear acceptance patterns).
+"""
+
+from __future__ import annotations
+
+from statistics import median
+from typing import Any
+
+import torch
+
+from benchmarks.bilinear_metrics import (
+    compute_b_rmse_magnitude,
+    compute_coverage_of_zero,
+    compute_shrinkage,
+    compute_sign_recovery_nonzero,
+)
+
+__all__ = [
+    "compute_trajectory_r_squared",
+    "compute_elbo_model_selection",
+    "compute_latent_circuit_acceptance_gates",
+    "compute_coverage_multi_level",
+    "compute_b_rmse_magnitude",
+    "compute_sign_recovery_nonzero",
+    "compute_coverage_of_zero",
+    "compute_shrinkage",
+    "LC_A_RMSE_THRESHOLD",
+    "LC_B_RMSE_THRESHOLD",
+    "LC_SIGN_RECOVERY_THRESHOLD",
+    "LC_CI_COVERAGE_THRESHOLD",
+    "LC_TRAJECTORY_R2_THRESHOLD",
+]
+
+
+# ---------------------------------------------------------------------------
+# Provisional acceptance thresholds
+# ---------------------------------------------------------------------------
+
+LC_A_RMSE_THRESHOLD: float = 0.15
+"""Provisional A-RMSE gate for latent-circuit DCM.
+
+0.15 (provisional -- Plan 20-05 calibration pending).
+
+Tighter than the RECOV-03 bilinear BOLD threshold (ratio-based) because
+the latent-circuit forward model uses direct observation with identity
+C_obs (pitfall LC5 avoided): no hemodynamic smearing means A should be
+recovered more precisely than from BOLD data. The absolute value 0.15
+corresponds roughly to half the prior std (LC_A_PRIOR_VARIANCE^0.5 = 0.25)
+at 2 sigma, appropriate for N=4 chains with off-diagonal strength 0.2.
+
+This value is PROVISIONAL. Plan 20-05 will run a prior-variance sweep on
+5+ synthetic RNNs and tighten/loosen each gate based on observed recovery
+distributions. Do not treat 0.15 as a hard requirement before calibration.
+
+References
+----------
+.planning/phases/20-latent-circuit-forward-model/20-CONTEXT.md (SYNTH-01)
+.planning/phases/20-latent-circuit-forward-model/20-05-PLAN.md
+"""
+
+LC_B_RMSE_THRESHOLD: float = 0.20
+"""Provisional magnitude-masked B-RMSE gate for latent-circuit DCM.
+
+0.20 (same as RECOV-04 for bilinear BOLD). Unchanged because the B prior
+variance (LC_B_PRIOR_VARIANCE = 1.0) matches the task-DCM B prior, so the
+same absolute threshold applies until Plan 20-05 calibration.
+
+References
+----------
+.planning/REQUIREMENTS.md -- RECOV-04 (B-RMSE threshold, bilinear BOLD).
+.planning/phases/20-latent-circuit-forward-model/20-CONTEXT.md (SYNTH-01)
+"""
+
+LC_SIGN_RECOVERY_THRESHOLD: float = 0.80
+"""Provisional pooled sign-recovery gate for non-zero B elements.
+
+0.80 (same as RECOV-05). Same reasoning as LC_B_RMSE_THRESHOLD -- B prior
+matches, so the RECOV-05 80% floor is a reasonable provisional gate.
+
+References
+----------
+.planning/REQUIREMENTS.md -- RECOV-05 (sign recovery, bilinear BOLD).
+"""
+
+LC_CI_COVERAGE_THRESHOLD: float = 0.85
+"""Provisional 95% CI coverage gate for null B elements.
+
+0.85 (same as RECOV-06). The AutoNormal mean-field limitation (N1 in
+bilinear research) applies equally here; 85% is the right provisional
+floor before calibration.
+
+References
+----------
+.planning/REQUIREMENTS.md -- RECOV-06 (coverage-of-zero, bilinear BOLD).
+"""
+
+LC_TRAJECTORY_R2_THRESHOLD: float = 0.95
+"""Provisional held-out trajectory R-squared gate (SYNTH-02).
+
+0.95 for a correctly-specified latent-circuit model. The latent-circuit DCM
+uses the same generative model for simulation and inference (correctly
+specified), so high trajectory reconstruction fidelity on held-out data
+is expected. Under misspecification (real RNN data), this threshold will
+likely need lowering; Plan 20-05 will calibrate against synthetic RNN
+trajectories with nonlinear terms.
+
+References
+----------
+.planning/phases/20-latent-circuit-forward-model/20-CONTEXT.md (SYNTH-02)
+"""
+
+
+# ---------------------------------------------------------------------------
+# Core metric functions
+# ---------------------------------------------------------------------------
+
+
+def compute_trajectory_r_squared(
+    predicted: torch.Tensor,
+    observed: torch.Tensor,
+) -> float:
+    """Per-region R-squared between predicted and observed trajectories.
+
+    Computes the coefficient of determination (R-squared) for each
+    region independently, then returns the mean across regions. Used
+    for SYNTH-02: held-out trajectory reconstruction gate.
+
+    Parameters
+    ----------
+    predicted : torch.Tensor
+        Predicted latent-state trajectories, shape ``(T, N)``.
+    observed : torch.Tensor
+        Observed latent-state trajectories, shape ``(T, N)``.
+
+    Returns
+    -------
+    float
+        Mean R-squared across N regions. Returns ``nan`` if ``observed``
+        has fewer than 2 time points (undefined variance).
+
+    Notes
+    -----
+    R-squared is defined per region as::
+
+        R2_n = 1 - SS_res_n / SS_tot_n
+
+    where ``SS_res_n = sum((obs_n - pred_n)^2)`` and
+    ``SS_tot_n = sum((obs_n - mean(obs_n))^2)``.
+
+    ``SS_tot_n`` is clamped to at least ``1e-12`` to avoid division by
+    zero when a region has constant observed signal. In that case
+    ``SS_res_n`` is also effectively zero for a good prediction, so R2
+    correctly approaches 1.
+
+    References
+    ----------
+    .planning/phases/20-latent-circuit-forward-model/20-CONTEXT.md
+        SYNTH-02 trajectory R-squared acceptance gate.
+    """
+    if observed.shape[0] < 2:
+        return float("nan")
+
+    predicted = predicted.to(dtype=torch.float64)
+    observed = observed.to(dtype=torch.float64)
+
+    obs_mean = observed.mean(dim=0)  # (N,)
+    ss_res = ((observed - predicted) ** 2).sum(dim=0)  # (N,)
+    ss_tot = ((observed - obs_mean) ** 2).sum(dim=0)   # (N,)
+    ss_tot = ss_tot.clamp(min=1e-12)
+
+    r2_per_region = 1.0 - ss_res / ss_tot  # (N,)
+    return r2_per_region.mean().item()
+
+
+def compute_elbo_model_selection(
+    elbo_dict: dict[int, float],
+    *,
+    true_n: int | None = None,
+) -> dict[str, Any]:
+    """ELBO-based model order selection across candidate latent dimensions.
+
+    Selects the latent dimensionality N with the lowest ELBO loss (= best
+    model fit, since Pyro run_svi returns the negative ELBO as a positive
+    loss -- lower is better).
+
+    Parameters
+    ----------
+    elbo_dict : dict[int, float]
+        Mapping from candidate region count ``N`` to best final ELBO loss
+        (as returned by ``run_svi``'s ``'final_loss'`` key). Lower is
+        better (loss = -ELBO, so lower loss = higher ELBO = better fit).
+    true_n : int or None, optional
+        Ground-truth latent dimensionality (for accuracy evaluation).
+        When provided, ``correct`` key is set to ``True`` if
+        ``selected_n == true_n``.
+
+    Returns
+    -------
+    dict
+        Keys:
+
+        - ``selected_n`` (int): N with the lowest ELBO loss.
+        - ``elbos`` (dict): copy of input ``elbo_dict``.
+        - ``correct`` (bool or None): whether ``selected_n == true_n``;
+          ``None`` when ``true_n`` is not provided.
+        - ``best_loss`` (float): minimum loss value.
+
+    Raises
+    ------
+    ValueError
+        If ``elbo_dict`` is empty.
+
+    References
+    ----------
+    .planning/phases/20-latent-circuit-forward-model/20-RESEARCH.md
+        Section 4 (ELBO model selection for latent dimensionality).
+    """
+    if not elbo_dict:
+        raise ValueError(
+            "elbo_dict must be non-empty; got empty dict. "
+            "Provide at least one {N: loss} entry."
+        )
+
+    selected_n = min(elbo_dict, key=lambda k: elbo_dict[k])
+    best_loss = elbo_dict[selected_n]
+    correct: bool | None = None
+    if true_n is not None:
+        correct = selected_n == true_n
+
+    return {
+        "selected_n": selected_n,
+        "elbos": dict(elbo_dict),
+        "correct": correct,
+        "best_loss": best_loss,
+    }
+
+
+def compute_coverage_multi_level(
+    samples: torch.Tensor,
+    true_value: torch.Tensor,
+    levels: list[float] | None = None,
+) -> dict[float, float]:
+    """Empirical CI coverage at multiple credible interval levels.
+
+    For each CI level, computes the lower and upper quantile bounds of
+    the sample distribution via ``torch.quantile`` and checks what
+    fraction of ``true_value`` elements fall within the interval.
+
+    Parameters
+    ----------
+    samples : torch.Tensor
+        Posterior samples, shape ``(S, ...)`` where S is the number of
+        samples. Flattened internally to ``(S, D)`` for computation.
+    true_value : torch.Tensor
+        Ground-truth values, shape ``(...)`` matching ``samples[0]``.
+        Flattened internally to ``(D,)``.
+    levels : list of float or None, optional
+        CI levels to evaluate. Default ``[0.50, 0.75, 0.90, 0.95]``.
+
+    Returns
+    -------
+    dict[float, float]
+        Mapping from CI level to coverage fraction in ``[0.0, 1.0]``.
+
+    Notes
+    -----
+    Uses empirical quantiles (not z-scores) so the result is accurate
+    for non-Gaussian posteriors (e.g., AutoIAF). For AutoNormal, z-score
+    and quantile methods agree closely.
+
+    References
+    ----------
+    .planning/phases/20-latent-circuit-forward-model/20-CONTEXT.md
+        SYNTH-01 coverage gate.
+    """
+    if levels is None:
+        levels = [0.50, 0.75, 0.90, 0.95]
+
+    # Flatten to 2D for quantile computation.
+    S = samples.shape[0]
+    samples_2d = samples.reshape(S, -1).float()
+    true_flat = true_value.reshape(-1).float()
+
+    result: dict[float, float] = {}
+    for level in levels:
+        alpha = (1.0 - level) / 2.0
+        lo = torch.quantile(samples_2d, alpha, dim=0)
+        hi = torch.quantile(samples_2d, 1.0 - alpha, dim=0)
+        in_ci = (true_flat >= lo) & (true_flat <= hi)
+        result[level] = in_ci.float().mean().item()
+    return result
+
+
+def compute_latent_circuit_acceptance_gates(
+    runner_results: list[dict[str, Any]],
+    *,
+    thresholds: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """Aggregate per-seed metrics into latent-circuit acceptance gates.
+
+    Each gate passes if the MEDIAN across seeds meets its threshold.
+    Median aggregation is more robust than mean for small seed counts
+    (N=3 quick, N=10+ full) and matches the bilinear benchmark pattern.
+
+    Parameters
+    ----------
+    runner_results : list of dict
+        Per-seed dicts from ``run_latent_circuit_recovery``. Each must
+        contain the following float keys:
+
+        - ``a_rmse``: A-matrix RMSE (SYNTH-01).
+        - ``b_rmse``: Magnitude-masked B-RMSE (SYNTH-01).
+        - ``sign_recovery``: Fraction of non-zero B elements with
+          correct sign (SYNTH-01).
+        - ``ci_coverage_95``: 95% CI coverage on null B elements
+          (SYNTH-01).
+        - ``trajectory_r_squared``: Held-out trajectory R-squared
+          (SYNTH-02).
+
+        Optional but logged if present:
+
+        - ``shrinkage_A``: Mean shrinkage ratio for A posterior.
+        - ``shrinkage_B``: Mean shrinkage ratio for B posterior.
+
+    thresholds : dict of str to float, or None, optional
+        Override any subset of the default provisional thresholds::
+
+            {
+                "a_rmse": LC_A_RMSE_THRESHOLD,
+                "b_rmse": LC_B_RMSE_THRESHOLD,
+                "sign_recovery": LC_SIGN_RECOVERY_THRESHOLD,
+                "ci_coverage_95": LC_CI_COVERAGE_THRESHOLD,
+                "trajectory_r_squared": LC_TRAJECTORY_R2_THRESHOLD,
+            }
+
+    Returns
+    -------
+    dict
+        Keys:
+
+        - ``gates`` (dict): per-gate dicts with ``observed_median``,
+          ``threshold``, and ``pass`` (bool).
+        - ``per_seed`` (dict): per-gate lists of per-seed values.
+        - ``all_pass`` (bool): True iff all 5 gates pass.
+        - ``n_seeds`` (int): number of seed results aggregated.
+        - ``thresholds_used`` (dict): actual thresholds applied.
+
+    Raises
+    ------
+    ValueError
+        If ``runner_results`` is empty or any required key is missing
+        from all seed dicts.
+
+    References
+    ----------
+    .planning/phases/20-latent-circuit-forward-model/20-CONTEXT.md
+        SYNTH-01, SYNTH-02 acceptance criteria.
+    """
+    if not runner_results:
+        raise ValueError(
+            "runner_results must be non-empty; cannot compute gates from "
+            "an empty list."
+        )
+
+    # Required per-seed keys and their gate sense (lower-is-better vs
+    # higher-is-better).
+    gate_config: dict[str, tuple[str, float, bool]] = {
+        # key: (default_threshold, higher_is_better)
+        "a_rmse": (
+            "a_rmse",
+            LC_A_RMSE_THRESHOLD,
+            False,  # lower is better
+        ),
+        "b_rmse": (
+            "b_rmse",
+            LC_B_RMSE_THRESHOLD,
+            False,
+        ),
+        "sign_recovery": (
+            "sign_recovery",
+            LC_SIGN_RECOVERY_THRESHOLD,
+            True,  # higher is better
+        ),
+        "ci_coverage_95": (
+            "ci_coverage_95",
+            LC_CI_COVERAGE_THRESHOLD,
+            True,
+        ),
+        "trajectory_r_squared": (
+            "trajectory_r_squared",
+            LC_TRAJECTORY_R2_THRESHOLD,
+            True,
+        ),
+    }
+
+    # Merge with caller overrides.
+    effective_thresholds: dict[str, float] = {
+        name: cfg[1] for name, cfg in gate_config.items()
+    }
+    if thresholds:
+        for k, v in thresholds.items():
+            if k in effective_thresholds:
+                effective_thresholds[k] = v
+
+    # Collect per-seed values for each gate.
+    per_seed: dict[str, list[float]] = {name: [] for name in gate_config}
+    for i, seed_dict in enumerate(runner_results):
+        for name in gate_config:
+            if name not in seed_dict:
+                raise ValueError(
+                    f"runner_results[{i}] is missing required key {name!r}. "
+                    f"Got keys: {sorted(seed_dict.keys())}."
+                )
+            per_seed[name].append(float(seed_dict[name]))
+
+    # Compute gates: median across seeds.
+    gates: dict[str, dict[str, Any]] = {}
+    all_pass = True
+    for name, (_, _, higher_is_better) in gate_config.items():
+        vals = per_seed[name]
+        obs_median = median(vals)
+        thresh = effective_thresholds[name]
+        passed = (
+            obs_median >= thresh if higher_is_better
+            else obs_median <= thresh
+        )
+        gates[name] = {
+            "observed_median": obs_median,
+            "threshold": thresh,
+            "pass": bool(passed),
+            "higher_is_better": higher_is_better,
+        }
+        if not passed:
+            all_pass = False
+
+    return {
+        "gates": gates,
+        "per_seed": per_seed,
+        "all_pass": all_pass,
+        "n_seeds": len(runner_results),
+        "thresholds_used": dict(effective_thresholds),
+    }
