@@ -8,24 +8,30 @@ NaN detection, and three ELBO variants (Trace, TraceMeanField, Renyi),
 and the posterior extraction helper simplifies retrieval of
 variational parameters.
 
+Multi-start SVI (``n_restarts > 1``) addresses ELBO landscape
+multi-modality (pitfall LC11, Langdon & Engel 2025) by running
+independent SVI optimizations and selecting the best by final ELBO.
+
 References
 ----------
 04-RESEARCH.md -- Pyro patterns, pitfalls, and configuration.
 10-RESEARCH.md -- Guide variant init_scale asymmetry and blocklists.
+20-RESEARCH.md -- Latent circuit DCM pitfalls (LC11: multi-start SVI).
 """
 
 from __future__ import annotations
 
-from typing import Any, Callable
-
+import logging
 import math
-import torch
+from collections.abc import Callable
+from typing import Any
+
 import pyro
-import pyro.distributions as dist
+import torch
 from pyro.infer import (
+    SVI,
     Predictive,
     RenyiELBO,
-    SVI,
     Trace_ELBO,
     TraceMeanField_ELBO,
 )
@@ -39,7 +45,6 @@ from pyro.infer.autoguide import (
     AutoNormal,
 )
 from pyro.optim import ClippedAdam
-
 
 GUIDE_REGISTRY: dict[str, type[AutoGuide]] = {
     "auto_delta": AutoDelta,
@@ -189,6 +194,141 @@ def create_guide(
     return GUIDE_REGISTRY[guide_type](model, **ctor_kwargs)
 
 
+_svi_logger = logging.getLogger("pyro_dcm.svi")
+
+
+def _build_elbo(
+    elbo_type: str,
+    num_particles: int,
+) -> Any:
+    """Build a Pyro ELBO loss object.
+
+    Parameters
+    ----------
+    elbo_type : str
+        ELBO type key from ``ELBO_REGISTRY``.
+    num_particles : int
+        Number of ELBO particles for gradient estimation.
+
+    Returns
+    -------
+    ELBO
+        Pyro ELBO instance.
+    """
+    if elbo_type == "renyi_elbo":
+        renyi_particles = max(num_particles, 2)
+        return RenyiELBO(
+            alpha=0.5,
+            num_particles=renyi_particles,
+            vectorize_particles=(renyi_particles > 1),
+        )
+    elbo_cls = ELBO_REGISTRY[elbo_type]
+    return elbo_cls(
+        num_particles=num_particles,
+        vectorize_particles=(num_particles > 1),
+    )
+
+
+def _run_single_svi(
+    model: Callable[..., Any],
+    guide: Callable[..., Any],
+    model_args: tuple[Any, ...],
+    num_steps: int,
+    lr: float,
+    clip_norm: float,
+    lr_decay_factor: float,
+    num_particles: int,
+    elbo_type: str,
+    guide_type: str | None,
+    model_kwargs: dict[str, Any],
+    *,
+    catch_nan: bool = False,
+) -> dict[str, Any]:
+    """Execute a single SVI optimization loop.
+
+    Parameters
+    ----------
+    model : callable
+        Pyro model function.
+    guide : callable
+        Pyro guide function.
+    model_args : tuple
+        Positional arguments for model/guide.
+    num_steps : int
+        Number of SVI steps.
+    lr : float
+        Initial learning rate.
+    clip_norm : float
+        Maximum gradient norm for clipping.
+    lr_decay_factor : float
+        Decay learning rate to this fraction over the run.
+    num_particles : int
+        Number of ELBO particles.
+    elbo_type : str
+        ELBO type key.
+    guide_type : str or None
+        Guide type key (for auto_laplace post-processing).
+    model_kwargs : dict
+        Extra keyword arguments for ``svi.step``.
+    catch_nan : bool, optional
+        If True, catch NaN ELBO and return ``final_loss=inf``
+        instead of raising. Default False.
+
+    Returns
+    -------
+    dict
+        Keys: ``'losses'``, ``'final_loss'``, ``'num_steps'``,
+        and optionally ``'guide'`` (for auto_laplace).
+    """
+    lrd = lr_decay_factor ** (1.0 / max(num_steps, 1))
+    optimizer = ClippedAdam({
+        "lr": lr,
+        "clip_norm": clip_norm,
+        "lrd": lrd,
+    })
+    elbo = _build_elbo(elbo_type, num_particles)
+    svi = SVI(model, guide, optimizer, loss=elbo)
+
+    losses: list[float] = []
+    for step in range(num_steps):
+        try:
+            loss = svi.step(*model_args, **model_kwargs)
+        except RuntimeError:
+            if catch_nan:
+                return {
+                    "losses": losses,
+                    "final_loss": float("inf"),
+                    "num_steps": len(losses),
+                }
+            raise
+        losses.append(loss)
+
+        if math.isnan(loss):
+            if catch_nan:
+                return {
+                    "losses": losses,
+                    "final_loss": float("inf"),
+                    "num_steps": len(losses),
+                }
+            msg = f"NaN ELBO at step {step}"
+            raise RuntimeError(msg)
+
+    post_guide = None
+    if guide_type == "auto_laplace":
+        post_guide = guide.laplace_approximation(
+            *model_args, **model_kwargs,
+        )
+
+    result: dict[str, Any] = {
+        "losses": losses,
+        "final_loss": losses[-1],
+        "num_steps": num_steps,
+    }
+    if post_guide is not None:
+        result["guide"] = post_guide
+    return result
+
+
 def run_svi(
     model: Callable[..., Any],
     guide: Callable[..., Any],
@@ -201,6 +341,8 @@ def run_svi(
     elbo_type: str = "trace_elbo",
     guide_type: str | None = None,
     model_kwargs: dict[str, Any] | None = None,
+    n_restarts: int = 1,
+    guide_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     """Run SVI optimization for a Pyro model/guide pair.
 
@@ -208,6 +350,13 @@ def run_svi(
     stochastic variational inference with ``ClippedAdam`` optimizer,
     configurable ELBO loss, gradient clipping, and exponential learning
     rate decay.
+
+    When ``n_restarts > 1``, runs multiple independent SVI
+    optimizations with fresh guide instances from ``guide_factory``
+    and selects the result with lowest final ELBO loss. This
+    addresses ELBO landscape multi-modality (pitfall LC11, Langdon &
+    Engel 2025). NaN restarts are assigned ``final_loss=inf`` and
+    skipped; if ALL restarts produce NaN, raises ``RuntimeError``.
 
     Parameters
     ----------
@@ -248,11 +397,24 @@ def run_svi(
         bit-exact equivalent to the pre-v0.3.0 signature for all linear
         callers (``task_svi.py``, ``spectral_svi.py``, ``rdcm_vb.py``,
         ``amortized_*.py``).
+    n_restarts : int, optional
+        Number of independent SVI optimizations. Default 1 preserves
+        backward compatibility (single run, identical return dict).
+        When ``> 1``, runs ``n_restarts`` independent SVI loops,
+        each starting from a fresh guide instance via
+        ``guide_factory()``, and returns the result with the lowest
+        ``final_loss``.
+    guide_factory : callable or None, optional
+        Zero-argument callable that returns a fresh guide instance.
+        Required when ``n_restarts > 1``. Each restart calls
+        ``guide_factory()`` to create an independently initialized
+        guide. When ``None`` and ``n_restarts > 1``, raises
+        ``ValueError``. Default None.
 
     Returns
     -------
     dict
-        Keys:
+        When ``n_restarts <= 1`` (default):
 
         - ``'losses'``: list of float, ELBO loss at each step.
         - ``'final_loss'``: float, loss at last step.
@@ -260,25 +422,44 @@ def run_svi(
         - ``'guide'``: (only for ``guide_type='auto_laplace'``)
           Post-Laplace ``AutoMultivariateNormal`` guide.
 
+        When ``n_restarts > 1``, additional keys:
+
+        - ``'n_restarts'``: int, number of restarts requested.
+        - ``'best_restart_idx'``: int, index of the best restart.
+        - ``'all_restarts'``: list of dicts, per-restart results
+          with keys ``'losses'``, ``'final_loss'``, ``'restart'``,
+          ``'num_steps'``.
+        - ``'guide_factory'``: callable, the guide factory for
+          creating a guide matching the restored param store.
+
     Raises
     ------
     ValueError
-        If ``elbo_type`` is not in ``ELBO_REGISTRY``, or if
-        ``'tracemeanfield_elbo'`` is used with a non-mean-field guide.
+        If ``elbo_type`` is not in ``ELBO_REGISTRY``, if
+        ``'tracemeanfield_elbo'`` is used with a non-mean-field guide,
+        or if ``n_restarts > 1`` and ``guide_factory is None``.
     RuntimeError
-        If ELBO becomes NaN at any step.
+        If ELBO becomes NaN at any step (single restart), or if
+        ALL restarts produce NaN (multi-restart).
 
     Notes
     -----
-    - ``pyro.clear_param_store()`` is called at the start to ensure
-      a fresh optimization (see 04-RESEARCH.md Pitfall 6).
+    - ``pyro.clear_param_store()`` is called at the start of each
+      SVI run to ensure fresh optimization (see 04-RESEARCH.md
+      Pitfall 6).
     - Learning rate decay: ``lrd = lr_decay_factor ** (1 / num_steps)``,
       applied per-step multiplicatively by ``ClippedAdam``.
     - Gradient clipping via ``clip_norm`` prevents exploding gradients
       from ODE-based models (see 04-RESEARCH.md Pitfall 1).
+    - Multi-start SVI: after all restarts, the param store is
+      restored to the best restart's state. Callers can immediately
+      use ``extract_posterior_params`` on a ``guide_factory()``-
+      created guide with the restored param store.
 
     Examples
     --------
+    Single restart (backward compatible):
+
     >>> from pyro_dcm.models import task_dcm_model, create_guide, run_svi
     >>> guide = create_guide(task_dcm_model, init_scale=0.01)
     >>> result = run_svi(
@@ -287,6 +468,19 @@ def run_svi(
     ...     num_steps=500, lr=0.005,
     ... )
     >>> print(f"Final loss: {result['final_loss']:.2f}")
+
+    Multi-start SVI (10 restarts):
+
+    >>> from functools import partial
+    >>> gf = partial(create_guide, task_dcm_model, init_scale=0.01)
+    >>> result = run_svi(
+    ...     task_dcm_model, gf(),
+    ...     model_args=(bold, stimulus, a_mask, c_mask, t_eval, TR, dt),
+    ...     num_steps=500, lr=0.005,
+    ...     n_restarts=10, guide_factory=gf,
+    ... )
+    >>> print(f"Best ELBO: {result['final_loss']:.2f}")
+    >>> print(f"Best restart: {result['best_restart_idx']}")
     """
     # Validate elbo_type
     if elbo_type not in ELBO_REGISTRY:
@@ -310,56 +504,98 @@ def run_svi(
         )
         raise ValueError(msg)
 
-    pyro.clear_param_store()
-
-    # Per-step multiplicative LR decay
-    lrd = lr_decay_factor ** (1.0 / max(num_steps, 1))
-
-    optimizer = ClippedAdam({
-        "lr": lr,
-        "clip_norm": clip_norm,
-        "lrd": lrd,
-    })
-
-    # Build ELBO object
-    if elbo_type == "renyi_elbo":
-        renyi_particles = max(num_particles, 2)
-        elbo = RenyiELBO(
-            alpha=0.5,
-            num_particles=renyi_particles,
-            vectorize_particles=(renyi_particles > 1),
-        )
-    else:
-        elbo_cls = ELBO_REGISTRY[elbo_type]
-        elbo = elbo_cls(
-            num_particles=num_particles,
-            vectorize_particles=(num_particles > 1),
-        )
-
-    svi = SVI(model, guide, optimizer, loss=elbo)
-
     kw: dict[str, Any] = model_kwargs or {}
-    losses: list[float] = []
-    for step in range(num_steps):
-        loss = svi.step(*model_args, **kw)
-        losses.append(loss)
 
-        if math.isnan(loss):
-            msg = f"NaN ELBO at step {step}"
-            raise RuntimeError(msg)
+    # ------------------------------------------------------------------
+    # Single-restart path: identical to pre-Phase-20 behavior
+    # ------------------------------------------------------------------
+    if n_restarts <= 1:
+        pyro.clear_param_store()
+        return _run_single_svi(
+            model, guide, model_args, num_steps, lr,
+            clip_norm, lr_decay_factor, num_particles,
+            elbo_type, guide_type, kw,
+        )
 
-    # Post-process AutoLaplaceApproximation
-    post_guide = None
-    if guide_type == "auto_laplace":
-        post_guide = guide.laplace_approximation(*model_args, **kw)
+    # ------------------------------------------------------------------
+    # Multi-restart path
+    # ------------------------------------------------------------------
+    if guide_factory is None:
+        msg = (
+            "guide_factory is required when n_restarts > 1. "
+            "Provide a zero-argument callable that returns a "
+            "fresh guide instance (e.g., "
+            "functools.partial(create_guide, model, "
+            "guide_type='auto_normal', init_scale=0.01))."
+        )
+        raise ValueError(msg)
 
+    all_restarts: list[dict[str, Any]] = []
+    all_states: list[dict[str, Any]] = []
+
+    for restart_idx in range(n_restarts):
+        pyro.clear_param_store()
+        current_guide = guide_factory()
+
+        restart_result = _run_single_svi(
+            model, current_guide, model_args, num_steps, lr,
+            clip_norm, lr_decay_factor, num_particles,
+            elbo_type, guide_type, kw,
+            catch_nan=True,
+        )
+
+        restart_result["restart"] = restart_idx
+        all_restarts.append(restart_result)
+        all_states.append(pyro.get_param_store().get_state())
+
+        _svi_logger.info(
+            "Multi-start SVI: restart %d/%d, final ELBO: %.2f",
+            restart_idx + 1,
+            n_restarts,
+            restart_result["final_loss"],
+        )
+
+    # Select best restart by minimum final_loss
+    finite_restarts = [
+        (i, r) for i, r in enumerate(all_restarts)
+        if r["final_loss"] != float("inf")
+    ]
+
+    if not finite_restarts:
+        msg = (
+            f"All {n_restarts} SVI restarts produced NaN ELBO. "
+            f"Consider adjusting learning rate, init_scale, or "
+            f"model parameterization."
+        )
+        raise RuntimeError(msg)
+
+    best_idx = min(
+        finite_restarts,
+        key=lambda x: x[1]["final_loss"],
+    )[0]
+
+    _svi_logger.info(
+        "Multi-start SVI: best restart %d with ELBO %.2f",
+        best_idx,
+        all_restarts[best_idx]["final_loss"],
+    )
+
+    # Restore best restart's param store state
+    pyro.clear_param_store()
+    pyro.get_param_store().set_state(all_states[best_idx])
+
+    best = all_restarts[best_idx]
     result: dict[str, Any] = {
-        "losses": losses,
-        "final_loss": losses[-1],
-        "num_steps": num_steps,
+        "losses": best["losses"],
+        "final_loss": best["final_loss"],
+        "num_steps": best["num_steps"],
+        "n_restarts": n_restarts,
+        "best_restart_idx": best_idx,
+        "all_restarts": all_restarts,
+        "guide_factory": guide_factory,
     }
-    if post_guide is not None:
-        result["guide"] = post_guide
+    if "guide" in best:
+        result["guide"] = best["guide"]
     return result
 
 
