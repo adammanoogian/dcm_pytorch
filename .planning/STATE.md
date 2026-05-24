@@ -11,22 +11,25 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 
 **Milestone:** v0.6.0 Latent Circuit DCM (defined 2026-05-24)
 **Phase:** 20 of 25 (Latent Circuit Forward Model -- v0.6.0 scientific core)
-**Plan:** 02 of 5 complete
+**Plan:** 03 of 5 complete
 **Status:** In progress
-**Last activity:** 2026-05-24 -- Completed 20-02-PLAN.md. Extended run_svi with n_restarts + guide_factory multi-start support; backward-compatible param store restoration; 6-test suite for all multi-start contracts.
+**Last activity:** 2026-05-24 -- Completed 20-03-PLAN.md. direct_observation function (identity C_obs, pitfall LC5), latent_circuit_dcm_model (LC priors 1/16 and 1.0, hemodynamic=False, dt=0.01), 11-test suite all passing.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 Plans 01-02 complete; Plans 03-05 pending
+- v0.6.0: Phase 20 Plans 01-03 complete; Plans 04-05 pending
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [==---------] Plans 01-02/5 done
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [===---------] Plans 01-03/5 done
 
 ## Decisions
 
 - **[20-01-D1] hemodynamic=False as keyword-only after stability_check_every.** No positional break for existing callers; bit-exact backward compat preserved.
 - **[20-01-D2] simulate_latent_circuit reuses _normalize_B_list/_normalize_stimulus_to_input_fn from task_simulator.** DRY: bilinear path is identical; private helpers imported directly.
 - **[20-01-D3] Initial state torch.zeros(N) not make_initial_state (5N).** make_initial_state returns wrong shape for hemodynamic=False mode.
+- **[20-03-D1] pyro.deterministic() appears as type='sample' in this Pyro version.** Tests must check by site name, not by type. Pattern documented in 20-03-SUMMARY.md key-decisions.
+- **[20-03-D2] AutoIAFNormal hidden_dim must exceed latent_dim.** For N=4, M=1 model: latent_dim=21 (N^2 + N*M + 1). Use hidden_dim=[32] not [20] to avoid AutoRegressiveNN ValueError.
+- **[20-03-D3] LC_A_PRIOR_VARIANCE=1/16 confirmed as separate constant from BOLD A prior (1/64).** Addresses pitfall LC4. Stored in latent_circuit_dcm_model as module-level constant, re-exported from models/__init__.py.
 - **[20-02] n_restarts=1 path is bit-exact with pre-Phase-20 single-run path.** Return dict has exactly {losses, final_loss, num_steps}; no extended keys. Backward compat verified by existing test suite.
 - **[20-02] guide_factory required when n_restarts>1 (ValueError on None).** Prevents silent reuse of a pre-trained guide across restarts.
 - **[20-02] Param store restored via get_state/set_state after all restarts.** Avoids performance cost of re-running the best restart.
@@ -66,7 +69,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-24 (Phase 20 Plan 02 execution)
-Stopped at: Completed 20-02-PLAN.md -- run_svi multi-start extension (11d1090) + test suite (60beab7). Phase 20 Plan 02 complete.
-Next: Execute Phase 20 Plan 03 (latent circuit Pyro model and prior recalibration).
+Last session: 2026-05-24 (Phase 20 Plan 03 execution)
+Stopped at: Completed 20-03-PLAN.md -- direct_observation (e4eeefe) + latent_circuit_dcm_model (c9b0bd2) + 11-test suite (8779580). Phase 20 Plan 03 complete.
+Next: Execute Phase 20 Plan 04 (prior recalibration on synthetic RNNs).
 Resume file: None
