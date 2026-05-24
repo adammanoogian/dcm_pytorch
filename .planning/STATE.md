@@ -13,7 +13,7 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 **Phase:** 20 of 25 (Direct Observation Forward Model, Simulator & Synthetic Validation)
 **Plan:** 02 of 05
 **Status:** In progress (plans 01-02 complete)
-**Last activity:** 2026-05-24 -- Completed 20-02-PLAN.md (multi-start SVI). Extended run_svi() with n_restarts and guide_factory parameters. MODEL-05 requirement satisfied.
+**Last activity:** 2026-05-24 -- Completed 20-01-PLAN.md (forward model & simulator). CoupledDCMSystem hemodynamic toggle + simulate_latent_circuit. Also 20-02 complete (multi-start SVI).
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 pending
@@ -30,6 +30,7 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 - **guide_factory required for n_restarts>1.** Safe re-initialization needs fresh guide instances (D20-02-02).
 - **NaN restarts get inf penalty and are skipped.** One bad init doesn't abort entire multi-start (D20-02-03).
 - **Prior recalibration mandatory.** LC_A_PRIOR_VARIANCE separate from BOLD priors. Addresses pitfall LC4.
+- **CoupledDCMSystem hemodynamic toggle duplicates bilinear logic.** Preserves bit-exact hemodynamic=True code path per OBS-04 (D20-01-01).
 - Prior v0.3.0/v0.4.0/v0.5.0 decisions: see earlier STATE.md history in git log.
 
 ## Blockers
@@ -58,7 +59,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-24T16:29Z
-Stopped at: Completed 20-02-PLAN.md (multi-start SVI)
+Last session: 2026-05-24T16:31Z
+Stopped at: Completed 20-01-PLAN.md (forward model & simulator)
 Next: Execute 20-03-PLAN.md (latent circuit DCM Pyro model)
 Resume file: None
