@@ -10,19 +10,21 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 ## Current Position
 
 **Milestone:** v0.6.0 Latent Circuit DCM (defined 2026-05-24)
-**Phase:** 20 of 25 (Direct Observation Forward Model, Simulator & Synthetic Validation)
-**Plan:** --
-**Status:** Roadmap created; Phase 20 ready to plan
-**Last activity:** 2026-05-24 -- v0.6.0 roadmap created. 6 phases (20-25), 38 requirements mapped across 10 categories. Inside-out build order: forward model + synthetic validation first (Phase 20), RNN pipeline in parallel (Phase 21), then integration + comparison (Phase 22), BMR (Phase 23), TRIBE (Phase 24), publication (Phase 25).
+**Phase:** 19 of 25 (Pipeline Demos -- MNE/BIDS integration demos)
+**Plan:** 01 of 2 complete
+**Status:** In progress (Phase 19 Plan 01 complete)
+**Last activity:** 2026-05-24 -- Completed 19-01-PLAN.md. Created scripts/demo_spectral_dcm.py: spectral DCM pipeline demo using MNE Epochs -> epochs_to_csd -> SVI -> posterior A with A-RMSE recovery metric.
 
 **Prior milestones in flight:**
-- v0.5.0: Phase 18 COMPLETE; Phase 19 pending
+- v0.5.0: Phase 18 COMPLETE; Phase 19 in progress (plan 01 done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
+- v0.6.0: Phase 20 roadmap created; pending planning
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==--------] Phase 18 complete; 19 pending | v0.6.0 [----------] Roadmap defined
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [===-------] Phase 18 complete; 19 plan 01 done | v0.6.0 [----------] Roadmap defined
 
 ## Decisions
 
+- **[19-01] Demo scripts use simulate_* CSD for SVI fitting, not MNE noise epochs.** epochs_to_csd is demonstrated for IO bridge visibility (shapes printed); recovery metrics require ground-truth CSD from the generative model. Comments in script explain the distinction.
 - **v0.6.0 phase structure = 6 phases (20-25).** Derived from 10 requirement categories clustered into 6 delivery boundaries. Phase 20 (14 reqs) is the scientific core; Phases 20 and 21 can run in parallel.
 - **C_obs fixed at identity for v0.6.0.** Addresses pitfall LC5 (rotation ambiguity). Learned C_obs deferred to v0.7.0+.
 - **Multi-start SVI (>=10 restarts) non-optional.** Addresses pitfall LC11; L&E uses 100.
@@ -55,7 +57,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-24 (v0.6.0 roadmap creation)
-Stopped at: ROADMAP.md updated with v0.6.0 Phases 20-25. REQUIREMENTS-v0.6.0.md traceability updated.
-Next: `/gsd:plan-phase 20` to derive plans for the forward model + simulator + synthetic validation phase.
+Last session: 2026-05-24 (Phase 19 Plan 01 execution)
+Stopped at: Completed 19-01-PLAN.md -- scripts/demo_spectral_dcm.py committed (cc92511).
+Next: Execute 19-02-PLAN.md (second pipeline demo script).
 Resume file: None
