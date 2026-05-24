@@ -369,8 +369,8 @@ matrices, serving as copy-pasteable starting points for real neuroimaging workfl
 **Requirements:** PIPE-01, PIPE-02
 **Plans:** 2 plans (1 wave)
 Plans:
-- [ ] 19-01-PLAN.md — Spectral DCM pipeline demo: synthetic MNE Epochs -> epochs_to_csd -> spectral_dcm_model -> SVI -> posterior A (PIPE-01)
-- [ ] 19-02-PLAN.md — Task DCM pipeline demo: synthetic MNE Epochs -> epochs_to_timeseries -> task_dcm_model (bilinear B) -> SVI -> posterior A + B (PIPE-02)
+- [x] 19-01-PLAN.md — Spectral DCM pipeline demo: synthetic MNE Epochs -> epochs_to_csd -> spectral_dcm_model -> SVI -> posterior A (PIPE-01)
+- [x] 19-02-PLAN.md — Task DCM pipeline demo: synthetic MNE Epochs -> epochs_to_timeseries -> task_dcm_model (bilinear B) -> SVI -> posterior A + B (PIPE-02)
 
 **Success Criteria** (what must be TRUE):
 
@@ -384,7 +384,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 18. MNE/BIDS IO Test Suite | 2/2 | Complete (verified 17/17 must-haves) | 2026-05-21 |
-| 19. End-to-End Pipeline Demos | 0/2 | Planned | -- |
+| 19. End-to-End Pipeline Demos | 2/2 | Complete (verified 10/10 must-haves) | 2026-05-24 |
 
 ---
 
@@ -619,7 +619,7 @@ complete, making the v0.6.0 results paper-ready.
 | 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | v0.3.0 | 0/2 | Planned | -- |
 | 17. Circuit Visualization Module | v0.4.0 | 1/1 | Complete | 2026-04-24 |
 | 18. MNE/BIDS IO Test Suite | v0.5.0 | 2/2 | Complete (verified 17/17 must-haves) | 2026-05-21 |
-| 19. End-to-End Pipeline Demos | v0.5.0 | 0/TBD | Not started | -- |
+| 19. End-to-End Pipeline Demos | v0.5.0 | 2/2 | Complete (verified 10/10 must-haves) | 2026-05-24 |
 | 20. Direct Observation Forward Model, Simulator & Synthetic Validation | v0.6.0 | 0/5 | Planned | -- |
 | 21. CT-RNN Training & Latent Extraction | v0.6.0 | 0/TBD | Not started | -- |
 | 22. End-to-End Pipeline & Comparison | v0.6.0 | 0/TBD | Not started | -- |
