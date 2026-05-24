@@ -27,6 +27,7 @@ from pyro_dcm.forward_models.rdcm_forward import (
     get_hrf,
     split_real_imag,
 )
+from pyro_dcm.forward_models.latent_observation import direct_observation
 from pyro_dcm.forward_models.rdcm_posterior import (
     compute_free_energy_rigid,
     compute_free_energy_sparse,
@@ -80,4 +81,6 @@ __all__ = [
     "get_priors_sparse",
     "rigid_inversion",
     "sparse_inversion",
+    # Phase 20: Latent circuit observation
+    "direct_observation",
 ]
