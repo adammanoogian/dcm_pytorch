@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from pyro_dcm.simulators.latent_circuit_simulator import (
+    make_stable_latent_circuit_A,
+    simulate_latent_circuit,
+)
 from pyro_dcm.simulators.rdcm_simulator import (
     make_block_stimulus_rdcm,
     make_stable_A_rdcm,
@@ -31,4 +35,7 @@ __all__ = [
     "make_block_stimulus_rdcm",
     "make_stable_A_rdcm",
     "simulate_rdcm",
+    # Phase 20: Latent circuit DCM simulator
+    "make_stable_latent_circuit_A",
+    "simulate_latent_circuit",
 ]
