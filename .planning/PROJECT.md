@@ -69,6 +69,33 @@ Pyro generative model + priors, simulator, and recovery benchmark.
 - SPM12 cross-validation of bilinear DCM (requires MATLAB; v0.4+ candidate)
 - NumPyro backends, regularization study, semi-amortized pipeline, amortized calibration (deferred to v0.4.0+)
 
+## Upcoming Milestone: v0.6.0 Latent Circuit DCM
+
+**Goal:** Apply bilinear DCM as an interpretable model to distill trained RNN latent
+dynamics into small, interpretable directed circuits with posterior uncertainty. Train
+an RNN to predict neural activity from task stimuli, extract hidden state trajectories,
+then fit DCM to those trajectories using a direct observation model (no hemodynamic
+convolution). The bilinear B_j matrices capture how experimental conditions reshape
+effective connectivity — a neuroscience-native parameterization distinct from existing
+latent circuit approaches (Langdon & Engel 2025).
+
+**Target features:**
+
+- Direct observation model for neural-state fitting (y = C_obs @ x + noise; no balloon-Windkessel)
+- Neural data prediction RNN: small continuous-time RNN trained to predict/reproduce neural activity from task stimuli
+- Known-connectivity synthetic RNN for parameter recovery validation (ground truth W_rec)
+- DCM fitting pipeline: extract h(t) from trained RNN, reduce dimensionality, fit bilinear DCM
+- Parameter recovery benchmark: verify DCM recovers known A/B structure from RNN ground truth
+- Comparison to Langdon & Engel (2025) latent circuit inference (nonlinear f() vs bilinear B_j)
+- Publication-quality figures and methods section
+
+**Explicitly deferred out of v0.6.0:**
+
+- Fitting to real recorded neural data (synthetic/RNN-generated only for this milestone)
+- nn4psych actor-critic networks (behavioral, not neural data)
+- Amortized guides for latent circuit fitting (per-subject SVI first)
+- Neural ODE extension (Approach 2; separate milestone v0.7.0+)
+
 ### Out of Scope
 
 - Non-stationary A(t) extensions — deferred to v0.2, requires separate contribution
@@ -109,6 +136,8 @@ Pyro generative model + priors, simulator, and recovery benchmark.
 | Static A first | Clean first paper; non-stationary A(t) is second contribution | -- Pending |
 | NumPyro for NUTS only | JAX speed for validation sampling, not primary inference | -- Pending |
 | v0.3.0 scoped to bilinear only | Keeps milestone focused and shippable; HEART2ADAPT/PEB/SPM12 extensions land in v0.4+ | -- Pending |
+| Direct observation for RNN latents | No balloon-Windkessel when fitting DCM to RNN hidden states; hemodynamic model only for real BOLD | -- Pending |
+| Neural data prediction RNN (not behavioral) | RNN trained to predict neural activity, not behavioral choices; DCM then distills learned neural dynamics | -- Pending |
 
 ---
-*Last updated: 2026-04-17 after v0.3.0 milestone started*
+*Last updated: 2026-05-24 after v0.6.0 milestone started*
