@@ -46,7 +46,14 @@ def run_sweep() -> list[dict]:
     print()
 
     results = []
-    config = BenchmarkConfig(n_datasets=N_DATASETS, n_svi_steps=N_SVI_STEPS)
+    config = BenchmarkConfig(
+        variant="latent_circuit",
+        method="svi",
+        n_datasets=N_DATASETS,
+        n_svi_steps=N_SVI_STEPS,
+        n_regions=4,
+        seed=SEED,
+    )
 
     for i, (a_var, b_var, init_scale) in enumerate(grid):
         t0 = time.time()
