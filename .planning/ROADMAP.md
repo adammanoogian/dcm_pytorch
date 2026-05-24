@@ -477,6 +477,13 @@ producing the observed data that bilinear DCM fits to.
 **Depends on:** Nothing in v0.6.0 (independent of Phase 20; requires only PyTorch +
 neurogym + scikit-learn). Can run in parallel with Phase 20.
 **Requirements:** RNN-01, RNN-02, RNN-03, RNN-04, DIM-01, DIM-02, DIM-03
+**Plans:** 4 plans (4 waves)
+Plans:
+- [ ] 21-01-PLAN.md — CT-RNN module + rnn package + pyproject.toml deps + unit tests (RNN-01)
+- [ ] 21-02-PLAN.md — RNN trainer + CDDM task integration + training tests (RNN-02)
+- [ ] 21-03-PLAN.md — Fixed-point analysis + latent extraction (PCA, R2 gate, variance diagnostic) + tests (RNN-04, DIM-01, DIM-02, DIM-03)
+- [ ] 21-04-PLAN.md — Cluster training script + sbatch for 20-seed ensemble + trajectory extraction (RNN-03)
+
 **Success Criteria** (what must be TRUE):
 
   1. `ContinuousTimeRNN(nn.Module)` implements `tau * dh/dt = -h + f(W_rec @ h +
@@ -595,7 +602,7 @@ complete, making the v0.6.0 results paper-ready.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 20. Direct Observation Forward Model, Simulator & Synthetic Validation | 0/5 | Planned | -- |
-| 21. CT-RNN Training & Latent Extraction | 0/TBD | Not started | -- |
+| 21. CT-RNN Training & Latent Extraction | 0/4 | Planned | -- |
 | 22. End-to-End Pipeline & Comparison | 0/TBD | Not started | -- |
 | 23. Bayesian Model Reduction | 0/TBD | Not started | -- |
 | 24. TRIBE Foundation Model Use Case | 0/TBD | Not started | -- |
@@ -621,7 +628,7 @@ complete, making the v0.6.0 results paper-ready.
 | 18. MNE/BIDS IO Test Suite | v0.5.0 | 2/2 | Complete (verified 17/17 must-haves) | 2026-05-21 |
 | 19. End-to-End Pipeline Demos | v0.5.0 | 2/2 | Complete (verified 10/10 must-haves) | 2026-05-24 |
 | 20. Direct Observation Forward Model, Simulator & Synthetic Validation | v0.6.0 | 0/5 | Planned | -- |
-| 21. CT-RNN Training & Latent Extraction | v0.6.0 | 0/TBD | Not started | -- |
+| 21. CT-RNN Training & Latent Extraction | v0.6.0 | 0/4 | Planned | -- |
 | 22. End-to-End Pipeline & Comparison | v0.6.0 | 0/TBD | Not started | -- |
 | 23. Bayesian Model Reduction | v0.6.0 | 0/TBD | Not started | -- |
 | 24. TRIBE Foundation Model Use Case | v0.6.0 | 0/TBD | Not started | -- |
@@ -629,4 +636,4 @@ complete, making the v0.6.0 results paper-ready.
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-05-24 -- Phase 20 planned (5 plans, 4 waves). CoupledDCMSystem hemodynamic toggle (per CONTEXT decision), latent circuit simulator, multi-start SVI, Pyro model with LC-specific priors, recovery benchmark with cluster calibration sweep + ELBO model selection. OBS-04 tension resolved: coupled_system.py edited for toggle; neural_state.py/balloon_model.py/bold_signal.py untouched.*
+*Last updated: 2026-05-25 -- Phase 21 planned (4 plans, 4 waves). ContinuousTimeRNN module, RNN trainer with CDDM, fixed-point analysis, PCA latent extraction with output-R2 gate, 20-seed cluster training ensemble. Independent of Phase 20; runs in parallel.*
