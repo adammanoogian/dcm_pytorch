@@ -424,15 +424,25 @@ on synthetic bilinear ground truth at the same standard as v0.3.0 RECOV benchmar
 `parameterize_A`, `parameterize_B`, `compute_effective_A`, `create_guide`, `run_svi`).
 **Requirements:** OBS-01, OBS-02, OBS-03, OBS-04, SIM-01, SIM-02, MODEL-01, MODEL-02,
 MODEL-03, MODEL-04, MODEL-05, SYNTH-01, SYNTH-02, SYNTH-03
+**Plans:** 5 plans (4 waves)
+Plans:
+- [ ] 20-01-PLAN.md — CoupledDCMSystem hemodynamic toggle + latent circuit simulator + tests (OBS-01, OBS-03, OBS-04, SIM-01, SIM-02)
+- [ ] 20-02-PLAN.md — Multi-start SVI extension to run_svi (MODEL-05)
+- [ ] 20-03-PLAN.md — Pyro latent_circuit_dcm_model + guide auto-discovery verification (MODEL-01, MODEL-02, MODEL-03, MODEL-04)
+- [ ] 20-04-PLAN.md — Recovery benchmark runner + metrics infrastructure (SYNTH-01, SYNTH-02 infrastructure)
+- [ ] 20-05-PLAN.md — Prior calibration sweep + acceptance run + ELBO model selection on cluster (MODEL-02 finalization, SYNTH-01, SYNTH-02, SYNTH-03)
+
 **Success Criteria** (what must be TRUE):
 
-  1. `LatentCircuitSystem(nn.Module)` wraps `NeuralStateEquation` with N-dimensional
-     state vector (no hemodynamic states) and integrates via `torchdiffeq.odeint`;
-     zero edits to `neural_state.py`, `balloon_model.py`, `bold_signal.py`, or
-     `coupled_system.py` (OBS-01, OBS-03, OBS-04).
+  1. `CoupledDCMSystem(hemodynamic=False)` integrates an N-dimensional state vector
+     (no hemodynamic states) via `torchdiffeq.odeint`; `hemodynamic=True` preserves
+     bit-exact existing behavior; zero edits to `neural_state.py`, `balloon_model.py`,
+     `bold_signal.py` (OBS-01, OBS-03, OBS-04; `coupled_system.py` edited per CONTEXT
+     decision to add toggle).
   2. `simulate_latent_circuit(...)` generates synthetic N-dimensional trajectories
-     from known bilinear ground truth, and its output matches `LatentCircuitSystem`
-     ODE integration at `atol=1e-6` given identical parameters (SIM-01, SIM-02).
+     from known bilinear ground truth, and its output matches
+     `CoupledDCMSystem(hemodynamic=False)` ODE integration at `atol=1e-6` given
+     identical parameters (SIM-01, SIM-02).
   3. `latent_circuit_dcm_model` Pyro model samples `A_free`, `C`, `B_free_j`,
      `noise_prec` with priors recalibrated for RNN-scale dynamics
      (`LC_A_PRIOR_VARIANCE` documented separately from task DCM's
@@ -442,10 +452,10 @@ MODEL-03, MODEL-04, MODEL-05, SYNTH-01, SYNTH-02, SYNTH-03
   4. `create_guide()` auto-discovers all sample sites in `latent_circuit_dcm_model`
      without factory changes; verified on AutoNormal, AutoLowRankMVN, AutoIAFNormal
      (MODEL-03).
-  5. Parameter recovery on N=4-8 synthetic bilinear ground truth achieves: A RMSE
+  5. Parameter recovery on N=4 synthetic bilinear ground truth achieves: A RMSE
      within documented threshold, B RMSE within threshold, sign recovery >= 80%,
      95% CI coverage >= 85%; trajectory R-squared >= 0.95 on held-out trials;
-     ELBO correctly selects true N=4 from candidates N={2,4,6,8}
+     ELBO correctly selects true N=4 from candidates N={2,3,4,5,6}
      (SYNTH-01, SYNTH-02, SYNTH-03).
 
 #### Phase 21: CT-RNN Training & Latent Extraction
@@ -575,7 +585,7 @@ complete, making the v0.6.0 results paper-ready.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 20. Direct Observation Forward Model, Simulator & Synthetic Validation | 0/TBD | Not started | -- |
+| 20. Direct Observation Forward Model, Simulator & Synthetic Validation | 0/5 | Planned | -- |
 | 21. CT-RNN Training & Latent Extraction | 0/TBD | Not started | -- |
 | 22. End-to-End Pipeline & Comparison | 0/TBD | Not started | -- |
 | 23. Bayesian Model Reduction | 0/TBD | Not started | -- |
@@ -601,7 +611,7 @@ complete, making the v0.6.0 results paper-ready.
 | 17. Circuit Visualization Module | v0.4.0 | 1/1 | Complete | 2026-04-24 |
 | 18. MNE/BIDS IO Test Suite | v0.5.0 | 2/2 | Complete (verified 17/17 must-haves) | 2026-05-21 |
 | 19. End-to-End Pipeline Demos | v0.5.0 | 0/TBD | Not started | -- |
-| 20. Direct Observation Forward Model, Simulator & Synthetic Validation | v0.6.0 | 0/TBD | Not started | -- |
+| 20. Direct Observation Forward Model, Simulator & Synthetic Validation | v0.6.0 | 0/5 | Planned | -- |
 | 21. CT-RNN Training & Latent Extraction | v0.6.0 | 0/TBD | Not started | -- |
 | 22. End-to-End Pipeline & Comparison | v0.6.0 | 0/TBD | Not started | -- |
 | 23. Bayesian Model Reduction | v0.6.0 | 0/TBD | Not started | -- |
@@ -610,4 +620,4 @@ complete, making the v0.6.0 results paper-ready.
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-05-24 -- v0.6.0 Latent Circuit DCM milestone added (Phases 20-25, 6 phases, 38 requirements mapped). Phase structure: inside-out build order starting with forward model + synthetic validation (Phase 20), parallel RNN training (Phase 21), end-to-end pipeline + L&E comparison (Phase 22), BMR (Phase 23), TRIBE (Phase 24), publication (Phase 25).*
+*Last updated: 2026-05-24 -- Phase 20 planned (5 plans, 4 waves). CoupledDCMSystem hemodynamic toggle (per CONTEXT decision), latent circuit simulator, multi-start SVI, Pyro model with LC-specific priors, recovery benchmark with cluster calibration sweep + ELBO model selection. OBS-04 tension resolved: coupled_system.py edited for toggle; neural_state.py/balloon_model.py/bold_signal.py untouched.*
