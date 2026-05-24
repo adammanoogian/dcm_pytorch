@@ -303,6 +303,7 @@ def test_guide_auto_discovery_auto_iaf(
     guide = create_guide(
         latent_circuit_dcm_model,
         guide_type="auto_iaf",
+        hidden_dim=[32],
     )
 
     model_args = (
