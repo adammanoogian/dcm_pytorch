@@ -89,7 +89,7 @@ Requirements for Latent Circuit DCM. Each maps to a roadmap phase.
 ### v0.6.1 Candidates
 
 - **LC-OBS-01**: Learned C_obs projection (jointly optimized with DCM parameters)
-- **LC-PERT-01**: Perturbation validation: DCM connectivity changes → RNN weight perturbation → behavioral effect prediction
+- **LC-PERT-01**: Perturbation validation: DCM connectivity changes -> RNN weight perturbation -> behavioral effect prediction
 - **LC-TRIBE-02**: Fit DCM to multiple foundation models (BrainLM, POYO) for cross-model comparison
 
 ## Out of Scope
@@ -109,13 +109,50 @@ Requirements for Latent Circuit DCM. Each maps to a roadmap phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (To be filled by roadmapper) | | |
+| OBS-01 | Phase 20 | Pending |
+| OBS-02 | Phase 20 | Pending |
+| OBS-03 | Phase 20 | Pending |
+| OBS-04 | Phase 20 | Pending |
+| SIM-01 | Phase 20 | Pending |
+| SIM-02 | Phase 20 | Pending |
+| MODEL-01 | Phase 20 | Pending |
+| MODEL-02 | Phase 20 | Pending |
+| MODEL-03 | Phase 20 | Pending |
+| MODEL-04 | Phase 20 | Pending |
+| MODEL-05 | Phase 20 | Pending |
+| SYNTH-01 | Phase 20 | Pending |
+| SYNTH-02 | Phase 20 | Pending |
+| SYNTH-03 | Phase 20 | Pending |
+| RNN-01 | Phase 21 | Pending |
+| RNN-02 | Phase 21 | Pending |
+| RNN-03 | Phase 21 | Pending |
+| RNN-04 | Phase 21 | Pending |
+| DIM-01 | Phase 21 | Pending |
+| DIM-02 | Phase 21 | Pending |
+| DIM-03 | Phase 21 | Pending |
+| PIPE-01 | Phase 22 | Pending |
+| PIPE-02 | Phase 22 | Pending |
+| PIPE-03 | Phase 22 | Pending |
+| COMP-01 | Phase 22 | Pending |
+| COMP-02 | Phase 22 | Pending |
+| COMP-03 | Phase 22 | Pending |
+| COMP-04 | Phase 22 | Pending |
+| COMP-05 | Phase 22 | Pending |
+| BMR-01 | Phase 23 | Pending |
+| BMR-02 | Phase 23 | Pending |
+| BMR-03 | Phase 23 | Pending |
+| TRIBE-01 | Phase 24 | Pending |
+| TRIBE-02 | Phase 24 | Pending |
+| TRIBE-03 | Phase 24 | Pending |
+| PUB-01 | Phase 25 | Pending |
+| PUB-02 | Phase 25 | Pending |
+| PUB-03 | Phase 25 | Pending |
 
 **Coverage:**
 - v0.6.0 requirements: 38 total
-- Mapped to phases: TBD
-- Unmapped: TBD
+- Mapped to phases: 38/38
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-24*
-*Last updated: 2026-05-24 after initial definition*
+*Last updated: 2026-05-24 -- traceability table populated by roadmapper (38/38 mapped to Phases 20-25)*

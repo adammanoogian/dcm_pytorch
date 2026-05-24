@@ -7,6 +7,7 @@
 - **v0.3.0 Bilinear DCM Extension** - Phases 13-16 (in progress; started 2026-04-17)
 - **v0.4.0 Circuit Explorer** - Phase 17+ (defined 2026-04-24; not yet started)
 - **v0.5.0 MNE-Python Integration** - Phases 18-19 (in progress; started 2026-05-21)
+- **v0.6.0 Latent Circuit DCM** - Phases 20-25 (defined 2026-05-24)
 
 <details>
 <summary>v0.1.0 Foundation (Phases 1-8) - SHIPPED 2026-04-03</summary>
@@ -378,6 +379,211 @@ matrices, serving as copy-pasteable starting points for real neuroimaging workfl
 
 ---
 
+## Upcoming Milestone: v0.6.0 Latent Circuit DCM
+
+**Status:** Defined 2026-05-24
+**Phases:** 20-25 (6 phases)
+**Requirements covered:** 38/38 v0.6.0 requirements
+
+### Overview
+
+v0.6.0 adds Latent Circuit DCM to the Pyro-DCM framework: train a continuous-time RNN
+on a cognitive task, extract hidden state trajectories, reduce dimensionality with PCA,
+then fit bilinear DCM (`dx/dt = Ax + sum_j u_j B_j x + Cu`) to those trajectories using
+a direct observation model (`y = C_obs @ x + noise`) in place of the balloon-Windkessel
+hemodynamic chain. The scientific contribution is threefold: (1) posterior uncertainty on
+circuit parameters (Langdon & Engel 2025 provides point estimates only), (2) explicit
+bilinear B_j matrices capturing context-dependent connectivity changes, and (3)
+ELBO-based circuit architecture selection. The build order is inside-out: validate the
+DCM model on synthetic bilinear ground truth first (Phase 20), build the RNN data
+pipeline in parallel (Phase 21), then wire them together (Phase 22), add Bayesian Model
+Reduction (Phase 23), demonstrate on a foundation model (Phase 24), and compile
+publication artifacts (Phase 25).
+
+**Critical path:** Phase 20 (forward model + synthetic validation) -> Phase 22
+(end-to-end pipeline) -> Phase 25 (publication). Phase 21 (RNN) can run in parallel
+with Phase 20. Phase 23 (BMR) depends on Phase 20. Phase 24 (TRIBE) depends on Phase 20.
+
+**Milestone acceptance gate:** (1) Parameter recovery on synthetic bilinear ground truth
+passes RECOV-equivalent criteria (A RMSE, B RMSE, sign recovery, 95% CI coverage);
+(2) End-to-end pipeline produces trajectory R-squared >= 0.80 on RNN latents;
+(3) ELBO correctly selects true N from candidates on synthetic data;
+(4) BMR analytic evidence agrees with brute-force ELBO comparison;
+(5) Publication figures 1-8 and methods section complete.
+
+### Phases
+
+#### Phase 20: Direct Observation Forward Model, Simulator & Synthetic Validation
+
+**Goal:** Users can fit bilinear DCM to N-dimensional neural-state trajectories via a
+direct observation model (no hemodynamic convolution), with parameter recovery validated
+on synthetic bilinear ground truth at the same standard as v0.3.0 RECOV benchmarks.
+
+**Branch:** `gsd/phase-20-latent-circuit-forward-model`
+**Depends on:** v0.3.0 shipping bilinear infrastructure (`NeuralStateEquation`,
+`parameterize_A`, `parameterize_B`, `compute_effective_A`, `create_guide`, `run_svi`).
+**Requirements:** OBS-01, OBS-02, OBS-03, OBS-04, SIM-01, SIM-02, MODEL-01, MODEL-02,
+MODEL-03, MODEL-04, MODEL-05, SYNTH-01, SYNTH-02, SYNTH-03
+**Success Criteria** (what must be TRUE):
+
+  1. `LatentCircuitSystem(nn.Module)` wraps `NeuralStateEquation` with N-dimensional
+     state vector (no hemodynamic states) and integrates via `torchdiffeq.odeint`;
+     zero edits to `neural_state.py`, `balloon_model.py`, `bold_signal.py`, or
+     `coupled_system.py` (OBS-01, OBS-03, OBS-04).
+  2. `simulate_latent_circuit(...)` generates synthetic N-dimensional trajectories
+     from known bilinear ground truth, and its output matches `LatentCircuitSystem`
+     ODE integration at `atol=1e-6` given identical parameters (SIM-01, SIM-02).
+  3. `latent_circuit_dcm_model` Pyro model samples `A_free`, `C`, `B_free_j`,
+     `noise_prec` with priors recalibrated for RNN-scale dynamics
+     (`LC_A_PRIOR_VARIANCE` documented separately from task DCM's
+     `A_PRIOR_VARIANCE`); `C_obs` fixed at identity for v0.6.0; multi-start SVI
+     (>=10 restarts, select by best ELBO) implemented as standard fitting procedure
+     (MODEL-01, MODEL-02, MODEL-04, MODEL-05).
+  4. `create_guide()` auto-discovers all sample sites in `latent_circuit_dcm_model`
+     without factory changes; verified on AutoNormal, AutoLowRankMVN, AutoIAFNormal
+     (MODEL-03).
+  5. Parameter recovery on N=4-8 synthetic bilinear ground truth achieves: A RMSE
+     within documented threshold, B RMSE within threshold, sign recovery >= 80%,
+     95% CI coverage >= 85%; trajectory R-squared >= 0.95 on held-out trials;
+     ELBO correctly selects true N=4 from candidates N={2,4,6,8}
+     (SYNTH-01, SYNTH-02, SYNTH-03).
+
+#### Phase 21: CT-RNN Training & Latent Extraction
+
+**Goal:** Users can train a continuous-time RNN on a cognitive task, extract hidden
+state trajectories, and reduce them to a low-dimensional space with quality diagnostics,
+producing the observed data that bilinear DCM fits to.
+
+**Branch:** `gsd/phase-21-ctrnn-training`
+**Depends on:** Nothing in v0.6.0 (independent of Phase 20; requires only PyTorch +
+neurogym + scikit-learn). Can run in parallel with Phase 20.
+**Requirements:** RNN-01, RNN-02, RNN-03, RNN-04, DIM-01, DIM-02, DIM-03
+**Success Criteria** (what must be TRUE):
+
+  1. `ContinuousTimeRNN(nn.Module)` implements `tau * dh/dt = -h + f(W_rec @ h +
+     W_in @ u + b)` with ReLU activation; trainable via BPTT with behavioral
+     cross-entropy loss; at least 20 RNNs trained on CDDM with different seeds
+     and saved weights + full h(t) trajectories per trial condition
+     (RNN-01, RNN-02, RNN-03).
+  2. Fixed-point analysis utilities find fixed points via `torch.optim`, compute
+     Jacobians via `torch.autograd.functional.jacobian`, and decompose eigenvalues
+     via `torch.linalg.eig`; used to report linearization quality at fixed points
+     (RNN-04).
+  3. PCA-based dimensionality reduction maps H-dimensional RNN hidden states to
+     N-dimensional DCM state space with cumulative variance explained diagnostic;
+     output reconstruction R-squared gate verifies PCA-projected states reconstruct
+     RNN behavioral readout with R-squared >= 0.90 before fitting DCM
+     (DIM-01, DIM-02, DIM-03).
+
+#### Phase 22: End-to-End Pipeline & Comparison
+
+**Goal:** The full pipeline -- trained RNN to extracted latents to PCA to bilinear
+DCM fit to posterior A/B matrices -- runs end-to-end, with systematic comparison
+to Langdon & Engel 2025 and ELBO-based model selection across architectures.
+
+**Branch:** `gsd/phase-22-pipeline-comparison`
+**Depends on:** Phase 20 (validated DCM model) + Phase 21 (trained RNNs + latent
+extraction).
+**Requirements:** PIPE-01, PIPE-02, PIPE-03, COMP-01, COMP-02, COMP-03, COMP-04,
+COMP-05
+**Success Criteria** (what must be TRUE):
+
+  1. Single-script demonstration runs the full pipeline: trained RNN -> extract h(t)
+     -> PCA -> fit bilinear DCM -> posterior A, B_j matrices; trajectory R-squared
+     of bilinear DCM fit to nonlinear RNN latents >= 0.80 reported per condition
+     (PIPE-01, PIPE-02).
+  2. Linearization quality diagnostic `||J(h*) - A_eff||_F / ||J(h*)||_F` computed
+     at fixed points, documenting where bilinear approximation is valid
+     (PIPE-03).
+  3. Quantitative comparison to Langdon & Engel 2025: bilinear DCM trajectory
+     R-squared vs L&E nonlinear circuit R-squared on same RNN ensemble; bilinear DCM
+     adds posterior uncertainty (D-1) and explicit B_j (D-2) that L&E lacks
+     (COMP-01).
+  4. ELBO model comparison across: linear vs bilinear DCM, different N values,
+     different B_j mask topologies; guide type comparison across AutoNormal,
+     AutoLowRankMVN, AutoIAFNormal with coverage calibration on synthetic data
+     (COMP-02, COMP-03).
+  5. Misspecification analysis: systematic comparison of bilinear fit quality across
+     RNN nonlinearity regimes; qualitative comparison to TVB/Jirsa whole-brain
+     approach as positioning section (COMP-04, COMP-05).
+
+#### Phase 23: Bayesian Model Reduction
+
+**Goal:** Users can analytically score reduced DCM architectures (connection subsets)
+from a single full-model SVI fit, enabling efficient circuit-size selection without
+refitting.
+
+**Branch:** `gsd/phase-23-bayesian-model-reduction`
+**Depends on:** Phase 20 (latent circuit DCM posteriors).
+**Requirements:** BMR-01, BMR-02, BMR-03
+**Success Criteria** (what must be TRUE):
+
+  1. `bayesian_model_reduction(posterior_mean, posterior_cov, prior_mean, prior_cov,
+     reduced_prior_cov)` implements Friston & Penny (2011) analytic model evidence
+     for reduced models, citing REF-070 (BMR-01).
+  2. Circuit-size selection: fit full DCM (N=max), then analytically score all
+     reduced architectures (connection subsets); log-evidence differences reported
+     (BMR-02).
+  3. BMR results compared to brute-force ELBO comparison (separate SVI fits per
+     architecture) on synthetic data; agreement validates the analytic approximation
+     (BMR-03).
+
+#### Phase 24: TRIBE Foundation Model Use Case
+
+**Goal:** Bilinear DCM distills interpretable circuit dynamics from a pre-trained brain
+foundation model (Meta TRIBE v2 or comparable), demonstrating that the method
+generalizes beyond task-trained RNNs.
+
+**Branch:** `gsd/phase-24-tribe-foundation-model`
+**Depends on:** Phase 20 (latent circuit DCM model + fitting pipeline).
+**Requirements:** TRIBE-01, TRIBE-02, TRIBE-03
+**Success Criteria** (what must be TRUE):
+
+  1. Latent representations extracted from Meta TRIBE v2 (or comparable open-source
+     brain encoding model) for a stimulus set (TRIBE-01).
+  2. Bilinear DCM fit to TRIBE's latent dynamics produces trajectory R-squared and
+     posterior A/B matrices with credible intervals (TRIBE-02).
+  3. Demonstration that interpretable circuit connections identified by DCM relate
+     to known neuroscience (e.g., sensory-to-decision pathways), presented as a
+     proof-of-concept section (TRIBE-03).
+
+#### Phase 25: Publication Artifacts
+
+**Goal:** All publication-quality figures, methods section, and reference updates are
+complete, making the v0.6.0 results paper-ready.
+
+**Branch:** `gsd/phase-25-publication-artifacts`
+**Depends on:** Phase 22 (pipeline results) + Phase 23 (BMR results) + Phase 24
+(TRIBE results).
+**Requirements:** PUB-01, PUB-02, PUB-03
+**Success Criteria** (what must be TRUE):
+
+  1. Eight publication-quality figures produced: (1) pipeline schematic,
+     (2) parameter recovery on synthetic, (3) trajectory fits per condition,
+     (4) A + B_j heatmaps with credible intervals, (5) ELBO vs N curve,
+     (6) BMR circuit selection, (7) L&E comparison, (8) misspecification regime
+     analysis (PUB-01).
+  2. Methods section (Markdown + LaTeX) covers: bilinear DCM equations, direct
+     observation model (citing David et al. 2006 EEG/MEG DCM precedent), SVI
+     inference, BMR (citing Friston & Penny 2011), validation strategy (PUB-02).
+  3. REFERENCES.md updated with REF-070 through REF-076 (BMR, BMS, EEG DCM,
+     Thomas 2023, DCM-RNN, Pinotsis 2013, Langdon & Engel 2025) (PUB-03).
+
+### Progress
+
+**Execution Order:** 20 (+ 21 in parallel) -> 22 -> 23 (can overlap with 22) -> 24 (can overlap with 23) -> 25
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 20. Direct Observation Forward Model, Simulator & Synthetic Validation | 0/TBD | Not started | -- |
+| 21. CT-RNN Training & Latent Extraction | 0/TBD | Not started | -- |
+| 22. End-to-End Pipeline & Comparison | 0/TBD | Not started | -- |
+| 23. Bayesian Model Reduction | 0/TBD | Not started | -- |
+| 24. TRIBE Foundation Model Use Case | 0/TBD | Not started | -- |
+| 25. Publication Artifacts | 0/TBD | Not started | -- |
+
+---
+
 ## Cumulative Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -395,7 +601,13 @@ matrices, serving as copy-pasteable starting points for real neuroimaging workfl
 | 17. Circuit Visualization Module | v0.4.0 | 1/1 | Complete | 2026-04-24 |
 | 18. MNE/BIDS IO Test Suite | v0.5.0 | 2/2 | Complete (verified 17/17 must-haves) | 2026-05-21 |
 | 19. End-to-End Pipeline Demos | v0.5.0 | 0/TBD | Not started | -- |
+| 20. Direct Observation Forward Model, Simulator & Synthetic Validation | v0.6.0 | 0/TBD | Not started | -- |
+| 21. CT-RNN Training & Latent Extraction | v0.6.0 | 0/TBD | Not started | -- |
+| 22. End-to-End Pipeline & Comparison | v0.6.0 | 0/TBD | Not started | -- |
+| 23. Bayesian Model Reduction | v0.6.0 | 0/TBD | Not started | -- |
+| 24. TRIBE Foundation Model Use Case | v0.6.0 | 0/TBD | Not started | -- |
+| 25. Publication Artifacts | v0.6.0 | 0/TBD | Not started | -- |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-05-21 — Phase 18 (MNE/BIDS IO Test Suite) complete; verified 17/17 must-haves; 15 tests green (12 MNE loader + 3 BIDS loader). v0.5.0 milestone section added. Phase 19 (End-to-End Pipeline Demos) is next.*
+*Last updated: 2026-05-24 -- v0.6.0 Latent Circuit DCM milestone added (Phases 20-25, 6 phases, 38 requirements mapped). Phase structure: inside-out build order starting with forward model + synthetic validation (Phase 20), parallel RNN training (Phase 21), end-to-end pipeline + L&E comparison (Phase 22), BMR (Phase 23), TRIBE (Phase 24), publication (Phase 25).*
