@@ -11,16 +11,16 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 
 **Milestone:** v0.6.0 Latent Circuit DCM (defined 2026-05-24)
 **Phase:** 20 of 25 (Latent Circuit Forward Model -- v0.6.0 scientific core)
-**Plan:** 03 of 5 complete
+**Plan:** 04 of 5 complete
 **Status:** In progress
-**Last activity:** 2026-05-24 -- Completed 20-03-PLAN.md. direct_observation function (identity C_obs, pitfall LC5), latent_circuit_dcm_model (LC priors 1/16 and 1.0, hemodynamic=False, dt=0.01), 11-test suite all passing.
+**Last activity:** 2026-05-24 -- Completed 20-04-PLAN.md. latent_circuit_metrics.py (trajectory R2, ELBO selection, acceptance gates), latent_circuit_recovery runner (N=4 chain, multi-start SVI, 80/20 split, per-seed metrics), generate_latent_circuit_fixtures, RUNNER_REGISTRY updated.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 Plans 01-03 complete; Plans 04-05 pending
+- v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 pending
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [===---------] Plans 01-03/5 done
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [====---------] Plans 01-04/5 done
 
 ## Decisions
 
@@ -30,6 +30,9 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 - **[20-03-D1] pyro.deterministic() appears as type='sample' in this Pyro version.** Tests must check by site name, not by type. Pattern documented in 20-03-SUMMARY.md key-decisions.
 - **[20-03-D2] AutoIAFNormal hidden_dim must exceed latent_dim.** For N=4, M=1 model: latent_dim=21 (N^2 + N*M + 1). Use hidden_dim=[32] not [20] to avoid AutoRegressiveNN ValueError.
 - **[20-03-D3] LC_A_PRIOR_VARIANCE=1/16 confirmed as separate constant from BOLD A prior (1/64).** Addresses pitfall LC4. Stored in latent_circuit_dcm_model as module-level constant, re-exported from models/__init__.py.
+- **[20-04-D1] importlib.import_module required to access LC_*_PRIOR_VARIANCE for monkey-patching.** pyro_dcm.models.__init__ re-exports latent_circuit_dcm_model function under the submodule name; import-as resolves to function not module. Fixed with importlib.import_module("pyro_dcm.models.latent_circuit_dcm_model").
+- **[20-04-D2] 100s / dt=0.01 ODE = ~16s per SVI step on laptop.** Full acceptance runs (1000+ steps, 10+ restarts, 10 seeds) must go to M3 cluster. Smoke test uses _duration_override=2.0 for API verification only.
+- **[20-04-D3] All LC acceptance thresholds provisional.** A-RMSE 0.15, B-RMSE 0.20, sign recovery 0.80, CI coverage 0.85, trajectory R2 0.95. Plan 20-05 recalibration pending.
 - **[20-02] n_restarts=1 path is bit-exact with pre-Phase-20 single-run path.** Return dict has exactly {losses, final_loss, num_steps}; no extended keys. Backward compat verified by existing test suite.
 - **[20-02] guide_factory required when n_restarts>1 (ValueError on None).** Prevents silent reuse of a pre-trained guide across restarts.
 - **[20-02] Param store restored via get_state/set_state after all restarts.** Avoids performance cost of re-running the best restart.
@@ -69,7 +72,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-24 (Phase 20 Plan 03 execution)
-Stopped at: Completed 20-03-PLAN.md -- direct_observation (e4eeefe) + latent_circuit_dcm_model (c9b0bd2) + 11-test suite (8779580). Phase 20 Plan 03 complete.
-Next: Execute Phase 20 Plan 04 (prior recalibration on synthetic RNNs).
+Last session: 2026-05-24 (Phase 20 Plan 04 execution)
+Stopped at: Completed 20-04-PLAN.md -- latent_circuit_metrics.py (0419288) + runner + fixture generation (5aba415). Phase 20 Plan 04 complete.
+Next: Execute Phase 20 Plan 05 (prior recalibration sweep on synthetic RNNs, using lc_a_prior_var/lc_b_prior_var kwarg in runner).
 Resume file: None
