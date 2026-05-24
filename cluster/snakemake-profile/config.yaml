@@ -1,0 +1,32 @@
+# Snakemake SLURM Profile for Monash M3 (dcm_pytorch)
+# Usage: snakemake --profile cluster/snakemake-profile/ <target>
+
+executor: slurm
+
+default-resources:
+  slurm_partition: comp
+  mem_mb: 8000
+  runtime: 60
+  cpus_per_task: 4
+
+jobs: 4
+latency-wait: 30
+rerun-incomplete: true
+use-conda: false
+
+set-resources:
+  test_latent_circuit_forward:
+    runtime: 30
+    mem_mb: 4000
+  test_multi_start_svi:
+    runtime: 30
+    mem_mb: 4000
+  test_latent_circuit_model:
+    runtime: 45
+    mem_mb: 8000
+  test_latent_circuit_recovery:
+    runtime: 60
+    mem_mb: 8000
+  test_existing_no_regression:
+    runtime: 30
+    mem_mb: 4000
