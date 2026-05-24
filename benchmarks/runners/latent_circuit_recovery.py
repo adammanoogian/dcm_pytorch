@@ -270,7 +270,9 @@ def run_latent_circuit_recovery(
     .planning/phases/20-latent-circuit-forward-model/20-04-PLAN.md Task 2.
     .planning/REQUIREMENTS-v0.6.0.md SYNTH-01..03.
     """
-    import pyro_dcm.models.latent_circuit_dcm_model as lc_module
+    import sys
+    import pyro_dcm.models.latent_circuit_dcm_model  # noqa: F401
+    lc_module = sys.modules["pyro_dcm.models.latent_circuit_dcm_model"]
 
     # Prior override support: monkey-patch module constants if provided.
     orig_a_prior = lc_module.LC_A_PRIOR_VARIANCE
