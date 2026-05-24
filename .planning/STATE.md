@@ -11,16 +11,16 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 
 **Milestone:** v0.6.0 Latent Circuit DCM (defined 2026-05-24)
 **Phase:** 20+21 in parallel (Phase 20: Latent Circuit Forward Model; Phase 21: CT-RNN Training)
-**Plan:** Phase 20: 04 of 5 complete | Phase 21: 02 of 5 complete
+**Plan:** Phase 20: 04 of 5 complete | Phase 21: 03 of 5 complete
 **Status:** In progress
-**Last activity:** 2026-05-25 -- Completed 21-02-PLAN.md. train_rnn() and eval_rnn_performance() in rnn_trainer.py, Adam BPTT on neurogym CDDM, 4-test integration suite (smoke + dimension mismatch + eval + convergence).
+**Last activity:** 2026-05-25 -- Completed 21-03-PLAN.md. fixed_point_analysis.py (find_fixed_points, compute_jacobian_at_fp, classify_stability) and latent_extraction.py (extract_trajectories, pca_reduce, output_r_squared_gate, variance_explained_diagnostic, zscore_trajectories). 26 tests pass.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
 - v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 pending | Phase 21 Plan 01 complete; Plans 02-05 pending
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [======---------] Ph20 Plans 01-04/5 done; Ph21 Plans 01-02/5 done
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=======--------] Ph20 Plans 01-04/5 done; Ph21 Plans 01-03/5 done
 
 ## Decisions
 
@@ -39,6 +39,10 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 - **[21-02-D1] neurogym labels shape is (T, B) not (T*B,).** ngym.Dataset() v2.3.1 returns labels as (seq_len, batch_size); must .reshape(-1) before CrossEntropyLoss and accuracy computation.
 - **[21-02-D2] neurogym imported inside train_rnn/eval_rnn_performance only.** Optional dependency guard: try/except ImportError with install hint. Callers without neurogym can still import ContinuousTimeRNN.
 - **[21-02-D3] Early stopping checks every log_every steps; 3 consecutive checks >= criterion_acc trigger return.** Count resets if accuracy drops below threshold at any log checkpoint.
+- **[21-03-D1] Module docstring must precede `from __future__ import annotations`.** ruff E402 treats any non-import statement (including docstrings) before imports as breaking import-block contiguity; PEP 257 module docstring is first statement.
+- **[21-03-D2] output_r_squared_gate fail test uses orthogonal equal-variance embedding.** Correlated factor mixing allows 1 PC to capture >90% variance; disjoint H/3-block basis guarantees PC1 ~33% and gate fails with N=1.
+- **[21-03-D3] classify_stability parameter named jacobian_matrix to avoid shadowing module import.** Module imports `jacobian` from `torch.autograd.functional`; parameter named `jacobian` would shadow it inside the function.
+- **[21-03-D4] extract_trajectories metadata stored as Python dict under `__meta__` key.** np.ndarray cannot hold heterogeneous scalar types (dt_seconds, tau, alpha); dict is correct container.
 - **[20-02] n_restarts=1 path is bit-exact with pre-Phase-20 single-run path.** Return dict has exactly {losses, final_loss, num_steps}; no extended keys. Backward compat verified by existing test suite.
 - **[20-02] guide_factory required when n_restarts>1 (ValueError on None).** Prevents silent reuse of a pre-trained guide across restarts.
 - **[20-02] Param store restored via get_state/set_state after all restarts.** Avoids performance cost of re-running the best restart.
@@ -78,7 +82,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-25 (Phase 21 Plan 02 execution)
-Stopped at: Completed 21-02-PLAN.md -- train_rnn (b5e1a9c) + integration tests (3f0d1ea). Phase 21 Plan 02 complete.
-Next: Execute Phase 20 Plan 05 (prior recalibration sweep) OR Phase 21 Plan 03 (fixed_point_analysis.py). Both unblocked.
+Last session: 2026-05-25 (Phase 21 Plan 03 execution)
+Stopped at: Completed 21-03-PLAN.md -- fixed_point_analysis.py (1e78d02) + latent_extraction.py + tests (4b5f537). Phase 21 Plan 03 complete.
+Next: Execute Phase 20 Plan 05 (prior recalibration sweep) OR Phase 21 Plan 04 (cluster training scripts). Both unblocked.
 Resume file: None
