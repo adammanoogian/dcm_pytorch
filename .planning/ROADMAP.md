@@ -367,6 +367,15 @@ matrices, serving as copy-pasteable starting points for real neuroimaging workfl
 **Branch:** `gsd/phase-19-pipeline-demos`
 **Depends on:** Phase 18 (confirmed IO contracts via passing tests).
 **Requirements:** PIPE-01, PIPE-02
+**Plans:** 2 plans (1 wave)
+Plans:
+- [ ] 19-01-PLAN.md — Spectral DCM pipeline demo: synthetic MNE Epochs -> epochs_to_csd -> spectral_dcm_model -> SVI -> posterior A (PIPE-01)
+- [ ] 19-02-PLAN.md — Task DCM pipeline demo: synthetic MNE Epochs -> epochs_to_timeseries -> task_dcm_model (bilinear B) -> SVI -> posterior A + B (PIPE-02)
+
+**Success Criteria** (what must be TRUE):
+
+  1. `pytest tests/test_mne_loader.py` and `pytest tests/test_bids_loader.py` still pass (no regressions).
+  2. Both pipeline scripts execute end-to-end on synthetic data and produce fitted posterior A matrices.
 
 ### Progress
 
@@ -375,7 +384,7 @@ matrices, serving as copy-pasteable starting points for real neuroimaging workfl
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 18. MNE/BIDS IO Test Suite | 2/2 | Complete (verified 17/17 must-haves) | 2026-05-21 |
-| 19. End-to-End Pipeline Demos | 0/TBD | Not started | -- |
+| 19. End-to-End Pipeline Demos | 0/2 | Planned | -- |
 
 ---
 
