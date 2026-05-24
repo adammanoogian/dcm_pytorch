@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 ## Current Position
 
 **Milestone:** v0.6.0 Latent Circuit DCM (defined 2026-05-24)
-**Phase:** 20 of 25 (Latent Circuit Forward Model -- v0.6.0 scientific core)
-**Plan:** 04 of 5 complete
+**Phase:** 20+21 in parallel (Phase 20: Latent Circuit Forward Model; Phase 21: CT-RNN Training)
+**Plan:** Phase 20: 04 of 5 complete | Phase 21: 01 of 5 complete
 **Status:** In progress
-**Last activity:** 2026-05-24 -- Completed 20-04-PLAN.md. latent_circuit_metrics.py (trajectory R2, ELBO selection, acceptance gates), latent_circuit_recovery runner (N=4 chain, multi-start SVI, 80/20 split, per-seed metrics), generate_latent_circuit_fixtures, RUNNER_REGISTRY updated.
+**Last activity:** 2026-05-25 -- Completed 21-01-PLAN.md. ContinuousTimeRNN(nn.Module) Euler CT-RNN module, rnn/ package, [latent] pyproject.toml group, 10 unit tests.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 pending
+- v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 pending | Phase 21 Plan 01 complete; Plans 02-05 pending
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [====---------] Plans 01-04/5 done
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=====---------] Ph20 Plans 01-04/5 done; Ph21 Plan 01/5 done
 
 ## Decisions
 
@@ -33,6 +33,9 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 - **[20-04-D1] importlib.import_module required to access LC_*_PRIOR_VARIANCE for monkey-patching.** pyro_dcm.models.__init__ re-exports latent_circuit_dcm_model function under the submodule name; import-as resolves to function not module. Fixed with importlib.import_module("pyro_dcm.models.latent_circuit_dcm_model").
 - **[20-04-D2] 100s / dt=0.01 ODE = ~16s per SVI step on laptop.** Full acceptance runs (1000+ steps, 10+ restarts, 10 seeds) must go to M3 cluster. Smoke test uses _duration_override=2.0 for API verification only.
 - **[20-04-D3] All LC acceptance thresholds provisional.** A-RMSE 0.15, B-RMSE 0.20, sign recovery 0.80, CI coverage 0.85, trajectory R2 0.95. Plan 20-05 recalibration pending.
+- **[21-01-D1] alpha = dt/tau is a plain float attribute, not nn.Parameter.** Fixed for v0.6.0; avoids accidental gradient computation through it; learnable timescales deferred.
+- **[21-01-D2] Euler integration chosen over torchdiffeq for CT-RNN training.** Matches Langdon & Engel (2025) trainRNNbrain exactly; faster and deterministic for fixed-dt neurogym observations.
+- **[21-01-D3] Langdon & Engel (2025) formal REF-ID deferred to Phase 25 (PUB-03).** Cited by author/year in docstring as interim placeholder.
 - **[20-02] n_restarts=1 path is bit-exact with pre-Phase-20 single-run path.** Return dict has exactly {losses, final_loss, num_steps}; no extended keys. Backward compat verified by existing test suite.
 - **[20-02] guide_factory required when n_restarts>1 (ValueError on None).** Prevents silent reuse of a pre-trained guide across restarts.
 - **[20-02] Param store restored via get_state/set_state after all restarts.** Avoids performance cost of re-running the best restart.
@@ -72,7 +75,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-24 (Phase 20 Plan 04 execution)
-Stopped at: Completed 20-04-PLAN.md -- latent_circuit_metrics.py (0419288) + runner + fixture generation (5aba415). Phase 20 Plan 04 complete.
-Next: Execute Phase 20 Plan 05 (prior recalibration sweep on synthetic RNNs, using lc_a_prior_var/lc_b_prior_var kwarg in runner).
+Last session: 2026-05-25 (Phase 21 Plan 01 execution)
+Stopped at: Completed 21-01-PLAN.md -- ContinuousTimeRNN (f3968ed) + unit tests (1dd9eec). Phase 21 Plan 01 complete.
+Next: Execute Phase 20 Plan 05 (prior recalibration sweep) OR Phase 21 Plan 02 (rnn_trainer.py). Both unblocked.
 Resume file: None
