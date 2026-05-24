@@ -11,15 +11,15 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 
 **Milestone:** v0.6.0 Latent Circuit DCM (defined 2026-05-24)
 **Phase:** 20 of 25 (Direct Observation Forward Model, Simulator & Synthetic Validation)
-**Plan:** 03 of 05
-**Status:** In progress (plans 01-03 complete)
-**Last activity:** 2026-05-24 -- Completed 20-03-PLAN.md (latent circuit DCM Pyro model + observation function + test suite).
+**Plan:** 04 of 05
+**Status:** In progress (plans 01-04 complete)
+**Last activity:** 2026-05-24 -- Completed 20-04-PLAN.md (benchmark runner + metrics for latent circuit recovery).
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 pending
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==--------] Phase 18 complete; 19 pending | v0.6.0 [===-------] Phase 20: 3/5 plans complete
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==--------] Phase 18 complete; 19 pending | v0.6.0 [====------] Phase 20: 4/5 plans complete
 
 ## Decisions
 
@@ -29,6 +29,8 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 - **n_restarts=1 preserves exact backward-compatible code path.** No structural changes to single-restart behavior (D20-02-01).
 - **guide_factory required for n_restarts>1.** Safe re-initialization needs fresh guide instances (D20-02-02).
 - **NaN restarts get inf penalty and are skipped.** One bad init doesn't abort entire multi-start (D20-02-03).
+- **Median-based acceptance gates for latent circuit recovery.** Robust to outlier seeds (D20-04-01).
+- **Prior override via module monkey-patching in runner.** Enables 20-05 sweep without model signature changes (D20-04-04).
 - **Prior recalibration mandatory.** LC_A_PRIOR_VARIANCE separate from BOLD priors. Addresses pitfall LC4.
 - **CoupledDCMSystem hemodynamic toggle duplicates bilinear logic.** Preserves bit-exact hemodynamic=True code path per OBS-04 (D20-01-01).
 - Prior v0.3.0/v0.4.0/v0.5.0 decisions: see earlier STATE.md history in git log.
@@ -59,7 +61,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-24T18:21Z
-Stopped at: Completed 20-03-PLAN.md (latent circuit DCM Pyro model)
-Next: Execute 20-04-PLAN.md (synthetic validation / parameter recovery)
+Last session: 2026-05-24T18:58Z
+Stopped at: Completed 20-04-PLAN.md (benchmark runner + metrics)
+Next: Execute 20-05-PLAN.md (prior recalibration sweep on M3 cluster)
 Resume file: None
