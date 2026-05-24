@@ -11,15 +11,15 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 
 **Milestone:** v0.6.0 Latent Circuit DCM (defined 2026-05-24)
 **Phase:** 20 of 25 (Direct Observation Forward Model, Simulator & Synthetic Validation)
-**Plan:** 02 of 05
-**Status:** In progress (plans 01-02 complete)
-**Last activity:** 2026-05-24 -- Completed 20-01-PLAN.md (forward model & simulator). CoupledDCMSystem hemodynamic toggle + simulate_latent_circuit. Also 20-02 complete (multi-start SVI).
+**Plan:** 03 of 05
+**Status:** In progress (plans 01-03 complete)
+**Last activity:** 2026-05-24 -- Completed 20-03-PLAN.md (latent circuit DCM Pyro model + observation function + test suite).
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 pending
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==--------] Phase 18 complete; 19 pending | v0.6.0 [==--------] Phase 20: 2/5 plans complete
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==--------] Phase 18 complete; 19 pending | v0.6.0 [===-------] Phase 20: 3/5 plans complete
 
 ## Decisions
 
@@ -59,7 +59,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-24T16:31Z
-Stopped at: Completed 20-01-PLAN.md (forward model & simulator)
-Next: Execute 20-03-PLAN.md (latent circuit DCM Pyro model)
+Last session: 2026-05-24T18:21Z
+Stopped at: Completed 20-03-PLAN.md (latent circuit DCM Pyro model)
+Next: Execute 20-04-PLAN.md (synthetic validation / parameter recovery)
 Resume file: None
