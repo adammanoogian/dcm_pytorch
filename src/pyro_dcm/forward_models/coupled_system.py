@@ -9,11 +9,15 @@ The ``CoupledDCMSystem`` is an ``nn.Module`` to satisfy the
 ``torchdiffeq.odeint_adjoint`` interface requirement (adjoint method
 needs module parameters for backpropagation through the ODE).
 
-State vector layout (N regions):
+State vector layout (N regions) when ``hemodynamic=True`` (default):
     [x(N), s(N), lnf(N), lnv(N), lnq(N)]
 
 where x=neural activity, s=vasodilatory signal, lnf=log blood flow,
 lnv=log blood volume, lnq=log deoxyhemoglobin.
+
+When ``hemodynamic=False`` (latent-circuit mode, v0.6.0):
+    State vector is just neural activity x(N); BalloonWindkessel is
+    not constructed and forward() returns shape (N,) not (5N,).
 
 v0.3.0 extension
 ----------------
@@ -25,6 +29,14 @@ expression ``self.A @ x + self.C @ u_all`` and is bit-exact against
 pre-existing callers. An eigenvalue-based stability monitor
 (``_maybe_check_stability``) logs WARNING to ``pyro_dcm.stability``
 when ``max Re(eig(A_eff)) > 0``; the monitor never raises (D4).
+
+v0.6.0 extension
+----------------
+``hemodynamic=False`` enables latent-circuit DCM mode where the state
+vector IS neural activity directly (shape N, not 5N). No hemodynamic
+submodule is constructed. This is the forward model for Phase 20
+latent-circuit fitting: the latent state x(t) from a trained RNN is
+modeled as evolving under a bilinear DCM A matrix.
 
 References
 ----------
@@ -94,6 +106,7 @@ class CoupledDCMSystem(nn.Module):
     hemo_params : dict or None, optional
         Hemodynamic parameters {kappa, gamma, tau, alpha, E0}.
         If None, uses SPM12 defaults from ``BalloonWindkessel``.
+        Ignored when ``hemodynamic=False``.
     B : torch.Tensor or None, optional
         Stacked modulatory matrices, shape ``(J, N, N)``. ``None``
         (default) or ``B.shape[0] == 0`` routes through the linear
@@ -107,6 +120,14 @@ class CoupledDCMSystem(nn.Module):
         Cadence in RHS evaluations (``forward()`` calls) between
         eigenvalue checks. Set to ``0`` to disable the monitor entirely
         (zero overhead).
+    hemodynamic : bool, default True
+        When ``True`` (default), couples the neural state equation with
+        the Balloon-Windkessel hemodynamic model; state vector has shape
+        ``(5N,)`` and ``forward()`` returns shape ``(5N,)``. When
+        ``False``, the state IS neural activity directly: state vector
+        has shape ``(N,)`` and ``forward()`` returns shape ``(N,)``.
+        ``hemo_params`` is ignored in this mode. Existing callers that
+        do not pass this argument are unaffected (bit-exact).
 
     Raises
     ------
@@ -129,6 +150,11 @@ class CoupledDCMSystem(nn.Module):
     >>> state = torch.zeros(10, dtype=torch.float64)  # 5*N=10
     >>> dstate = system.forward(torch.tensor(0.0), state)
     >>> dstate.shape  # (10,)
+    >>> # Latent-circuit mode (v0.6.0): state is neural activity only
+    >>> lc_system = CoupledDCMSystem(A, C, input_fn, hemodynamic=False)
+    >>> lc_state = torch.zeros(2, dtype=torch.float64)  # N=2
+    >>> dlc = lc_system.forward(torch.tensor(0.0), lc_state)
+    >>> dlc.shape  # (2,)
     """
 
     def __init__(
@@ -141,6 +167,7 @@ class CoupledDCMSystem(nn.Module):
         B: torch.Tensor | None = None,
         n_driving_inputs: int | None = None,
         stability_check_every: int = 10,
+        hemodynamic: bool = True,
     ) -> None:
         """Initialize coupled neural-hemodynamic ODE system.
 
@@ -186,6 +213,7 @@ class CoupledDCMSystem(nn.Module):
             shape ``(n_driving_inputs + J,)`` where ``J == B.shape[0]``.
         hemo_params : dict or None, optional
             Hemodynamic parameters {kappa, gamma, tau, alpha, E0}.
+            Ignored when ``hemodynamic=False``.
         B : torch.Tensor or None, optional
             Stacked modulatory matrices, shape ``(J, N, N)``. None
             (default) or ``B.shape[0] == 0`` routes through the linear
@@ -200,6 +228,11 @@ class CoupledDCMSystem(nn.Module):
             eigenvalue checks. Set to ``0`` to disable the monitor
             entirely (zero overhead). Counter is persistent across
             separate ``integrate_ode`` calls on the same instance.
+        hemodynamic : bool, default True
+            When ``True``, couples neural + Balloon-Windkessel; state is
+            ``(5N,)``. When ``False``, state IS neural activity ``(N,)``;
+            BalloonWindkessel is not constructed. Existing callers that
+            omit this argument are unaffected.
 
         Raises
         ------
@@ -240,23 +273,37 @@ class CoupledDCMSystem(nn.Module):
         self.stability_check_every = int(stability_check_every)
         self._step_counter = 0  # plain int, persistent across integrate_ode calls
 
+        # v0.6.0 hemodynamic toggle.
+        self.hemodynamic = hemodynamic
+
         # Component models (neural uses the shared A, C references).
         self.neural = NeuralStateEquation(self.A, self.C)
 
-        if hemo_params is not None:
-            self.hemo = BalloonWindkessel(**hemo_params)
+        # Only construct BalloonWindkessel in hemodynamic mode (default).
+        # When hemodynamic=False the state IS neural activity; no hemo submodule.
+        if self.hemodynamic:
+            if hemo_params is not None:
+                self.hemo = BalloonWindkessel(**hemo_params)
+            else:
+                self.hemo = BalloonWindkessel()
         else:
-            self.hemo = BalloonWindkessel()
+            self.hemo = None  # type: ignore[assignment]
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
-        """Compute combined ODE derivatives for the 5N state vector.
+        """Compute ODE derivatives for the state vector.
 
-        Implements [REF-001] Eq. 1 + [REF-002] Eq. 2-5. The neural RHS
-        branches on ``self.B``: when ``None`` or empty-J, evaluates the
-        literal v0.2.0 linear expression ``self.A @ x + self.C @ u_all``
-        (CONTEXT-locked short-circuit); when non-empty, composes
-        ``A_eff(t) = A + sum_j u_mod[j] * B[j]`` via
-        ``compute_effective_A`` and routes
+        When ``hemodynamic=True`` (default): implements [REF-001] Eq. 1 +
+        [REF-002] Eq. 2-5. State is shape ``(5*N,)``; returns ``(5*N,)``.
+
+        When ``hemodynamic=False`` (latent-circuit mode, v0.6.0): state IS
+        neural activity, shape ``(N,)``; returns neural derivative ``(N,)``
+        only. No hemodynamic computation is performed.
+
+        The neural RHS branches on ``self.B``: when ``None`` or empty-J,
+        evaluates the literal v0.2.0 linear expression
+        ``self.A @ x + self.C @ u_all`` (CONTEXT-locked short-circuit);
+        when non-empty, composes ``A_eff(t) = A + sum_j u_mod[j] * B[j]``
+        via ``compute_effective_A`` and routes
         ``A_eff @ x + self.C @ u_drive``.
 
         Parameters
@@ -264,15 +311,33 @@ class CoupledDCMSystem(nn.Module):
         t : torch.Tensor
             Current time (scalar tensor).
         state : torch.Tensor
-            Full state vector, shape ``(5*N,)``.
+            Full state vector. Shape ``(5*N,)`` when ``hemodynamic=True``;
+            shape ``(N,)`` when ``hemodynamic=False``.
 
         Returns
         -------
         torch.Tensor
-            Derivative vector, shape ``(5*N,)``.
+            Derivative vector. Shape ``(5*N,)`` when ``hemodynamic=True``;
+            shape ``(N,)`` when ``hemodynamic=False``.
         """
         N = self.n_regions
 
+        # Latent-circuit mode (v0.6.0): state IS neural activity x, shape (N,).
+        if not self.hemodynamic:
+            x = state  # shape (N,)
+            u_all = self.input_fn(t)
+            if self.B is None or self.B.shape[0] == 0:
+                return self.A @ x + self.C @ u_all
+            else:
+                M_d = self.n_driving_inputs
+                u_drive = u_all[:M_d]
+                u_mod = u_all[M_d:]
+                A_eff = compute_effective_A(self.A, self.B, u_mod)
+                dx = A_eff @ x + self.C @ u_drive
+                self._maybe_check_stability(t, A_eff, u_mod)
+                return dx
+
+        # Hemodynamic mode (default, pre-v0.6.0 behavior preserved bit-exact).
         # 1. Unpack state vector
         x = state[:N]           # neural activity
         s = state[N:2 * N]      # vasodilatory signal
