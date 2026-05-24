@@ -38,6 +38,10 @@ import torch
 
 from pyro_dcm.forward_models.rdcm_forward import generate_bold
 from pyro_dcm.models.spectral_dcm_model import decompose_csd_for_likelihood
+from pyro_dcm.simulators.latent_circuit_simulator import (
+    make_stable_latent_circuit_A,
+    simulate_latent_circuit,
+)
 from pyro_dcm.simulators.rdcm_simulator import (
     make_block_stimulus_rdcm,
     make_stable_A_rdcm,
@@ -293,6 +297,178 @@ def generate_task_bilinear_fixtures(
 
 
 # ---------------------------------------------------------------------------
+# Latent-circuit DCM fixtures (Phase 20)
+# ---------------------------------------------------------------------------
+
+# Latent-circuit ground-truth constants (matches runner in
+# benchmarks/runners/latent_circuit_recovery.py).
+_LC_DURATION: float = 100.0
+_LC_DT: float = 0.01
+_LC_SNR: float = 10.0
+_LC_N_BLOCKS: int = 5
+_LC_BLOCK_DURATION: float = 10.0
+_LC_REST_DURATION: float = 10.0
+_LC_MOD_TIMES: list[float] = [10.0, 40.0, 70.0]
+_LC_MOD_DURATIONS: list[float] = [8.0, 8.0, 8.0]
+_LC_MOD_AMPLITUDES: list[float] = [1.0, 1.0, 1.0]
+
+
+def generate_latent_circuit_fixtures(
+    n_regions: int,
+    n_datasets: int,
+    seed: int,
+    output_dir: str,
+) -> None:
+    """Generate latent-circuit DCM fixtures (v0.6.0 Phase 20).
+
+    Creates synthetic latent-state trajectory datasets for SYNTH-01 and
+    SYNTH-02 benchmark validation. Each dataset uses the same N=4 directed
+    chain ground truth (A, B, C) with per-seed noise realizations. The
+    fixture layout follows the existing .npz + manifest.json pattern.
+
+    Ground-truth topology (Plan 20-04 specification):
+
+    - A: diagonal=-0.5 Hz, off-diagonal chain A[i+1, i]=0.15 Hz.
+    - B: directed chain B[1,0]=0.4, B[2,1]=0.3, B[3,2]=0.2 (J=1).
+    - C: driving input to region 0, amplitude 1.0.
+    - Stimulus: 5 blocks of 10s ON + 10s OFF over 100s.
+    - Modulator: 3 epochs of 8s at [10, 40, 70] s.
+
+    Parameters
+    ----------
+    n_regions : int
+        Number of latent dimensions (N). Fixtures use a fixed N=4
+        ground truth; other values will generate fixtures with the
+        same topology but may not match the runner's ground truth.
+    n_datasets : int
+        Number of datasets to produce (one per noise seed).
+    seed : int
+        Base random seed (incremented per dataset for noise).
+    output_dir : str
+        Root output directory. Subdirectory named
+        ``latent_circuit_{n_regions}region``.
+
+    Notes
+    -----
+    Each .npz contains:
+    ``trajectories`` (noisy, ``(T, N)``), ``trajectories_clean``
+    (``(T, N)``), ``times`` (``(T,)``), ``A`` (``(N, N)``),
+    ``C`` (``(N, M)``), ``B_list`` (``(J, N, N)``),
+    ``stimulus_times``, ``stimulus_values``,
+    ``stimulus_mod_times``, ``stimulus_mod_values``,
+    ``SNR``, ``duration``, ``dt``, ``seed``.
+
+    References
+    ----------
+    .planning/phases/20-latent-circuit-forward-model/20-CONTEXT.md
+        SYNTH-01, SYNTH-02 fixture specification.
+    .planning/phases/20-latent-circuit-forward-model/20-04-PLAN.md
+    """
+    subdir = Path(output_dir) / f"latent_circuit_{n_regions}region"
+    os.makedirs(subdir, exist_ok=True)
+
+    N = n_regions
+    J = 1
+
+    # Build fixed ground truth (same as runner).
+    A_base = make_stable_latent_circuit_A(
+        N, density=0.0, self_inhibition=0.5, seed=0,
+    )
+    A_true = A_base.clone()
+    for i in range(min(N - 1, 3)):
+        A_true[i + 1, i] = 0.15
+
+    B_true = torch.zeros(J, N, N, dtype=torch.float64)
+    b_magnitudes = [0.4, 0.3, 0.2]
+    for k in range(min(N - 1, 3)):
+        if k < len(b_magnitudes):
+            B_true[0, k + 1, k] = b_magnitudes[k]
+
+    # Stability guard: scale B if A + sum(B) is unstable.
+    B_sum = B_true.sum(dim=0)
+    scale = 1.0
+    for _ in range(20):
+        if torch.linalg.eigvals(A_true + B_sum * scale).real.max() < -0.05:
+            break
+        scale *= 0.5
+    B_true = B_true * scale
+
+    C = torch.zeros(N, 1, dtype=torch.float64)
+    if N > 0:
+        C[0, 0] = 1.0
+
+    # Driving stimulus.
+    stim = make_block_stimulus(
+        n_blocks=_LC_N_BLOCKS,
+        block_duration=_LC_BLOCK_DURATION,
+        rest_duration=_LC_REST_DURATION,
+        n_inputs=1,
+    )
+
+    # Modulator.
+    stim_mod_dict = make_epoch_stimulus(
+        event_times=_LC_MOD_TIMES,
+        event_durations=_LC_MOD_DURATIONS,
+        event_amplitudes=_LC_MOD_AMPLITUDES,
+        duration=_LC_DURATION,
+        dt=_LC_DT,
+        n_inputs=1,
+    )
+    stim_mod = PiecewiseConstantInput(
+        stim_mod_dict["times"], stim_mod_dict["values"],
+    )
+
+    fields_saved: list[str] = []
+
+    for i in range(n_datasets):
+        seed_i = seed + i
+        print(
+            f"  Generating latent_circuit_{n_regions}region: "
+            f"dataset {i + 1}/{n_datasets}..."
+        )
+
+        torch.manual_seed(seed_i)
+
+        sim = simulate_latent_circuit(
+            A_true, C, stim,
+            duration=_LC_DURATION, dt=_LC_DT, SNR=_LC_SNR,
+            solver="rk4", seed=seed_i,
+            B_list=[B_true[0]],
+            stimulus_mod=stim_mod,
+        )
+
+        save_dict = {
+            "trajectories": sim["trajectories"].detach().numpy(),
+            "trajectories_clean": sim["trajectories_clean"].detach().numpy(),
+            "times": sim["times"].numpy(),
+            "A": A_true.numpy(),
+            "C": C.numpy(),
+            "B_list": B_true.numpy(),
+            "stimulus_times": stim["times"].numpy(),
+            "stimulus_values": stim["values"].numpy(),
+            "stimulus_mod_times": stim_mod_dict["times"].numpy(),
+            "stimulus_mod_values": stim_mod_dict["values"].numpy(),
+            "SNR": np.array(_LC_SNR),
+            "duration": np.array(_LC_DURATION),
+            "dt": np.array(_LC_DT),
+            "seed": np.array(seed_i),
+        }
+
+        np.savez(
+            str(subdir / f"dataset_{i:03d}.npz"),
+            **save_dict,
+        )
+
+        if i == 0:
+            fields_saved = list(save_dict.keys())
+
+    _write_manifest(
+        subdir, n_datasets, seed, n_regions,
+        "latent_circuit", fields_saved,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Spectral DCM fixtures
 # ---------------------------------------------------------------------------
 
@@ -530,6 +706,7 @@ _GENERATORS = {
     "task_bilinear": generate_task_bilinear_fixtures,
     "spectral": generate_spectral_fixtures,
     "rdcm": generate_rdcm_fixtures,
+    "latent_circuit": generate_latent_circuit_fixtures,
 }
 
 

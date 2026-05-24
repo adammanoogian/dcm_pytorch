@@ -10,6 +10,7 @@ from collections.abc import Callable
 from typing import Any
 
 from benchmarks.config import BenchmarkConfig
+from benchmarks.runners.latent_circuit_recovery import run_latent_circuit_recovery
 from benchmarks.runners.rdcm_vb import (
     run_rdcm_rigid_vb,
     run_rdcm_sparse_vb,
@@ -30,4 +31,5 @@ RUNNER_REGISTRY: dict[tuple[str, str], Callable[..., dict[str, Any]]] = {
     ("rdcm_rigid", "vb"): run_rdcm_rigid_vb,
     ("rdcm_sparse", "vb"): run_rdcm_sparse_vb,
     ("spm", "reference"): run_spm_reference,
+    ("latent_circuit", "svi"): run_latent_circuit_recovery,
 }
