@@ -293,6 +293,175 @@ def generate_task_bilinear_fixtures(
 
 
 # ---------------------------------------------------------------------------
+# Latent circuit DCM fixtures (Phase 20)
+# ---------------------------------------------------------------------------
+
+
+def generate_latent_circuit_fixtures(
+    n_regions: int,
+    n_datasets: int,
+    seed: int,
+    output_dir: str,
+) -> None:
+    """Generate latent circuit DCM fixtures for v0.6.0 recovery benchmark.
+
+    N-region bilinear network with direct neural state observation (no
+    hemodynamics). Ground truth: directed chain A matrix, J=1 modulator
+    with 3 non-null B elements forming a feedforward chain. Observations
+    are noisy neural trajectories at the integration grid (no TR
+    downsampling).
+
+    Parameters
+    ----------
+    n_regions : int
+        Number of latent circuit nodes. Phase 20 acceptance locks N=4.
+    n_datasets : int
+        Number of datasets to produce.
+    seed : int
+        Base random seed (incremented per dataset).
+    output_dir : str
+        Root output directory. Subdirectory named
+        ``latent_circuit_{n_regions}region``.
+
+    Notes
+    -----
+    SNR = 10.0; duration = 100s; dt = 0.01. Each .npz carries:
+    ``A_true``, ``C``, ``B_true``, ``b_mask_0``, ``trajectories``,
+    ``trajectories_clean``, ``stim_times``, ``stim_values``,
+    ``stim_mod_times``, ``stim_mod_values``, ``J``, ``SNR``,
+    ``duration``, ``dt``, ``seed``.
+
+    References
+    ----------
+    .planning/phases/20-latent-circuit-forward-model/20-04-PLAN.md Task 2.
+    """
+    from pyro_dcm.simulators.latent_circuit_simulator import (
+        make_stable_latent_circuit_A,
+        simulate_latent_circuit,
+    )
+
+    subdir = Path(output_dir) / f"latent_circuit_{n_regions}region"
+    os.makedirs(subdir, exist_ok=True)
+    fields_saved: list[str] = []
+
+    J = 1
+    duration = 100.0
+    dt_sim = 0.01
+    SNR = 10.0
+
+    for i in range(n_datasets):
+        seed_i = seed + i
+        print(
+            f"  Generating latent_circuit_{n_regions}region: "
+            f"dataset {i + 1}/{n_datasets}..."
+        )
+
+        torch.manual_seed(seed_i)
+
+        # A_true: stable random with directed chain overlay.
+        A_base = make_stable_latent_circuit_A(
+            n_regions, density=0.5, seed=seed_i,
+        )
+        A_true = A_base.clone()
+        for k in range(n_regions - 1):
+            A_true[k + 1, k] = A_true[k + 1, k] + 0.15
+        # Ensure stability.
+        for _ in range(20):
+            eigs = torch.linalg.eigvals(A_true)
+            if eigs.real.max().item() < 0:
+                break
+            A_true.diagonal().add_(-0.1)
+
+        # C: single driving input to region 0.
+        C = torch.zeros(n_regions, 1, dtype=torch.float64)
+        C[0, 0] = 1.0
+
+        # B: 3 non-null feedforward chain elements.
+        B_true = torch.zeros(J, n_regions, n_regions, dtype=torch.float64)
+        B_true[0, 1, 0] = 0.4
+        B_true[0, 2, 1] = 0.3
+        if n_regions >= 4:
+            B_true[0, 3, 2] = 0.2
+
+        # b_mask.
+        b_mask_0 = torch.zeros(
+            n_regions, n_regions, dtype=torch.float64,
+        )
+        b_mask_0[1, 0] = 1.0
+        b_mask_0[2, 1] = 1.0
+        if n_regions >= 4:
+            b_mask_0[3, 2] = 1.0
+
+        # Driving stimulus: 4 blocks.
+        stim = make_block_stimulus(
+            n_blocks=4,
+            block_duration=10.0,
+            rest_duration=15.0,
+            n_inputs=1,
+        )
+
+        # Modulator: 3 epochs.
+        stim_mod_dict = make_epoch_stimulus(
+            event_times=[15.0, 40.0, 70.0],
+            event_durations=[8.0, 8.0, 8.0],
+            event_amplitudes=[1.0, 1.0, 1.0],
+            duration=duration,
+            dt=dt_sim,
+            n_inputs=J,
+        )
+        stim_mod = PiecewiseConstantInput(
+            stim_mod_dict["times"], stim_mod_dict["values"],
+        )
+
+        sim = simulate_latent_circuit(
+            A_true, C, stim,
+            duration=duration, dt=dt_sim, SNR=SNR,
+            solver="rk4", seed=seed_i,
+            B_list=B_true,
+            stimulus_mod=stim_mod,
+        )
+
+        # Skip seeds with NaN/Inf trajectories.
+        if (
+            torch.isnan(sim["trajectories"]).any().item()
+            or torch.isinf(sim["trajectories"]).any().item()
+        ):
+            print(f"    WARNING: seed {seed_i} produced NaN/Inf, skipping.")
+            continue
+
+        save_dict = {
+            "A_true": A_true.numpy(),
+            "C": C.numpy(),
+            "B_true": B_true.numpy(),
+            "b_mask_0": b_mask_0.numpy(),
+            "trajectories": sim["trajectories"].detach().numpy(),
+            "trajectories_clean": sim["trajectories_clean"].detach().numpy(),
+            "stim_times": stim["times"].numpy(),
+            "stim_values": stim["values"].numpy(),
+            "stim_mod_times": stim_mod_dict["times"].numpy(),
+            "stim_mod_values": stim_mod_dict["values"].numpy(),
+            "J": np.array(J),
+            "SNR": np.array(SNR),
+            "duration": np.array(duration),
+            "dt": np.array(dt_sim),
+            "seed": np.array(seed_i),
+        }
+
+        np.savez(
+            str(subdir / f"dataset_{i:03d}.npz"),
+            **save_dict,
+        )
+
+        if i == 0:
+            fields_saved = list(save_dict.keys())
+
+    _write_manifest(
+        subdir, n_datasets, seed, n_regions,
+        "latent_circuit", fields_saved,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Spectral DCM fixtures
 # ---------------------------------------------------------------------------
 
@@ -528,6 +697,7 @@ def _write_manifest(
 _GENERATORS = {
     "task": generate_task_fixtures,
     "task_bilinear": generate_task_bilinear_fixtures,
+    "latent_circuit": generate_latent_circuit_fixtures,
     "spectral": generate_spectral_fixtures,
     "rdcm": generate_rdcm_fixtures,
 }
