@@ -36,7 +36,7 @@
 #SBATCH --array=0-19
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=8G
+#SBATCH --mem=32G
 #SBATCH --time=01:30:00
 #SBATCH --output=cluster/logs/rnn_train_%A_%a.out
 #SBATCH --error=cluster/logs/rnn_train_%A_%a.err
