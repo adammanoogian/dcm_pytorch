@@ -11,16 +11,16 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 
 **Milestone:** v0.6.0 Latent Circuit DCM (defined 2026-05-24)
 **Phase:** 20+21 in parallel (Phase 20: Latent Circuit Forward Model; Phase 21: CT-RNN Training)
-**Plan:** Phase 20: 04 of 5 complete (Plan 05 on cluster) | Phase 21: 04 of 4 complete (training on cluster)
-**Status:** Cluster jobs running -- awaiting results
-**Last activity:** 2026-05-25 -- Phase 21 Plan 04 code complete. Fixed calibration sweep (SLURM array job, 10s duration override). Submitted job 55639076 (48-combo calibration) and job 55639078 (20-seed RNN training). Previous calibration job 55629996 failed (performance: 8h/combo, error: 'dict' not callable, CANCELLED due to time limit).
+**Plan:** Phase 20: 05 in progress (acceptance on cluster) | Phase 21: 04 of 4 complete (training on cluster)
+**Status:** Cluster jobs running -- acceptance run + RNN training
+**Last activity:** 2026-05-25 -- Fixed trajectory R² bug (ODE y0 at test start instead of t=0). Calibration sweep showed B metrics uninformative at 300 steps (shrinkage_B=0.987 everywhere); A-RMSE varies with init_scale. Keeping default priors (1/16, 1.0). Submitted acceptance run job 55643276 (10 seeds, 1000 steps, 10 restarts, full 100s). RNN training job 55643099 (16GB memory, retry after OOM at 8GB).
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 on cluster (job 55639076) | Phase 21 Plans 01-04 complete; training on cluster (job 55639078)
+- v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 acceptance on cluster (job 55643276) | Phase 21 Plans 01-04 complete; training on cluster (job 55643099)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=========------] Ph20 04/5 done + cluster; Ph21 04/4 done + cluster
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=========------] Ph20 05 acceptance running; Ph21 04/4 done + training
 
 ## Decisions
 
@@ -82,7 +82,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-25 (Phase 20-05 + Phase 21-04 cluster submission)
-Stopped at: Both cluster jobs submitted. Phase 20-05 calibration sweep = job 55639076 (48-task array, 10s duration, 500 SVI steps, 3 restarts). Phase 21-04 RNN training = job 55639078 (20-seed array, H=256, 3000 steps). Previous calibration job 55629996 failed (8h/combo, 'dict' not callable error).
-Next: Check cluster results. Phase 20-05: aggregate calibration results -> apply winning priors -> 10-seed acceptance run. Phase 21: verify 20/20 seeds trained with accuracy >= 0.85.
+Last session: 2026-05-25 (Phase 20-05 acceptance submission + RNN retry)
+Stopped at: Acceptance run (job 55643276, 10 seeds × 1000 steps × 10 restarts × 100s ODE, ~12-24h per seed). RNN training v3 (job 55643099, 16GB memory). Fixed trajectory R² bug (a0c13a7). Calibration sweep showed init_scale=0.5 best for A; B metrics underpowered at 300 steps.
+Next: Check RNN results (~30 min). Check acceptance results (~12-24h). After acceptance: apply thresholds, run ELBO model selection, finalize Phase 20.
 Resume file: None
