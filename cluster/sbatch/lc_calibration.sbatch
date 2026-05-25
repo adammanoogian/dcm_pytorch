@@ -22,8 +22,8 @@
 #SBATCH --array=0-47
 #SBATCH --output=cluster/logs/lc_calib_%A_%a.out
 #SBATCH --error=cluster/logs/lc_calib_%A_%a.err
-#SBATCH --time=02:00:00
-#SBATCH --mem=8G
+#SBATCH --time=03:00:00
+#SBATCH --mem=12G
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=comp
 

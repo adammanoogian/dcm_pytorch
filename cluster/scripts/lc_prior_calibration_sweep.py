@@ -34,11 +34,11 @@ INIT_SCALES = [0.01, 0.05, 0.1, 0.5]
 
 GRID = list(product(A_PRIOR_VARS, B_PRIOR_VARS, INIT_SCALES))
 
-N_SVI_STEPS = 500
-N_RESTARTS = 3
+N_SVI_STEPS = 300
+N_RESTARTS = 2
 N_DATASETS = 1
 SEED = 42
-DURATION_OVERRIDE = 10.0
+DURATION_OVERRIDE = 30.0
 
 
 def run_single_combo(task_id: int) -> dict:
