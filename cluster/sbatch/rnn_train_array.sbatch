@@ -36,7 +36,7 @@
 #SBATCH --array=0-19
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
+#SBATCH --mem=8G
 #SBATCH --time=01:30:00
 #SBATCH --output=cluster/logs/rnn_train_%A_%a.out
 #SBATCH --error=cluster/logs/rnn_train_%A_%a.err
@@ -50,10 +50,10 @@ ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
 setup_torch_threads 4
 activate_env "$ENV_NAME"
 
-# Install package in dev mode without dep resolution (avoids pip
-# resolver OOM -- all deps already in conda env).
-echo "Installing package (--no-deps)..."
-pip install -e . --no-deps --quiet 2>&1 | tail -3
+# Package is pre-installed (editable) or found via sys.path in the
+# Python script.  NEVER run pip install inside array jobs -- N
+# concurrent resolvers race on the shared conda env (OOM + .pth
+# corruption).  See m3-hpc.skill convention 6.
 
 verify_torch
 print_job_header "Phase 21 RNN Training (seed=${SLURM_ARRAY_TASK_ID})"

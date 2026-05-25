@@ -31,8 +31,10 @@ ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
 setup_torch_threads 4
 activate_env "$ENV_NAME"
 
-echo "Installing package..."
-pip install -e ".[benchmark,dev]" --quiet 2>&1 | tail -3
+# Package is pre-installed (editable) or found via sys.path in the
+# Python script.  NEVER run pip install inside array jobs -- N
+# concurrent resolvers race on the shared conda env (OOM + .pth
+# corruption).  See m3-hpc.skill convention 6.
 
 verify_torch
 print_job_header "LC Acceptance (seed ${SLURM_ARRAY_TASK_ID}/9)"
