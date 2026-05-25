@@ -45,7 +45,6 @@ import torch
 
 from benchmarks.config import BenchmarkConfig
 from benchmarks.latent_circuit_metrics import (
-    compute_coverage_multi_level,
     compute_trajectory_r_squared,
 )
 from benchmarks.metrics import compute_rmse
@@ -281,14 +280,16 @@ def _predict_trajectories(
     b_mask_0: torch.Tensor,
     stimulus: PiecewiseConstantInput,
     stim_mod: PiecewiseConstantInput,
-    t_eval: torch.Tensor,
+    t_eval_full: torch.Tensor,
     dt: float,
+    T_train: int,
 ) -> torch.Tensor:
-    """Run the forward ODE to predict trajectories for a test segment.
+    """Run the forward ODE from t=0 and return the held-out test segment.
 
-    Uses posterior-mean parameters to generate clean (noise-free)
-    trajectory predictions on the specified time grid, for held-out
-    trajectory R-squared computation.
+    Integrates the full time grid starting from y0=zeros, then returns
+    only the test portion (indices T_train:). This is necessary because
+    the neural state at the train/test boundary is not zero — it has
+    evolved under stimulus input for the entire training segment.
 
     Parameters
     ----------
@@ -304,25 +305,27 @@ def _predict_trajectories(
         Driving input function.
     stim_mod : PiecewiseConstantInput
         Modulator input function.
-    t_eval : torch.Tensor
-        Time grid for ODE evaluation, shape ``(T_test,)``.
+    t_eval_full : torch.Tensor
+        Full time grid (train + test), shape ``(T_total,)``.
     dt : float
         ODE step size.
+    T_train : int
+        Number of training time points. The returned tensor starts
+        at index ``T_train``.
 
     Returns
     -------
     torch.Tensor
-        Predicted trajectories, shape ``(T_test, N)``.
+        Predicted trajectories for the test segment, shape
+        ``(T_total - T_train, N)``.
     """
     N = A_free_mean.shape[0]
     A = parameterize_A(A_free_mean.to(torch.float64))
 
-    # Apply mask and build B.
     b_mask_stacked = b_mask_0.unsqueeze(0)  # (1, N, N)
     b_free_stacked = B_free_mean.unsqueeze(0)  # (1, N, N)
     B_stacked = parameterize_B(b_free_stacked, b_mask_stacked)  # (1, N, N)
 
-    # Merge driving + modulator inputs.
     merged = merge_piecewise_inputs(stimulus, stim_mod)
 
     system = CoupledDCMSystem(
@@ -339,11 +342,11 @@ def _predict_trajectories(
         solution = integrate_ode(
             system,
             y0,
-            t_eval.to(torch.float64),
+            t_eval_full.to(torch.float64),
             method="rk4",
             step_size=dt,
         )
-    return solution  # (T_test, N)
+    return solution[T_train:]  # (T_test, N)
 
 
 # ---------------------------------------------------------------------------
@@ -527,7 +530,6 @@ def run_latent_circuit_recovery(
                 # Time grids.
                 t_all = sim["times"]             # (T_total,)
                 t_eval_train = t_all[:T_train]   # (T_train,)
-                t_eval_test = t_all[T_train:]    # (T_test,)
 
                 # --- Fit (with optional prior monkey-patch) ---
                 model_args = (
@@ -660,8 +662,9 @@ def run_latent_circuit_recovery(
                     b_mask_0,
                     driving_stim,
                     stim_mod,
-                    t_eval_test,
+                    t_all,
                     _DT,
+                    T_train,
                 )
                 traj_r2 = compute_trajectory_r_squared(
                     predicted_test, trajs_test.to(torch.float64),
