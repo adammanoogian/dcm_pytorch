@@ -11,16 +11,16 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 
 **Milestone:** v0.6.0 Latent Circuit DCM (defined 2026-05-24)
 **Phase:** 20+21 in parallel (Phase 20: Latent Circuit Forward Model; Phase 21: CT-RNN Training)
-**Plan:** Phase 20: 04 of 5 complete | Phase 21: 03 of 5 complete
-**Status:** In progress
-**Last activity:** 2026-05-25 -- Completed 21-03-PLAN.md. fixed_point_analysis.py (find_fixed_points, compute_jacobian_at_fp, classify_stability) and latent_extraction.py (extract_trajectories, pca_reduce, output_r_squared_gate, variance_explained_diagnostic, zscore_trajectories). 26 tests pass.
+**Plan:** Phase 20: 04 of 5 complete (Plan 05 on cluster) | Phase 21: 04 of 4 complete (training on cluster)
+**Status:** Cluster jobs running -- awaiting results
+**Last activity:** 2026-05-25 -- Phase 21 Plan 04 code complete. Fixed calibration sweep (SLURM array job, 10s duration override). Submitted job 55639076 (48-combo calibration) and job 55639078 (20-seed RNN training). Previous calibration job 55629996 failed (performance: 8h/combo, error: 'dict' not callable, CANCELLED due to time limit).
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 pending | Phase 21 Plan 01 complete; Plans 02-05 pending
+- v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 on cluster (job 55639076) | Phase 21 Plans 01-04 complete; training on cluster (job 55639078)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=======--------] Ph20 Plans 01-04/5 done; Ph21 Plans 01-03/5 done
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=========------] Ph20 04/5 done + cluster; Ph21 04/4 done + cluster
 
 ## Decisions
 
@@ -82,7 +82,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-25 (Phase 21 Plan 03 execution)
-Stopped at: Completed 21-03-PLAN.md -- fixed_point_analysis.py (1e78d02) + latent_extraction.py + tests (4b5f537). Phase 21 Plan 03 complete.
-Next: Execute Phase 20 Plan 05 (prior recalibration sweep) OR Phase 21 Plan 04 (cluster training scripts). Both unblocked.
+Last session: 2026-05-25 (Phase 20-05 + Phase 21-04 cluster submission)
+Stopped at: Both cluster jobs submitted. Phase 20-05 calibration sweep = job 55639076 (48-task array, 10s duration, 500 SVI steps, 3 restarts). Phase 21-04 RNN training = job 55639078 (20-seed array, H=256, 3000 steps). Previous calibration job 55629996 failed (8h/combo, 'dict' not callable error).
+Next: Check cluster results. Phase 20-05: aggregate calibration results -> apply winning priors -> 10-seed acceptance run. Phase 21: verify 20/20 seeds trained with accuracy >= 0.85.
 Resume file: None

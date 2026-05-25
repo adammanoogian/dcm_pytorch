@@ -51,7 +51,7 @@ setup_torch_threads 4
 activate_env "$ENV_NAME"
 
 echo "Installing package..."
-pip install -e ".[benchmark,dev]" --quiet 2>&1 | tail -3
+pip install -e ".[benchmark,dev,latent]" --quiet 2>&1 | tail -3
 
 verify_torch
 print_job_header "Phase 21 RNN Training (seed=${SLURM_ARRAY_TASK_ID})"
