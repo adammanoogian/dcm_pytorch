@@ -50,10 +50,10 @@ ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
 setup_torch_threads 4
 activate_env "$ENV_NAME"
 
-# Skip pip install -- script uses sys.path.insert for imports, and all
-# deps (torch, neurogym, scikit-learn) are in the conda env. pip's
-# dependency resolver uses 10+ GB on HPC and causes OOM kills.
-echo "Skipping pip install (sys.path import mode)"
+# Install package in dev mode without dep resolution (avoids pip
+# resolver OOM -- all deps already in conda env).
+echo "Installing package (--no-deps)..."
+pip install -e . --no-deps --quiet 2>&1 | tail -3
 
 verify_torch
 print_job_header "Phase 21 RNN Training (seed=${SLURM_ARRAY_TASK_ID})"
