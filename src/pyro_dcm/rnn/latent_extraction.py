@@ -27,6 +27,7 @@ def extract_trajectories(
     n_trials_per_condition: int = 50,
     conditions: list[dict] | None = None,
     device: torch.device | None = None,
+    max_steps_per_trial: int = 1000,
 ) -> dict[str, np.ndarray]:
     """Extract hidden-state trajectories from a trained CT-RNN.
 
@@ -50,6 +51,10 @@ def extract_trajectories(
         environment sampling and stores them under the key ``"default"``.
     device : torch.device or None, optional
         Device for RNN computation. If ``None``, uses ``cpu``.
+    max_steps_per_trial : int, optional
+        Maximum number of env steps per trial. Prevents infinite loops
+        when the environment never returns ``terminated=True`` (e.g.,
+        neurogym 2.2 ContextDecisionMaking). Default 1000.
 
     Returns
     -------
@@ -90,7 +95,8 @@ def extract_trajectories(
 
             obs_seq: list[np.ndarray] = [obs]
             done = False
-            while not done:
+            step_count = 0
+            while not done and step_count < max_steps_per_trial:
                 action = env.action_space.sample()
                 step_result = env.step(action)
                 obs, _, terminated, truncated, *_ = (
@@ -102,6 +108,7 @@ def extract_trajectories(
                 obs_seq.append(
                     obs if isinstance(obs, np.ndarray) else np.array(obs)
                 )
+                step_count += 1
 
             # obs_seq: list of T observations, each shape (M_in,)
             u_np = np.stack(obs_seq, axis=0).astype(np.float32)  # (T, M_in)
