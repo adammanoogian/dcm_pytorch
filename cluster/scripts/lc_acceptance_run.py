@@ -21,10 +21,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from benchmarks.config import BenchmarkConfig
 from benchmarks.runners.latent_circuit_recovery import run_latent_circuit_recovery
 
-N_SVI_STEPS = 1000
-N_RESTARTS = 10
+N_SVI_STEPS = 500
+N_RESTARTS = 5
 INIT_SCALE = 0.1
 BASE_SEED = 42
+DURATION_OVERRIDE = 50.0
 
 
 def main() -> None:
@@ -42,7 +43,7 @@ def main() -> None:
     print(f"Acceptance run: seed={seed} (offset={seed_offset})")
     print(
         f"Config: steps={N_SVI_STEPS}, restarts={N_RESTARTS}, "
-        f"init_scale={INIT_SCALE}"
+        f"init_scale={INIT_SCALE}, duration={DURATION_OVERRIDE}s"
     )
 
     config = BenchmarkConfig(
@@ -65,6 +66,7 @@ def main() -> None:
             n_modulators=1,
             n_restarts=N_RESTARTS,
             init_scale=INIT_SCALE,
+            _duration_override=DURATION_OVERRIDE,
         )
         seed_result = result["per_seed_results"][0]
         entry = {

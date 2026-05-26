@@ -18,7 +18,7 @@
 #SBATCH --array=0-9
 #SBATCH --output=cluster/logs/lc_accept_%A_%a.out
 #SBATCH --error=cluster/logs/lc_accept_%A_%a.err
-#SBATCH --time=24:00:00
+#SBATCH --time=12:00:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=comp
