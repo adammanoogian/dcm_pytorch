@@ -541,6 +541,11 @@ refitting.
 **Branch:** `gsd/phase-23-bayesian-model-reduction`
 **Depends on:** Phase 20 (latent circuit DCM posteriors).
 **Requirements:** BMR-01, BMR-02, BMR-03
+**Plans:** 3 plans
+Plans:
+- [ ] 23-01-PLAN.md -- Core BMR function + model_selection subpackage + unit tests (BMR-01)
+- [ ] 23-02-PLAN.md -- Circuit-size selection: enumerate reduced architectures + score via BMR (BMR-02)
+- [ ] 23-03-PLAN.md -- BMR vs brute-force ELBO validation on synthetic data + package finalization (BMR-03)
 **Success Criteria** (what must be TRUE):
 
   1. `bayesian_model_reduction(posterior_mean, posterior_cov, prior_mean, prior_cov,
@@ -649,7 +654,7 @@ complete, making the v0.6.0 results paper-ready.
 | 20. Direct Observation Forward Model, Simulator & Synthetic Validation | 4/5 | Plans 01-04 complete; Plan 05 acceptance needs rework | -- |
 | 21. CT-RNN Training & Latent Extraction | 4/4 | Complete (20 seeds trained, trajectories extracted) | 2026-05-26 |
 | 22. DCM Interpretability for Neural Data Models | 0/TBD | Not started | -- |
-| 23. Bayesian Model Reduction | 0/TBD | Not started | -- |
+| 23. Bayesian Model Reduction | 0/3 | Planned | -- |
 | 24. Foundation Model Use Cases (TRIBE + M/EEG) | 0/TBD | Not started | -- |
 | 25. Hybrid VAE-DCM | 0/TBD | Not started | -- |
 | 26. SBI for Spectral DCM | 0/TBD | Not started | -- |
@@ -677,7 +682,7 @@ complete, making the v0.6.0 results paper-ready.
 | 20. Direct Observation Forward Model, Simulator & Synthetic Validation | v0.6.0 | 4/5 | Plans 01-04 complete; 05 needs rework | -- |
 | 21. CT-RNN Training & Latent Extraction | v0.6.0 | 4/4 | Complete | 2026-05-26 |
 | 22. DCM Interpretability for Neural Data Models | v0.6.0 | 0/TBD | Not started | -- |
-| 23. Bayesian Model Reduction | v0.6.0 | 0/TBD | Not started | -- |
+| 23. Bayesian Model Reduction | v0.6.0 | 0/3 | Planned | -- |
 | 24. Foundation Model Use Cases (TRIBE + M/EEG) | v0.6.0 | 0/TBD | Not started | -- |
 | 25. Hybrid VAE-DCM | v0.6.0 | 0/TBD | Not started | -- |
 | 26. SBI for Spectral DCM | v0.6.0 | 0/TBD | Not started | -- |
