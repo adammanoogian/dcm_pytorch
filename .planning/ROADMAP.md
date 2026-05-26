@@ -576,8 +576,14 @@ TRIBE v2) and M/EEG (LaBraM, MEG-GPT, or comparable).
 **Branch:** `gsd/phase-24-foundation-model-use-cases`
 **Depends on:** Phase 20 (validated DCM model) + Phase 22 (M/EEG pipeline).
 **Requirements:** TRIBE-01, TRIBE-02, TRIBE-03, FMEEG-01, FMEEG-02, FMEEG-03
-(TBD during planning)
-**Success Criteria** (what must be TRUE — provisional, finalized during planning):
+**Plans:** 4 plans (3 waves)
+Plans:
+- [ ] 24-01-PLAN.md -- Foundation extractor infrastructure: BaseExtractor ABC, parcellation utility, pyproject.toml [foundation] extras, unit tests
+- [ ] 24-02-PLAN.md -- TRIBE v2 fMRI pipeline: TRIBEExtractor, extraction + DCM fitting scripts, A100 cluster sbatch
+- [ ] 24-03-PLAN.md -- M/EEG foundation model pipeline: LaBraMExtractor + BrainOmniExtractor, extraction + DCM fitting scripts, GPU cluster sbatch
+- [ ] 24-04-PLAN.md -- Cross-modal comparison: A-matrix agreement metrics (Pearson r, sign kappa, CI overlap), comparison script + figures, unit tests
+
+**Success Criteria** (what must be TRUE):
 
   1. Latent representations extracted from Meta TRIBE v2 (or comparable open-source
      brain encoding model) for a stimulus set; DCM fit produces posterior A/B
@@ -684,7 +690,7 @@ Plans:
 | 21. CT-RNN Training & Latent Extraction | 4/4 | Complete (20 seeds trained, trajectories extracted) | 2026-05-26 |
 | 22. DCM Interpretability for Neural Data Models | 0/6 | Planned | -- |
 | 23. Bayesian Model Reduction | 0/3 | Planned | -- |
-| 24. Foundation Model Use Cases (TRIBE + M/EEG) | 0/TBD | Not started | -- |
+| 24. Foundation Model Use Cases (TRIBE + M/EEG) | 0/4 | Planned | -- |
 | 25. Hybrid VAE-DCM | 0/4 | Planned | -- |
 | 26. SBI for Spectral DCM | 0/2 | Planned | -- |
 | 27. Publication Artifacts | 0/3 | Planned | -- |
@@ -710,13 +716,13 @@ Plans:
 | 19. End-to-End Pipeline Demos | v0.5.0 | 2/2 | Complete (verified 10/10 must-haves) | 2026-05-24 |
 | 20. Direct Observation Forward Model, Simulator & Synthetic Validation | v0.6.0 | 4/5 | Plans 01-04 complete; 05 needs rework | -- |
 | 21. CT-RNN Training & Latent Extraction | v0.6.0 | 4/4 | Complete | 2026-05-26 |
-| 22. DCM Interpretability for Neural Data Models | v0.6.0 | 0/TBD | Not started | -- |
+| 22. DCM Interpretability for Neural Data Models | v0.6.0 | 0/6 | Planned | -- |
 | 23. Bayesian Model Reduction | v0.6.0 | 0/3 | Planned | -- |
-| 24. Foundation Model Use Cases (TRIBE + M/EEG) | v0.6.0 | 0/TBD | Not started | -- |
+| 24. Foundation Model Use Cases (TRIBE + M/EEG) | v0.6.0 | 0/4 | Planned | -- |
 | 25. Hybrid VAE-DCM | v0.6.0 | 0/4 | Planned | -- |
 | 26. SBI for Spectral DCM | v0.6.0 | 0/2 | Planned | -- |
 | 27. Publication Artifacts | v0.6.0 | 0/3 | Planned | -- |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-05-26 -- Phase 26 planned (2 plans, 2 waves): SBI for spectral DCM via sbi NPE with embedding network, SBC validation, SBI-vs-SVI comparison. Phase 25 planned (4 plans, 4 waves). Phase 27 planned (3 plans, 2 waves). v0.6.0 restructured: new core is DCM as interpretability tool for neural data models (Phase 22). Phase 21 complete. Phase 20-05 needs rework.*
+*Last updated: 2026-05-26 -- Phase 24 planned (4 plans, 3 waves): foundation model extractor infrastructure, TRIBE v2 fMRI pipeline, M/EEG foundation model pipeline (LaBraM + BrainOmni), cross-modal comparison. Phase 26 planned (2 plans, 2 waves). Phase 25 planned (4 plans, 4 waves). Phase 27 planned (3 plans, 2 waves). v0.6.0 restructured: new core is DCM as interpretability tool for neural data models (Phase 22). Phase 21 complete. Phase 20-05 needs rework.*
