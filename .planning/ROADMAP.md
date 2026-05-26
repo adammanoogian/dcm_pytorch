@@ -584,24 +584,33 @@ TRIBE v2) and M/EEG (LaBraM, MEG-GPT, or comparable).
 #### Phase 25: Hybrid VAE-DCM
 
 **Goal:** A sequential VAE where the decoder IS the DCM forward model (neural state
-ODE + observation equation), providing a physics-informed generative model for
-M/EEG data that jointly learns latent initial conditions and connectivity
-parameters.
+ODE + observation equation), providing a physics-informed generative model that
+jointly learns latent initial conditions and connectivity parameters via amortized
+inference. Synthetic validation first; real M/EEG application after Phase 22.
 
 **Branch:** `gsd/phase-25-hybrid-vae-dcm`
-**Depends on:** Phase 20 (DCM forward model) + Phase 22 (M/EEG data pipeline).
-**Requirements:** HVAE-01 through HVAE-04 (TBD during planning)
-**Success Criteria** (what must be TRUE — provisional, finalized during planning):
+**Depends on:** Phase 20 (DCM forward model: CoupledDCMSystem, simulate_latent_circuit,
+parameterize_A, latent_circuit_dcm_model pattern).
+**Requirements:** HVAE-01 through HVAE-04
+**Plans:** 4 plans (4 waves)
+Plans:
+- [ ] 25-01-PLAN.md -- LatentCircuitDCMPacker (A_free + C + x0 + noise_prec) + DCMEncoderNet (1D-CNN encoder with dual z_loc/z_scale heads) + unit tests (HVAE-01 infrastructure)
+- [ ] 25-02-PLAN.md -- hybrid_vae_dcm_model (DCM ODE decoder as Pyro model) + HybridVAEDCMGuide (encoder as Pyro guide) + model/guide integration tests (HVAE-01, HVAE-02)
+- [ ] 25-03-PLAN.md -- Synthetic training data generator + training loop with KL annealing + training script + smoke recovery test (HVAE-02, HVAE-03)
+- [ ] 25-04-PLAN.md -- Full-scale cluster training (1000 examples, 200 epochs) + amortized recovery validation + inference timing verification (HVAE-02, HVAE-04)
 
-  1. VAE encoder maps M/EEG observations to approximate posterior over DCM
-     parameters (A, B_j, C) and initial conditions; DCM forward model serves
-     as the decoder generating predicted timeseries.
-  2. Training via ELBO maximization recovers known connectivity on synthetic
-     data with quality comparable to standalone SVI.
-  3. On real M/EEG data, the hybrid model produces both reconstruction quality
-     (VAE) and interpretable connectivity (DCM) from a single trained model.
+**Success Criteria** (what must be TRUE):
+
+  1. VAE encoder maps observed trajectories to approximate posterior over DCM
+     parameters (A, C) and initial conditions (x0); DCM forward model serves
+     as the decoder generating predicted timeseries via ODE integration (HVAE-01).
+  2. Training via ELBO maximization with KL annealing recovers known connectivity
+     on synthetic data: A_free RMSE < 0.3 and sign recovery > 0.6 on held-out
+     test set (HVAE-02).
+  3. KL divergence is non-trivial after training (> 0.1), confirming no posterior
+     collapse (HVAE-03).
   4. Amortized inference: once trained, parameter estimation for a new subject
-     is a single encoder forward pass (no per-subject SVI).
+     is a single encoder forward pass (< 1 second, no per-subject SVI) (HVAE-04).
 
 #### Phase 26: SBI for Spectral DCM
 
@@ -662,7 +671,7 @@ Plans:
 | 22. DCM Interpretability for Neural Data Models | 0/TBD | Not started | -- |
 | 23. Bayesian Model Reduction | 0/3 | Planned | -- |
 | 24. Foundation Model Use Cases (TRIBE + M/EEG) | 0/TBD | Not started | -- |
-| 25. Hybrid VAE-DCM | 0/TBD | Not started | -- |
+| 25. Hybrid VAE-DCM | 0/4 | Planned | -- |
 | 26. SBI for Spectral DCM | 0/TBD | Not started | -- |
 | 27. Publication Artifacts | 0/3 | Planned | -- |
 
@@ -690,10 +699,10 @@ Plans:
 | 22. DCM Interpretability for Neural Data Models | v0.6.0 | 0/TBD | Not started | -- |
 | 23. Bayesian Model Reduction | v0.6.0 | 0/3 | Planned | -- |
 | 24. Foundation Model Use Cases (TRIBE + M/EEG) | v0.6.0 | 0/TBD | Not started | -- |
-| 25. Hybrid VAE-DCM | v0.6.0 | 0/TBD | Not started | -- |
+| 25. Hybrid VAE-DCM | v0.6.0 | 0/4 | Planned | -- |
 | 26. SBI for Spectral DCM | v0.6.0 | 0/TBD | Not started | -- |
 | 27. Publication Artifacts | v0.6.0 | 0/3 | Planned | -- |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-05-26 -- v0.6.0 restructured: dropped Langdon & Engel RNN-circuit-extraction focus. New core: DCM as interpretability tool for neural data models (Phase 22). Added Phases 25 (hybrid VAE-DCM), 26 (SBI for spectral DCM). Phase 24 expanded to include M/EEG foundation models alongside TRIBE. Phase 21 complete (20 RNN seeds trained). Phase 20-05 acceptance needs rework (24h timeout). Phase 27 planned: 3 plans (2 waves).*
+*Last updated: 2026-05-26 -- Phase 25 planned (4 plans, 4 waves): hybrid VAE-DCM with DCM ODE decoder, amortized encoder, KL annealing, synthetic recovery validation. Phase 27 planned (3 plans, 2 waves). v0.6.0 restructured: new core is DCM as interpretability tool for neural data models (Phase 22). Phase 21 complete. Phase 20-05 needs rework.*
