@@ -515,8 +515,17 @@ as an interpretability tool for neural data models.
 
 **Branch:** `gsd/phase-22-dcm-neural-interpretability`
 **Depends on:** Phase 20 (validated DCM model) + Phase 18 (MNE IO).
-**Requirements:** INTERP-01 through INTERP-06 (TBD during planning)
-**Success Criteria** (what must be TRUE — provisional, finalized during planning):
+**Requirements:** INTERP-01 through INTERP-06
+**Plans:** 6 plans (4 waves)
+Plans:
+- [ ] 22-01-PLAN.md — MEG spectral DCM adaptations: frequency grid, parameterized eigenvalue clamp, MEG-scale prior variance (INTERP-01)
+- [ ] 22-02-PLAN.md — LSTM autoencoder module (MEGAutoencoder nn.Module) + AutoencoderTrainer + unit tests (INTERP-02)
+- [ ] 22-03-PLAN.md — Cam-CAN MEG data loader + source reconstruction pipeline + DUA registration checkpoint (INTERP-03)
+- [ ] 22-04-PLAN.md — Latent extraction + CSD computation + synthetic end-to-end integration test (INTERP-04)
+- [ ] 22-05-PLAN.md — Pipeline scripts (preprocess, train, extract, fit, compare) + cluster sbatch files (INTERP-05)
+- [ ] 22-06-PLAN.md — Full pipeline execution on real Cam-CAN data + scientific verification checkpoint (INTERP-06)
+
+**Success Criteria** (what must be TRUE):
 
   1. A temporal model (VAE, transformer, or similar) trained on real M/EEG data
      (e.g., Cam-CAN MEG, sensory/motor task) achieves reconstruction quality
@@ -621,8 +630,13 @@ simulated cross-spectral densities.
 
 **Branch:** `gsd/phase-26-sbi-spectral-dcm`
 **Depends on:** Phase 20 (spectral DCM forward model as simulator).
-**Requirements:** SBI-01 through SBI-04 (TBD during planning)
-**Success Criteria** (what must be TRUE — provisional, finalized during planning):
+**Requirements:** SBI-01 through SBI-04
+**Plans:** 2 plans (2 waves)
+Plans:
+- [ ] 26-01-PLAN.md — SBI core infrastructure: simulator wrapper, prior, embedding network, diagnostics utilities, unit/integration tests, pyproject.toml sbi dependency (SBI-01, SBI-02, SBI-03)
+- [ ] 26-02-PLAN.md — NPE training pipeline + SBC calibration validation + SBI-vs-SVI comparison script + cluster sbatch (SBI-01, SBI-02, SBI-03, SBI-04)
+
+**Success Criteria** (what must be TRUE):
 
   1. Neural density estimator (SNPE or SNLE) trained on simulated CSD from the
      spectral DCM forward model recovers posterior parameter distributions that
@@ -668,11 +682,11 @@ Plans:
 |-------|----------------|--------|-----------|
 | 20. Direct Observation Forward Model, Simulator & Synthetic Validation | 4/5 | Plans 01-04 complete; Plan 05 acceptance needs rework | -- |
 | 21. CT-RNN Training & Latent Extraction | 4/4 | Complete (20 seeds trained, trajectories extracted) | 2026-05-26 |
-| 22. DCM Interpretability for Neural Data Models | 0/TBD | Not started | -- |
+| 22. DCM Interpretability for Neural Data Models | 0/6 | Planned | -- |
 | 23. Bayesian Model Reduction | 0/3 | Planned | -- |
 | 24. Foundation Model Use Cases (TRIBE + M/EEG) | 0/TBD | Not started | -- |
 | 25. Hybrid VAE-DCM | 0/4 | Planned | -- |
-| 26. SBI for Spectral DCM | 0/TBD | Not started | -- |
+| 26. SBI for Spectral DCM | 0/2 | Planned | -- |
 | 27. Publication Artifacts | 0/3 | Planned | -- |
 
 ---
@@ -700,9 +714,9 @@ Plans:
 | 23. Bayesian Model Reduction | v0.6.0 | 0/3 | Planned | -- |
 | 24. Foundation Model Use Cases (TRIBE + M/EEG) | v0.6.0 | 0/TBD | Not started | -- |
 | 25. Hybrid VAE-DCM | v0.6.0 | 0/4 | Planned | -- |
-| 26. SBI for Spectral DCM | v0.6.0 | 0/TBD | Not started | -- |
+| 26. SBI for Spectral DCM | v0.6.0 | 0/2 | Planned | -- |
 | 27. Publication Artifacts | v0.6.0 | 0/3 | Planned | -- |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-05-26 -- Phase 25 planned (4 plans, 4 waves): hybrid VAE-DCM with DCM ODE decoder, amortized encoder, KL annealing, synthetic recovery validation. Phase 27 planned (3 plans, 2 waves). v0.6.0 restructured: new core is DCM as interpretability tool for neural data models (Phase 22). Phase 21 complete. Phase 20-05 needs rework.*
+*Last updated: 2026-05-26 -- Phase 26 planned (2 plans, 2 waves): SBI for spectral DCM via sbi NPE with embedding network, SBC validation, SBI-vs-SVI comparison. Phase 25 planned (4 plans, 4 waves). Phase 27 planned (3 plans, 2 waves). v0.6.0 restructured: new core is DCM as interpretability tool for neural data models (Phase 22). Phase 21 complete. Phase 20-05 needs rework.*
