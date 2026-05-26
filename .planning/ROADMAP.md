@@ -634,7 +634,13 @@ complete, making the v0.6.0 results paper-ready.
 **Depends on:** Phase 22 (main results) + Phase 23 (BMR results) + Phase 24
 (foundation model results).
 **Requirements:** PUB-01, PUB-02, PUB-03
-**Success Criteria** (what must be TRUE — provisional, finalized during planning):
+**Plans:** 3 plans (2 waves)
+Plans:
+- [ ] 27-01-PLAN.md -- REFERENCES.md update + methods section extension (Markdown + LaTeX) for all v0.6.0 methodology (PUB-02, PUB-03)
+- [ ] 27-02-PLAN.md -- Publication figure generation script + pipeline schematic figure (PUB-01)
+- [ ] 27-03-PLAN.md -- Equations quick-reference update + cross-consistency check + user verification checkpoint (PUB-01, PUB-02, PUB-03)
+
+**Success Criteria** (what must be TRUE):
 
   1. Publication-quality figures covering: pipeline schematic, parameter recovery
      on synthetic, DCM-derived connectivity from M/EEG model latents, BMR circuit
@@ -658,7 +664,7 @@ complete, making the v0.6.0 results paper-ready.
 | 24. Foundation Model Use Cases (TRIBE + M/EEG) | 0/TBD | Not started | -- |
 | 25. Hybrid VAE-DCM | 0/TBD | Not started | -- |
 | 26. SBI for Spectral DCM | 0/TBD | Not started | -- |
-| 27. Publication Artifacts | 0/TBD | Not started | -- |
+| 27. Publication Artifacts | 0/3 | Planned | -- |
 
 ---
 
@@ -686,8 +692,8 @@ complete, making the v0.6.0 results paper-ready.
 | 24. Foundation Model Use Cases (TRIBE + M/EEG) | v0.6.0 | 0/TBD | Not started | -- |
 | 25. Hybrid VAE-DCM | v0.6.0 | 0/TBD | Not started | -- |
 | 26. SBI for Spectral DCM | v0.6.0 | 0/TBD | Not started | -- |
-| 27. Publication Artifacts | v0.6.0 | 0/TBD | Not started | -- |
+| 27. Publication Artifacts | v0.6.0 | 0/3 | Planned | -- |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-05-26 -- v0.6.0 restructured: dropped Langdon & Engel RNN-circuit-extraction focus. New core: DCM as interpretability tool for neural data models (Phase 22). Added Phases 25 (hybrid VAE-DCM), 26 (SBI for spectral DCM). Phase 24 expanded to include M/EEG foundation models alongside TRIBE. Phase 21 complete (20 RNN seeds trained). Phase 20-05 acceptance needs rework (24h timeout).*
+*Last updated: 2026-05-26 -- v0.6.0 restructured: dropped Langdon & Engel RNN-circuit-extraction focus. New core: DCM as interpretability tool for neural data models (Phase 22). Added Phases 25 (hybrid VAE-DCM), 26 (SBI for spectral DCM). Phase 24 expanded to include M/EEG foundation models alongside TRIBE. Phase 21 complete (20 RNN seeds trained). Phase 20-05 acceptance needs rework (24h timeout). Phase 27 planned: 3 plans (2 waves).*
