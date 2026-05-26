@@ -5,22 +5,22 @@
 See: .planning/PROJECT.md (updated 2026-05-24)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.6.0 Latent Circuit DCM -- distill trained RNN latent dynamics into bilinear DCM circuits with posterior uncertainty
+**Current focus:** v0.6.0 DCM Interpretability for Neural Data Models -- DCM as an interpretability tool for deep learning models trained on real M/EEG data
 
 ## Current Position
 
-**Milestone:** v0.6.0 Latent Circuit DCM (defined 2026-05-24)
-**Phase:** 20+21 in parallel (Phase 20: Latent Circuit Forward Model; Phase 21: CT-RNN Training)
-**Plan:** Phase 20: 05 in progress (acceptance on cluster) | Phase 21: 04 of 4 complete (training on cluster)
-**Status:** Cluster jobs running -- acceptance run + RNN training
-**Last activity:** 2026-05-25 -- Fixed trajectory R² bug (ODE y0 at test start instead of t=0). Calibration sweep showed B metrics uninformative at 300 steps (shrinkage_B=0.987 everywhere); A-RMSE varies with init_scale. Keeping default priors (1/16, 1.0). Submitted acceptance run job 55643276 (10 seeds, 1000 steps, 10 restarts, full 100s). RNN training job 55643099 (16GB memory, retry after OOM at 8GB).
+**Milestone:** v0.6.0 (restructured 2026-05-26; was "Latent Circuit DCM")
+**Phase:** Phase 20 near-complete; Phase 21 complete; Phase 22 next (core contribution)
+**Plan:** Phase 20: 05 needs rework (acceptance timed out at 24h) | Phase 21: 04/04 complete
+**Status:** Phase 21 done. Roadmap restructured -- new Phases 22 (DCM on neural data model latents), 25 (hybrid VAE-DCM), 26 (SBI for spectral DCM). Phase 24 expanded (TRIBE + M/EEG foundation models).
+**Last activity:** 2026-05-26 -- Phase 21 complete: 20 RNN seeds trained (94.9% accuracy, H=256, CDDM), trajectories extracted. Roadmap restructured: dropped Langdon & Engel RNN-circuit-extraction as core focus; pivoted to DCM interpretability for models trained on real neuroimaging data. Phase 20-05 acceptance run timed out at 24h (100s ODE too slow on CPU); needs rework with shorter duration or different approach.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 acceptance on cluster (job 55643276) | Phase 21 Plans 01-04 complete; training on cluster (job 55643099)
+- v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 needs rework | Phase 21 complete | Phase 22 not started (core contribution)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=========------] Ph20 05 acceptance running; Ph21 04/4 done + training
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=======-----------] Ph20 4/5; Ph21 done; Ph22-27 not started
 
 ## Decisions
 
@@ -82,7 +82,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-25 (Phase 20-05 acceptance submission + RNN retry)
-Stopped at: Acceptance run (job 55643276, 10 seeds × 1000 steps × 10 restarts × 100s ODE, ~12-24h per seed). RNN training v3 (job 55643099, 16GB memory). Fixed trajectory R² bug (a0c13a7). Calibration sweep showed init_scale=0.5 best for A; B metrics underpowered at 300 steps.
-Next: Check RNN results (~30 min). Check acceptance results (~12-24h). After acceptance: apply thresholds, run ELBO model selection, finalize Phase 20.
+Last session: 2026-05-26 (Phase 21 complete, v0.6.0 restructured)
+Stopped at: Phase 21 complete (job 55649957, all 20 seeds trained and trajectories extracted). Acceptance run (job 55643276) timed out at 24h -- 100s ODE × 1000 steps × 10 restarts is ~44h/seed on CPU. Roadmap restructured: new core is Phase 22 (DCM interpretability for neural data models). Added Phases 25 (hybrid VAE-DCM), 26 (SBI for spectral DCM). Phase 24 expanded to TRIBE + M/EEG foundation models.
+Next: Rework Phase 20-05 acceptance (shorter duration or different config). Then plan Phase 22 (train temporal model on Cam-CAN MEG, fit spDCM to latent dynamics).
 Resume file: None
