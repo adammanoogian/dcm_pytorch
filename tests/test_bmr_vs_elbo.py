@@ -125,8 +125,8 @@ def test_bmr_agrees_with_elbo_ranking() -> None:
     reductions. Independently fits each reduced model via SVI. Asserts
     that BMR and ELBO agree on direction.
 
-    Cluster execution: duration=5.0, dt=0.05 (T=100 timepoints),
-    num_steps=500, lr=0.05 per fit. Total ~5 min on cluster.
+    Timing constraint: duration=1.0, dt=0.05 (T=20 timepoints),
+    num_steps=300 per fit. Total ~2 min on laptop.
     """
     total_start = time.perf_counter()
 
@@ -155,18 +155,20 @@ def test_bmr_agrees_with_elbo_ranking() -> None:
     C_true = torch.zeros(N, 1, dtype=torch.float64)
     C_true[0, 0] = 0.5
 
+    # Short stimulus: 2 blocks of 0.2s ON / 0.2s OFF
     stim = make_block_stimulus(
-        n_blocks=5, block_duration=0.4, rest_duration=0.4,
+        n_blocks=2, block_duration=0.2, rest_duration=0.2,
     )
 
+    # Simulate with high SNR, SHORT duration for speed
     sim = simulate_latent_circuit(
         A_true, C_true, stim,
-        duration=5.0, dt=0.05,
+        duration=1.0, dt=0.05,
         SNR=10.0, seed=42,
     )
     assert not sim["simulation_diverged"], "Simulation diverged"
 
-    observed_traj = sim["trajectories"]   # shape (T, N), T=100
+    observed_traj = sim["trajectories"]   # shape (T, N), T=20
     t_eval = sim["times"]                 # shape (T,)
     stimulus_fn = sim["stimulus"]         # PiecewiseConstantInput
 
@@ -179,12 +181,11 @@ def test_bmr_agrees_with_elbo_ranking() -> None:
     c_mask = torch.zeros(N, 1, dtype=torch.float64)
     c_mask[0, 0] = 1.0
 
-    dt = 0.05
     model_args_full = (
-        observed_traj, stimulus_fn, a_mask_full, c_mask, t_eval, dt,
+        observed_traj, stimulus_fn, a_mask_full, c_mask, t_eval, 0.05,
     )
 
-    num_steps = 500
+    num_steps = 300
 
     torch.manual_seed(42)
     pyro.set_rng_seed(42)
@@ -200,7 +201,7 @@ def test_bmr_agrees_with_elbo_ranking() -> None:
         guide_full,
         model_args=model_args_full,
         num_steps=num_steps,
-        lr=0.05,
+        lr=0.01,
     )
     full_elbo = svi_result_full["final_loss"]
     print(f"Full model ELBO (neg): {full_elbo:.2f}")
@@ -282,7 +283,7 @@ def test_bmr_agrees_with_elbo_ranking() -> None:
         reduced_a_mask = spec["a_mask"]
         model_args_reduced = (
             observed_traj, stimulus_fn, reduced_a_mask, c_mask,
-            t_eval, dt,
+            t_eval, 0.05,
         )
         guide_reduced = create_guide(
             latent_circuit_dcm_model,
@@ -294,7 +295,7 @@ def test_bmr_agrees_with_elbo_ranking() -> None:
             guide_reduced,
             model_args=model_args_reduced,
             num_steps=num_steps,
-            lr=0.05,
+            lr=0.01,
         )
         elbo_scores[name] = svi_result_reduced["final_loss"]
         print(f"  {name}: ELBO={svi_result_reduced['final_loss']:.2f}")

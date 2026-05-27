@@ -13,14 +13,14 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 **Phase:** Phase 25 Plan 01 COMPLETE (hybrid VAE-DCM primitives)
 **Plan:** Phase 25-01: LatentCircuitDCMPacker and DCMEncoderNet for hybrid VAE-DCM
 **Status:** Phase 25-01 COMPLETE. LatentCircuitDCMPacker (sparse pack/unpack with standardization) and DCMEncoderNet (1D-CNN encoder with dual heads) added to pyro_dcm.guides. 12/12 tests pass.
-**Last activity:** 2026-05-27 -- Phase 25-01 complete (commit 27da511). Packer + encoder primitives for hybrid VAE-DCM validated.
+**Last activity:** 2026-05-27 -- Phase 25-01 complete (commit 54a2e43). Packer + encoder primitives for hybrid VAE-DCM validated.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection) | Phase 25-01 COMPLETE (VAE-DCM primitives)
+- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection) | Phase 24-01 COMPLETE (foundation extractor) | Phase 25-01 COMPLETE (VAE-DCM primitives)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [============------] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23-01/02 DONE; Ph25-01 DONE; Ph23-03 + Ph24-27 planned
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [============------] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23-01/02 DONE; Ph24-01 DONE; Ph25-01 DONE; remaining planned
 
 ## Decisions
 
@@ -89,6 +89,6 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-05-27 (Phase 25-01 complete)
-Stopped at: Phase 25-01 hybrid VAE-DCM primitives complete. 12/12 tests pass, commit 27da511.
+Stopped at: Phase 25-01 hybrid VAE-DCM primitives complete. 12/12 tests pass, commit 54a2e43.
 Next: Phase 25-02+ (hybrid VAE-DCM model/training). Phase 20-05 acceptance still needs rework.
 Resume file: None
