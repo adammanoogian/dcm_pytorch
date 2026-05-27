@@ -24,6 +24,13 @@ Both model and guide share a single ``_latent`` sample site for Pyro
 ELBO compatibility. This follows the wrapper model pattern from
 ``amortized_wrappers.py`` adapted for the latent-circuit domain.
 
+**Training infrastructure:**
+
+- ``generate_synthetic_vae_dataset``: Creates diverse DCM parameter
+  sets and simulates trajectories for training/validation.
+- ``train_hybrid_vae_dcm``: SVI training loop with KL annealing
+  (beta warmup) for stable ODE decoder training.
+
 References
 ----------
 [REF-001] Friston, Harrison & Penny (2003), Eq. 1 -- Neural state
@@ -33,20 +40,32 @@ References
 
 from __future__ import annotations
 
+import logging
+
 import pyro
 import pyro.distributions as dist
+import pyro.poutine as poutine
 import torch
 import torch.nn as nn
+from pyro.infer import SVI, Trace_ELBO
+from pyro.optim import ClippedAdam
 
 from pyro_dcm.forward_models.coupled_system import CoupledDCMSystem
 from pyro_dcm.forward_models.latent_observation import direct_observation
 from pyro_dcm.forward_models.neural_state import parameterize_A
 from pyro_dcm.guides.dcm_encoder_net import DCMEncoderNet
 from pyro_dcm.guides.parameter_packing import LatentCircuitDCMPacker
+from pyro_dcm.simulators.latent_circuit_simulator import (
+    make_stable_latent_circuit_A,
+    simulate_latent_circuit,
+)
+from pyro_dcm.simulators.task_simulator import make_block_stimulus
 from pyro_dcm.utils.ode_integrator import (
     PiecewiseConstantInput,
     integrate_ode,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def hybrid_vae_dcm_model(
@@ -312,3 +331,327 @@ class HybridVAEDCMGuide(nn.Module):
                 key: torch.stack(vals, dim=0)
                 for key, vals in results.items()
             }
+
+
+def generate_synthetic_vae_dataset(
+    n_samples: int,
+    n_regions: int = 4,
+    n_inputs: int = 1,
+    duration: float = 5.0,
+    dt: float = 0.01,
+    seed: int = 42,
+) -> list[dict[str, torch.Tensor]]:
+    """Generate synthetic training data for hybrid VAE-DCM.
+
+    Creates diverse DCM parameter sets and simulates latent-state
+    trajectories using ``simulate_latent_circuit``. Each sample has
+    a unique stable A matrix, random C, random initial conditions,
+    and random observation noise precision. Trajectories are simulated
+    with a simple block stimulus (on at t=1-2s).
+
+    Parameters
+    ----------
+    n_samples : int
+        Number of training examples to generate.
+    n_regions : int, optional
+        Number of latent dimensions (N). Default 4.
+    n_inputs : int, optional
+        Number of driving inputs (M). Default 1.
+    duration : float, optional
+        Simulation duration in seconds. Default 5.0.
+    dt : float, optional
+        ODE integration step size in seconds. Default 0.01.
+    seed : int, optional
+        Base random seed for reproducibility. Default 42.
+
+    Returns
+    -------
+    list of dict
+        Each dict contains:
+
+        - ``"observed"``: Noisy trajectory, shape ``(T, N)``,
+          dtype ``float64``.
+        - ``"A"``: True connectivity matrix, shape ``(N, N)``.
+        - ``"C"``: True driving input weights, shape ``(N, M)``.
+        - ``"x0"``: True initial conditions, shape ``(N,)``.
+        - ``"noise_prec"``: True noise precision, scalar.
+        - ``"stimulus"``: ``PiecewiseConstantInput`` instance.
+        - ``"t_eval"``: Time grid, shape ``(T,)``.
+        - ``"a_mask"``: Connectivity mask, shape ``(N, N)``,
+          all ones.
+        - ``"c_mask"``: Input mask, shape ``(N, M)``, all ones.
+
+    Notes
+    -----
+    The block stimulus is created via ``make_block_stimulus`` with
+    parameters chosen so that the on-period falls within [1s, 2s]
+    for a duration >= 3s. For shorter durations, a single block
+    of 0.5s duration at t=0 is used.
+
+    All tensors use ``torch.float64`` for numerical stability in
+    ODE integration.
+
+    References
+    ----------
+    25-RESEARCH.md: Synthetic validation strategy for hybrid VAE-DCM.
+
+    Examples
+    --------
+    >>> dataset = generate_synthetic_vae_dataset(10, n_regions=3)
+    >>> len(dataset)
+    10
+    >>> dataset[0]["observed"].shape
+    torch.Size([500, 3])
+    """
+    dtype = torch.float64
+    dataset: list[dict[str, torch.Tensor]] = []
+
+    # Create a block stimulus: on at t=1-2s if duration allows,
+    # otherwise a short block at t=0.
+    if duration >= 3.0:
+        stim_dict = make_block_stimulus(
+            n_blocks=1,
+            block_duration=1.0,
+            rest_duration=duration - 1.0,
+            n_inputs=n_inputs,
+            dtype=dtype,
+        )
+        # Shift onset to t=1s by prepending a rest period.
+        times_shifted = torch.cat([
+            torch.tensor([0.0], dtype=dtype),
+            stim_dict["times"] + 1.0,
+        ])
+        values_shifted = torch.cat([
+            torch.zeros(1, n_inputs, dtype=dtype),
+            stim_dict["values"],
+        ])
+        stim = PiecewiseConstantInput(times_shifted, values_shifted)
+    else:
+        stim_dict = make_block_stimulus(
+            n_blocks=1,
+            block_duration=duration * 0.3,
+            rest_duration=duration * 0.7,
+            n_inputs=n_inputs,
+            dtype=dtype,
+        )
+        stim = PiecewiseConstantInput(
+            stim_dict["times"], stim_dict["values"],
+        )
+
+    # Masks: fully connected
+    a_mask = torch.ones(n_regions, n_regions, dtype=dtype)
+    c_mask = torch.ones(n_regions, n_inputs, dtype=dtype)
+
+    for i in range(n_samples):
+        torch.manual_seed(seed + i)
+
+        # Random stable A matrix
+        A = make_stable_latent_circuit_A(n_regions, seed=seed + i)
+
+        # Random C: sample from N(0, 0.5)
+        C = 0.5 * torch.randn(n_regions, n_inputs, dtype=dtype)
+
+        # Random initial conditions: small perturbations
+        x0 = 0.1 * torch.randn(n_regions, dtype=dtype)
+
+        # Random noise precision: Uniform(5, 50)
+        noise_prec = 5.0 + 45.0 * torch.rand(1, dtype=dtype).item()
+        noise_prec_t = torch.tensor(noise_prec, dtype=dtype)
+
+        # Simulate trajectory
+        sim_result = simulate_latent_circuit(
+            A, C, stim, duration=duration, dt=dt,
+            SNR=-1.0,  # No noise from simulator; we add our own
+            seed=seed + i + n_samples,
+        )
+
+        clean_traj = sim_result["trajectories"]  # (T, N) noise-free
+        t_eval = sim_result["times"]
+
+        # Skip diverged simulations
+        if sim_result["simulation_diverged"]:
+            logger.warning(
+                "Sample %d diverged during simulation, "
+                "regenerating with stronger self-inhibition.",
+                i,
+            )
+            # Retry with stronger self-inhibition
+            A = make_stable_latent_circuit_A(
+                n_regions, seed=seed + i,
+                self_inhibition=2.0,
+            )
+            sim_result = simulate_latent_circuit(
+                A, C, stim, duration=duration, dt=dt,
+                SNR=-1.0, seed=seed + i + n_samples,
+            )
+            clean_traj = sim_result["trajectories"]
+            t_eval = sim_result["times"]
+            if sim_result["simulation_diverged"]:
+                continue  # Skip this sample entirely
+
+        # Add Gaussian noise: std = 1 / sqrt(noise_prec)
+        noise_std = 1.0 / noise_prec**0.5
+        noise = noise_std * torch.randn_like(clean_traj)
+        observed = clean_traj + noise
+
+        dataset.append({
+            "observed": observed,
+            "A": A,
+            "C": C,
+            "x0": x0,
+            "noise_prec": noise_prec_t,
+            "stimulus": stim,
+            "t_eval": t_eval,
+            "a_mask": a_mask,
+            "c_mask": c_mask,
+        })
+
+    return dataset
+
+
+def train_hybrid_vae_dcm(
+    model_fn: object,
+    guide: HybridVAEDCMGuide,
+    train_data: list[dict[str, torch.Tensor]],
+    n_epochs: int = 100,
+    warmup_epochs: int = 20,
+    lr: float = 1e-3,
+    clip_norm: float = 10.0,
+    log_every: int = 10,
+) -> dict[str, list[float]]:
+    """Train hybrid VAE-DCM with KL annealing via SVI.
+
+    Implements the standard Pyro KL annealing pattern: the entire
+    model is scaled by ``beta = min(1.0, epoch / warmup_epochs)``
+    during the warmup period. This prevents posterior collapse and
+    ODE decoder divergence during early training when the encoder
+    is untrained.
+
+    Parameters
+    ----------
+    model_fn : callable
+        Pyro generative model (typically ``hybrid_vae_dcm_model``).
+    guide : HybridVAEDCMGuide
+        Pyro guide (encoder/recognition network).
+    train_data : list of dict
+        Training dataset from ``generate_synthetic_vae_dataset``.
+        Each dict must have keys: ``"observed"``, ``"stimulus"``,
+        ``"a_mask"``, ``"c_mask"``, ``"t_eval"``.
+    n_epochs : int, optional
+        Number of training epochs. Default 100.
+    warmup_epochs : int, optional
+        Number of KL warmup epochs (beta: 0 -> 1). Default 20.
+    lr : float, optional
+        Learning rate for ClippedAdam. Default 1e-3.
+    clip_norm : float, optional
+        Gradient clip norm for ClippedAdam. Default 10.0.
+    log_every : int, optional
+        Print progress every ``log_every`` epochs. Default 10.
+
+    Returns
+    -------
+    dict
+        Training results with keys:
+
+        - ``"losses"``: Per-epoch average ELBO losses,
+          length ``n_epochs``.
+        - ``"betas"``: Per-epoch KL annealing schedule,
+          length ``n_epochs``.
+
+    Notes
+    -----
+    **KL annealing:** The entire model is scaled by beta, following
+    the standard Pyro VAE tutorial pattern. During warmup (beta < 1),
+    the reduced likelihood weight makes training more conservative,
+    which stabilizes ODE decoder training. This is equivalent to the
+    beta-VAE objective with time-varying beta.
+
+    **NaN handling:** Individual SVI steps may produce NaN losses due
+    to ODE divergence (the model's NaN guard prevents gradient
+    corruption but the loss is still NaN). NaN losses are excluded
+    from epoch averages.
+
+    References
+    ----------
+    25-RESEARCH.md: KL annealing strategy for ODE-based decoders.
+
+    Examples
+    --------
+    >>> dataset = generate_synthetic_vae_dataset(50, n_regions=3)
+    >>> packer = LatentCircuitDCMPacker(3, 1, ...)  # with fit
+    >>> enc = DCMEncoderNet(3, packer.total_dim).double()
+    >>> guide = HybridVAEDCMGuide(enc, packer)
+    >>> result = train_hybrid_vae_dcm(
+    ...     hybrid_vae_dcm_model, guide, dataset,
+    ...     n_epochs=50, warmup_epochs=10,
+    ... )
+    >>> len(result["losses"])
+    50
+    """
+    optimizer = ClippedAdam({"lr": lr, "clip_norm": clip_norm})
+
+    # Extract dt from first training example's t_eval
+    first_t_eval = train_data[0]["t_eval"]
+    dt = float(first_t_eval[1] - first_t_eval[0])
+
+    epoch_losses: list[float] = []
+    beta_schedule: list[float] = []
+
+    for epoch in range(n_epochs):
+        # KL annealing: beta ramps from ~0 to 1 over warmup_epochs.
+        # Clamp beta >= 1e-6 to avoid poutine.scale(scale=0) error.
+        beta = min(1.0, max(1e-6, epoch / max(1, warmup_epochs)))
+        beta_schedule.append(beta)
+
+        # Create scaled model for this epoch's beta
+        scaled_model = (
+            poutine.scale(model_fn, scale=beta)
+            if beta < 1.0
+            else model_fn
+        )
+
+        # Create fresh SVI with current scaled model
+        svi = SVI(scaled_model, guide, optimizer, loss=Trace_ELBO())
+
+        # Shuffle training data
+        perm = torch.randperm(len(train_data))
+        step_losses: list[float] = []
+
+        for idx in perm:
+            ex = train_data[int(idx.item())]
+            loss = svi.step(
+                observed_trajectories=ex["observed"],
+                stimulus=ex["stimulus"],
+                a_mask=ex["a_mask"],
+                c_mask=ex["c_mask"],
+                t_eval=ex["t_eval"],
+                dt=dt,
+                packer=guide.packer,
+            )
+
+            # Track finite losses only
+            if torch.isfinite(torch.tensor(loss)):
+                step_losses.append(loss)
+
+        # Epoch average loss (NaN if all steps diverged)
+        if step_losses:
+            avg_loss = sum(step_losses) / len(step_losses)
+        else:
+            avg_loss = float("nan")
+        epoch_losses.append(avg_loss)
+
+        if (epoch + 1) % log_every == 0 or epoch == 0:
+            n_finite = len(step_losses)
+            n_total = len(train_data)
+            logger.info(
+                "Epoch %d/%d | beta=%.3f | loss=%.2f "
+                "| finite=%d/%d",
+                epoch + 1,
+                n_epochs,
+                beta,
+                avg_loss,
+                n_finite,
+                n_total,
+            )
+
+    return {"losses": epoch_losses, "betas": beta_schedule}
