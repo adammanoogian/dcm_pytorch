@@ -5,10 +5,18 @@ by spectral DCM for interpretability.
 """
 from __future__ import annotations
 
+from pyro_dcm.neural_data_models.latent_extraction import (
+    compute_latent_csd,
+    extract_latent_trajectories,
+    prepare_for_spectral_dcm,
+)
 from pyro_dcm.neural_data_models.lstm_autoencoder import MEGAutoencoder
 from pyro_dcm.neural_data_models.trainer import AutoencoderTrainer
 
 __all__ = [
     "AutoencoderTrainer",
     "MEGAutoencoder",
+    "compute_latent_csd",
+    "extract_latent_trajectories",
+    "prepare_for_spectral_dcm",
 ]
