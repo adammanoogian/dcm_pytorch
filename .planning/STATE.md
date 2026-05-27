@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 ## Current Position
 
 **Milestone:** v0.6.0 (restructured 2026-05-27; simulation-first pivot)
-**Phase:** Phase 22 code complete; production validation running on M3 (job 55698793)
-**Plan:** Phase 22: 01-06 code done, plans rewritten for simulation-first + VL inference | Phase 20: 05 partial pass (A good, B/R2 weak) | Phase 21: dropped (Langdon & Engel)
-**Status:** Phase 22 fully implemented: MEG spectral DCM, LSTM autoencoder (overcomplete 2x, spectral loss), OU simulator (10-region sensorimotor), latent extraction, perturbation experiment (9 conditions), raw-vs-latent validation. Swapped SVI to Variational Laplace as default. Smoke test passed locally (16 min, raw detected 1/9, latent 0/9 at minimal settings). Production run submitted to M3 (200 train, 50 eval, 128 VL iter, tol=0.01).
-**Last activity:** 2026-05-27 -- Phase 22 code complete (53+ tests), VL swap, production validation submitted (job 55698793). Obsidian knowledge base synthesis written.
+**Phase:** Phase 23 Plan 01 COMPLETE (BMR core)
+**Plan:** Phase 23-01: BMR core function implemented and tested
+**Status:** Phase 23-01 COMPLETE. bayesian_model_reduction() + make_reduced_prior_zero_connection() in pyro_dcm.model_selection, 8/8 tests pass, validated against exact conjugate Gaussian Bayes factor.
+**Last activity:** 2026-05-27 -- Phase 23-01 complete (commit 97ef99a). BMR Laplace approximation formula derived and validated.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 code complete (cluster pending)
+- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [==========--------] Ph20 partial; Ph21 dropped; Ph22 code done (verify pending); Ph23-27 planned
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [============------] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23 executing; Ph24-27 planned
 
 ## Decisions
 
@@ -58,6 +58,8 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 - **[22-01-D2] prior_a_var uses variance (not std) to match SPM12 convention.** Standard deviation computed as prior_a_var**0.5.
 - **[22-03-D1] OU process uses Euler-Maruyama with dt=1/sfreq, not adaptive ODE solver.** Simple, fast, matches plan specification; spectral DCM linear model doesn't need adaptive stepping.
 - **[22-03-D2] CSD consistency test uses 100 samples x 20s at 50 Hz with correlation > 0.5 threshold.** Finite-sample OU noise requires many realizations and lenient threshold; 50 Hz keeps test fast (~4s).
+- **[23-01-D1] BMR delta_F uses Laplace approximation, not VFE difference.** delta_F = log p(mu_f|m_r) - log p(mu_f|m_f) + 0.5*[log|Sigma_r| - log|Sigma_f|]. No trace term. Validated against exact conjugate Gaussian Bayes factor.
+- **[23-01-D2] BMR antisymmetry holds only for equal-covariance prior pairs.** When full and reduced priors differ only in mean (same cov), delta_F(A->B) = -delta_F(B->A) exactly. Different covariances break antisymmetry due to distinct reduced posterior precisions.
 - Prior v0.3.0/v0.4.0/v0.5.0 decisions: see earlier STATE.md history in git log.
 
 ## Blockers
@@ -86,7 +88,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-27 (Phase 22-06 Task 1 complete)
-Stopped at: Completed 22-06-PLAN.md Task 1 (validation orchestrator). Task 2 (human-verify) pending.
-Next: Submit full validation to M3, verify results (Task 2). Phase 20-05 acceptance still needs rework.
+Last session: 2026-05-27 (Phase 23-01 complete)
+Stopped at: Phase 23-01 BMR core implementation complete. 8/8 tests pass, commit 97ef99a.
+Next: Phase 23 remaining plans (if any). Phase 20-05 acceptance still needs rework.
 Resume file: None
