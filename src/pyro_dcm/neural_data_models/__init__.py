@@ -6,7 +6,9 @@ by spectral DCM for interpretability.
 from __future__ import annotations
 
 from pyro_dcm.neural_data_models.lstm_autoencoder import MEGAutoencoder
+from pyro_dcm.neural_data_models.trainer import AutoencoderTrainer
 
 __all__ = [
+    "AutoencoderTrainer",
     "MEGAutoencoder",
 ]
