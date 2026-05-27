@@ -6,12 +6,15 @@ spline transforms operate on [-5, 5], so all features must be
 standardized to approximately zero mean and unit variance before
 passing to the flow.
 
-Two packer classes are provided:
+Three packer classes are provided:
 
 - **TaskDCMPacker**: Packs/unpacks A_free, C, noise_prec for
   task-based DCM (``task_dcm_model``).
 - **SpectralDCMPacker**: Packs/unpacks A_free, noise_a, noise_b,
   noise_c, csd_noise_scale for spectral DCM (``spectral_dcm_model``).
+- **LatentCircuitDCMPacker**: Packs/unpacks A_free, C, x0,
+  noise_prec for hybrid VAE-DCM (``latent_circuit_dcm_model``).
+  Uses sparse packing (only non-zero mask entries) for A and C.
 
 LOG-SPACE CONTRACT
 ------------------
@@ -405,6 +408,241 @@ class SpectralDCMPacker:
         """
         assert self.mean_ is not None, "Call fit_standardization first"
         return (z - self.mean_) / self.std_
+
+    def unstandardize(self, z_std: torch.Tensor) -> torch.Tensor:
+        """Reverse standardization.
+
+        Parameters
+        ----------
+        z_std : torch.Tensor
+            Standardized vector(s).
+
+        Returns
+        -------
+        torch.Tensor
+            Original-scale packed vector: ``z_std * std + mean``.
+        """
+        assert self.mean_ is not None, "Call fit_standardization first"
+        return z_std * self.std_ + self.mean_
+
+
+class LatentCircuitDCMPacker:
+    """Pack/unpack DCM parameters for hybrid VAE-DCM.
+
+    Packs ``A_free``, ``C``, ``x0`` (initial conditions), and
+    ``noise_prec`` into a single flat vector for the encoder network.
+    Includes standardization (``fit_standardization``, ``standardize``,
+    ``unstandardize``) for training stability.
+
+    Unlike ``TaskDCMPacker`` which packs the full ``(N, N)`` A matrix,
+    this packer uses **sparse packing**: only the non-zero entries
+    specified by ``a_mask`` and ``c_mask`` are stored. This is
+    appropriate for latent circuit DCM where the connectivity mask
+    defines which connections exist.
+
+    Parameters
+    ----------
+    n_regions : int
+        Number of brain regions / latent dimensions (N).
+    n_inputs : int
+        Number of experimental inputs (M).
+    a_mask : torch.Tensor
+        Binary structural mask for A, shape ``(N, N)``.
+    c_mask : torch.Tensor
+        Binary structural mask for C, shape ``(N, M)``.
+
+    Attributes
+    ----------
+    total_dim : int
+        Total number of packed parameters.
+    mean_ : torch.Tensor or None
+        Per-element mean from ``fit_standardization``.
+    std_ : torch.Tensor or None
+        Per-element standard deviation from ``fit_standardization``.
+
+    Notes
+    -----
+    ``noise_prec`` is stored in log-space in the packed vector
+    (same contract as ``TaskDCMPacker``).
+
+    Dimension calculation:
+
+    - ``n_a``: number of non-zero entries in ``a_mask``
+    - ``n_c``: number of non-zero entries in ``c_mask``
+    - ``x0``: ``n_regions``
+    - ``noise_prec``: 1
+
+    Total: ``n_a + n_c + n_regions + 1``
+
+    Examples
+    --------
+    >>> a_mask = torch.tensor([[1, 1], [0, 1]], dtype=torch.float32)
+    >>> c_mask = torch.tensor([[1], [0]], dtype=torch.float32)
+    >>> packer = LatentCircuitDCMPacker(2, 1, a_mask, c_mask)
+    >>> packer.total_dim
+    7
+    """
+
+    def __init__(
+        self,
+        n_regions: int,
+        n_inputs: int,
+        a_mask: torch.Tensor,
+        c_mask: torch.Tensor,
+    ) -> None:
+        self.n_regions = n_regions
+        self.n_inputs = n_inputs
+        self.a_mask = a_mask.bool()
+        self.c_mask = c_mask.bool()
+
+        # Sparse dimension counts
+        self._n_a = int(self.a_mask.sum().item())
+        self._n_c = int(self.c_mask.sum().item())
+
+        # Standardization stats (fitted attributes)
+        self.mean_: torch.Tensor | None = None
+        self.std_: torch.Tensor | None = None
+
+    @property
+    def total_dim(self) -> int:
+        """Total number of packed parameters."""
+        return self._n_a + self._n_c + self.n_regions + 1
+
+    def pack(
+        self,
+        a_free: torch.Tensor,
+        c: torch.Tensor,
+        x0: torch.Tensor,
+        noise_prec: torch.Tensor,
+    ) -> torch.Tensor:
+        """Pack named parameters into a flat vector.
+
+        Parameters
+        ----------
+        a_free : torch.Tensor
+            Effective connectivity matrix, shape ``(N, N)``.
+            Only entries where ``a_mask`` is True are packed.
+        c : torch.Tensor
+            Driving input weights, shape ``(N, M)``.
+            Only entries where ``c_mask`` is True are packed.
+        x0 : torch.Tensor
+            Initial conditions, shape ``(N,)``.
+        noise_prec : torch.Tensor
+            Observation noise precision (scalar, positive).
+
+        Returns
+        -------
+        torch.Tensor
+            Flat vector of shape ``(total_dim,)``. The last element
+            is ``log(noise_prec)`` (log-space contract).
+
+        Examples
+        --------
+        >>> a_mask = torch.ones(3, 3)
+        >>> c_mask = torch.ones(3, 1)
+        >>> packer = LatentCircuitDCMPacker(3, 1, a_mask, c_mask)
+        >>> flat = packer.pack(
+        ...     torch.randn(3, 3), torch.randn(3, 1),
+        ...     torch.zeros(3), torch.tensor(10.0),
+        ... )
+        >>> flat.shape
+        torch.Size([13])
+        """
+        a_vals = a_free[self.a_mask]
+        c_vals = c[self.c_mask]
+        log_prec = torch.log(noise_prec).reshape(1)
+        return torch.cat([a_vals, c_vals, x0.flatten(), log_prec])
+
+    def unpack(self, flat: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Unpack flat vector into named parameter dict.
+
+        Parameters
+        ----------
+        flat : torch.Tensor
+            Flat vector of shape ``(total_dim,)``.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys:
+
+            - ``"A_free"``: shape ``(N, N)``, zeros where mask is False
+            - ``"C"``: shape ``(N, M)``, zeros where mask is False
+            - ``"x0"``: shape ``(N,)``
+            - ``"noise_prec"``: scalar (log-space; caller must
+              call ``.exp()`` for positive precision)
+
+        Examples
+        --------
+        >>> a_mask = torch.ones(3, 3)
+        >>> c_mask = torch.ones(3, 1)
+        >>> packer = LatentCircuitDCMPacker(3, 1, a_mask, c_mask)
+        >>> flat = torch.randn(13)
+        >>> params = packer.unpack(flat)
+        >>> params["A_free"].shape
+        torch.Size([3, 3])
+        """
+        N, M = self.n_regions, self.n_inputs
+        idx = 0
+
+        # A_free: sparse unpack
+        a_vals = flat[idx:idx + self._n_a]
+        idx += self._n_a
+        a_free = torch.zeros(N, N, dtype=flat.dtype, device=flat.device)
+        a_free[self.a_mask] = a_vals
+
+        # C: sparse unpack
+        c_vals = flat[idx:idx + self._n_c]
+        idx += self._n_c
+        c_mat = torch.zeros(N, M, dtype=flat.dtype, device=flat.device)
+        c_mat[self.c_mask] = c_vals
+
+        # x0
+        x0 = flat[idx:idx + N]
+        idx += N
+
+        # noise_prec (log-space)
+        noise_prec = flat[idx]
+
+        return {
+            "A_free": a_free,
+            "C": c_mat,
+            "x0": x0,
+            "noise_prec": noise_prec,
+        }
+
+    def fit_standardization(self, samples: torch.Tensor) -> None:
+        """Compute per-element mean and std from packed samples.
+
+        Parameters
+        ----------
+        samples : torch.Tensor
+            Stacked packed vectors, shape ``(n_samples, total_dim)``.
+            Each row is the output of ``pack()``.
+
+        Notes
+        -----
+        Standardization is critical for encoder networks that expect
+        approximately zero-mean, unit-variance targets.
+        """
+        self.mean_ = samples.mean(dim=0)
+        self.std_ = samples.std(dim=0).clamp(min=1e-6)
+
+    def standardize(self, flat: torch.Tensor) -> torch.Tensor:
+        """Standardize packed vector to zero mean, unit variance.
+
+        Parameters
+        ----------
+        flat : torch.Tensor
+            Packed parameter vector(s).
+
+        Returns
+        -------
+        torch.Tensor
+            Standardized vector: ``(flat - mean) / std``.
+        """
+        assert self.mean_ is not None, "Call fit_standardization first"
+        return (flat - self.mean_) / self.std_
 
     def unstandardize(self, z_std: torch.Tensor) -> torch.Tensor:
         """Reverse standardization.
