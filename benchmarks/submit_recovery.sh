@@ -15,6 +15,7 @@
 set -euo pipefail
 
 module load miniforge3
+eval "$(conda shell.bash hook)"
 conda activate dec-psilocybin-stats
 
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-4}
