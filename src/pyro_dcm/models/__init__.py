@@ -14,6 +14,10 @@ from pyro_dcm.models.spectral_dcm_model import (
     spectral_dcm_model,
     decompose_csd_for_likelihood,
 )
+from pyro_dcm.models.hybrid_vae_dcm import (
+    HybridVAEDCMGuide,
+    hybrid_vae_dcm_model,
+)
 from pyro_dcm.models.rdcm_model import rdcm_model
 from pyro_dcm.models.guides import (
     ELBO_REGISTRY,
@@ -27,6 +31,8 @@ from pyro_dcm.models.guides import (
 __all__ = [
     "amortized_spectral_dcm_model",
     "amortized_task_dcm_model",
+    "HybridVAEDCMGuide",
+    "hybrid_vae_dcm_model",
     "task_dcm_model",
     "latent_circuit_dcm_model",
     "LC_A_PRIOR_VARIANCE",
