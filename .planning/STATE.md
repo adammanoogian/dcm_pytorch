@@ -11,16 +11,16 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 
 **Milestone:** v0.6.0 (restructured 2026-05-26; was "Latent Circuit DCM")
 **Phase:** Phase 22 in progress (core contribution: DCM interpretability for neural data models)
-**Plan:** Phase 22: 02/06 complete | Phase 20: 05 needs rework | Phase 21: 04/04 complete
-**Status:** Phase 22-02 done (LSTM autoencoder + trainer). Continuing Phase 22 (DCM on neural data model latents).
-**Last activity:** 2026-05-27 -- Completed 22-02-PLAN.md: MEGAutoencoder (LSTM, overcomplete latent), AutoencoderTrainer (spectral consistency loss via torch.fft.rfft), 12 unit tests all passing.
+**Plan:** Phase 22: 01, 02, and 03 of 06 complete | Phase 20: 05 needs rework | Phase 21: 04/04 complete
+**Status:** Phase 22-03 done (MEG timeseries simulator). Continuing Phase 22.
+**Last activity:** 2026-05-27 -- Completed 22-03-PLAN.md: OU SDE simulator (simulate_meg_timeseries), 10-region sensorimotor A factory (make_sensorimotor_A), train/val dataset generator (generate_meg_dataset), 19 tests including CSD consistency validation.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 needs rework | Phase 21 complete | Phase 22 Plan 02 complete
+- v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 needs rework | Phase 21 complete | Phase 22 Plans 01-03 complete
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [========----------] Ph20 4/5; Ph21 done; Ph22 2/6
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=========---------] Ph20 4/5; Ph21 done; Ph22 3/6
 
 ## Decisions
 
@@ -54,6 +54,10 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 - **C_obs fixed at identity for v0.6.0.** Addresses pitfall LC5 (rotation ambiguity). Learned C_obs deferred to v0.7.0+.
 - **Multi-start SVI (>=10 restarts) non-optional.** Addresses pitfall LC11; L&E uses 100.
 - **Prior recalibration mandatory.** LC_A_PRIOR_VARIANCE separate from BOLD priors. Addresses pitfall LC4.
+- **[22-01-D1] eig_clamp=None disables clamping entirely; -1.0 recommended for MEG.** Default -1/32 preserves fMRI behavior. None relies on parameterize_A upstream.
+- **[22-01-D2] prior_a_var uses variance (not std) to match SPM12 convention.** Standard deviation computed as prior_a_var**0.5.
+- **[22-03-D1] OU process uses Euler-Maruyama with dt=1/sfreq, not adaptive ODE solver.** Simple, fast, matches plan specification; spectral DCM linear model doesn't need adaptive stepping.
+- **[22-03-D2] CSD consistency test uses 100 samples x 20s at 50 Hz with correlation > 0.5 threshold.** Finite-sample OU noise requires many realizations and lenient threshold; 50 Hz keeps test fast (~4s).
 - Prior v0.3.0/v0.4.0/v0.5.0 decisions: see earlier STATE.md history in git log.
 
 ## Blockers
@@ -82,7 +86,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-27 (Phase 22-02 complete)
-Stopped at: Completed 22-02-PLAN.md (MEGAutoencoder + AutoencoderTrainer + 12 tests).
-Next: Continue Phase 22 plans (22-03 through 22-06). Phase 20-05 acceptance still needs rework.
+Last session: 2026-05-27 (Phase 22-01 and 22-03 complete, in parallel)
+Stopped at: Completed 22-01-PLAN.md (MEG spectral DCM adaptation) and 22-03-PLAN.md (MEG simulator).
+Next: Continue Phase 22 plans (22-04 through 22-06). Phase 20-05 acceptance still needs rework.
 Resume file: None
