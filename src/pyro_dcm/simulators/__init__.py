@@ -4,6 +4,11 @@ from pyro_dcm.simulators.latent_circuit_simulator import (
     make_stable_latent_circuit_A,
     simulate_latent_circuit,
 )
+from pyro_dcm.simulators.meg_simulator import (
+    generate_meg_dataset,
+    make_sensorimotor_A,
+    simulate_meg_timeseries,
+)
 from pyro_dcm.simulators.rdcm_simulator import (
     make_block_stimulus_rdcm,
     make_stable_A_rdcm,
@@ -38,4 +43,8 @@ __all__ = [
     # Phase 20: Latent-circuit DCM simulator (v0.6.0)
     "make_stable_latent_circuit_A",
     "simulate_latent_circuit",
+    # Phase 22: MEG timeseries simulator (v0.6.0)
+    "generate_meg_dataset",
+    "make_sensorimotor_A",
+    "simulate_meg_timeseries",
 ]
