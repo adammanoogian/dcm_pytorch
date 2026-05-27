@@ -11,16 +11,16 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 
 **Milestone:** v0.6.0 (restructured 2026-05-26; was "Latent Circuit DCM")
 **Phase:** Phase 22 in progress (core contribution: DCM interpretability for neural data models)
-**Plan:** Phase 22: 01, 02, 03, 04, and 05 of 06 complete | Phase 20: 05 needs rework | Phase 21: 04/04 complete
-**Status:** Phase 22-05 done (perturbation experiment framework). Continuing Phase 22.
-**Last activity:** 2026-05-27 -- Completed 22-05-PLAN.md: perturbation experiment script (9 conditions), analysis script (5 figures + z-score metric), M3 cluster sbatch, 2 smoke tests.
+**Plan:** Phase 22: 01-06 complete (Task 2 human-verify pending) | Phase 20: 05 needs rework | Phase 21: 04/04 complete
+**Status:** Phase 22-06 Task 1 done (validation orchestrator). Task 2 (human-verify) pending cluster results.
+**Last activity:** 2026-05-27 -- Completed 22-06-PLAN.md Task 1: raw-vs-latent CSD validation orchestrator.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
 - v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 needs rework | Phase 21 complete | Phase 22 Plans 01-05 complete
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [==========--------] Ph20 4/5; Ph21 done; Ph22 5/6
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [==========--------] Ph20 4/5; Ph21 done; Ph22 6/6 (verify pending)
 
 ## Decisions
 
@@ -86,7 +86,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-27 (Phase 22-05 complete)
-Stopped at: Completed 22-05-PLAN.md (perturbation experiment framework).
-Next: Continue Phase 22 plan 22-06 (publication figures). Phase 20-05 acceptance still needs rework.
+Last session: 2026-05-27 (Phase 22-06 Task 1 complete)
+Stopped at: Completed 22-06-PLAN.md Task 1 (validation orchestrator). Task 2 (human-verify) pending.
+Next: Submit full validation to M3, verify results (Task 2). Phase 20-05 acceptance still needs rework.
 Resume file: None
