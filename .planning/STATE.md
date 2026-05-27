@@ -5,22 +5,22 @@
 See: .planning/PROJECT.md (updated 2026-05-24)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.6.0 DCM Interpretability for Neural Data Models -- DCM as an interpretability tool for deep learning models trained on real M/EEG data
+**Current focus:** v0.6.0 DCM Interpretability for Neural Data Models -- DCM as interpretability tool for deep learning on simulated/real M/EEG data
 
 ## Current Position
 
-**Milestone:** v0.6.0 (restructured 2026-05-26; was "Latent Circuit DCM")
-**Phase:** Phase 22 in progress (core contribution: DCM interpretability for neural data models)
-**Plan:** Phase 22: 01-06 complete (Task 2 human-verify pending) | Phase 20: 05 needs rework | Phase 21: 04/04 complete
-**Status:** Phase 22-06 Task 1 done (validation orchestrator). Task 2 (human-verify) pending cluster results.
-**Last activity:** 2026-05-27 -- Completed 22-06-PLAN.md Task 1: raw-vs-latent CSD validation orchestrator.
+**Milestone:** v0.6.0 (restructured 2026-05-27; simulation-first pivot)
+**Phase:** Phase 22 code complete; production validation running on M3 (job 55698793)
+**Plan:** Phase 22: 01-06 code done, plans rewritten for simulation-first + VL inference | Phase 20: 05 partial pass (A good, B/R2 weak) | Phase 21: dropped (Langdon & Engel)
+**Status:** Phase 22 fully implemented: MEG spectral DCM, LSTM autoencoder (overcomplete 2x, spectral loss), OU simulator (10-region sensorimotor), latent extraction, perturbation experiment (9 conditions), raw-vs-latent validation. Swapped SVI to Variational Laplace as default. Smoke test passed locally (16 min, raw detected 1/9, latent 0/9 at minimal settings). Production run submitted to M3 (200 train, 50 eval, 128 VL iter, tol=0.01).
+**Last activity:** 2026-05-27 -- Phase 22 code complete (53+ tests), VL swap, production validation submitted (job 55698793). Obsidian knowledge base synthesis written.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 needs rework | Phase 21 complete | Phase 22 Plans 01-05 complete
+- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 code complete (cluster pending)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [==========--------] Ph20 4/5; Ph21 done; Ph22 6/6 (verify pending)
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [==========--------] Ph20 partial; Ph21 dropped; Ph22 code done (verify pending); Ph23-27 planned
 
 ## Decisions
 
