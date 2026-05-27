@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 ## Current Position
 
 **Milestone:** v0.6.0 (restructured 2026-05-27; simulation-first pivot)
-**Phase:** Phase 25 Plan 02 COMPLETE (hybrid VAE-DCM model/guide pair)
-**Plan:** Phase 25-02: hybrid_vae_dcm_model + HybridVAEDCMGuide
-**Status:** Phase 25-02 COMPLETE. Physics-informed VAE with DCM ODE decoder and DCMEncoderNet recognition network. 7/7 tests pass.
-**Last activity:** 2026-05-28 -- Phase 25-02 complete (commits 07294bd, ad45a65). Model/guide pair for hybrid VAE-DCM validated.
+**Phase:** Phase 25 Plan 04 CHECKPOINT (cluster training + recovery validation)
+**Plan:** Phase 25-04: Cluster training pipeline + amortized recovery validation
+**Status:** Phase 25-04 Task 1 COMPLETE. Awaiting human-verify checkpoint: cluster job submission and recovery metric verification.
+**Last activity:** 2026-05-28 -- Phase 25-04 Task 1 complete (commit 1a78af6). Training pipeline, sbatch, recovery tests ready. Awaiting cluster run.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection) | Phase 24-01 COMPLETE (foundation extractor) | Phase 24-02 COMPLETE (TRIBE v2 pipeline) | Phase 25-01 COMPLETE (VAE-DCM primitives) | Phase 25-02 COMPLETE (VAE-DCM model/guide)
+- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection) | Phase 24-01 COMPLETE (foundation extractor) | Phase 24-02 COMPLETE (TRIBE v2 pipeline) | Phase 25-01 COMPLETE (VAE-DCM primitives) | Phase 25-02 COMPLETE (VAE-DCM model/guide) | Phase 25-04 at checkpoint (training pipeline ready, awaiting cluster run)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=============-----] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23-01/02 DONE; Ph24-01/02 DONE; Ph25-01/02 DONE; remaining planned
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=============-----] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23-01/02 DONE; Ph24-01/02 DONE; Ph25-01/02 DONE; Ph25-04 at checkpoint
 
 ## Decisions
 
@@ -65,6 +65,9 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 - **[24-02-D3] compute_empirical_csd with fs=1.0 Hz for TRIBE v2.** TRIBE v2 outputs at 1 Hz (fMRI TR); Nyquist at 0.5 Hz.
 - **[25-02-D1] SVI smoke test uses windowed average (first 5 vs last 5 finite losses).** Early SVI steps produce NaN losses from ODE divergence; NaN guard prevents gradient corruption but losses are NaN. Windowed comparison is more robust.
 - **[25-02-D2] packer.total_dim used (not n_features) for LatentCircuitDCMPacker.** Sparse packing attribute name differs from TaskDCMPacker's n_features.
+- **[25-04-D1] KL annealing uses poutine.scale with mutable beta container.** SVI created once with scaled_model closure; beta_container[0] updated per epoch. Avoids SVI recreation overhead.
+- **[25-04-D2] Beta floor is 1e-3 (not 0.0) at epoch 0.** When scale=0.0, poutine.scale zeros all log-probs, causing degenerate ELBO (all NaN). 1e-3 floor ensures valid gradients from first epoch.
+- **[25-04-D3] KL estimated analytically from encoder z_loc/z_scale vs N(0,I).** Avoids Trace_ELBO decomposition; 0.5*(scale^2 + loc^2 - 1 - 2*log(scale)).sum() is exact for diagonal Gaussian vs standard normal.
 - Prior v0.3.0/v0.4.0/v0.5.0 decisions: see earlier STATE.md history in git log.
 
 ## Blockers
@@ -93,7 +96,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-28 (Phase 25-02 complete)
-Stopped at: Phase 25-02 hybrid VAE-DCM model/guide pair complete. 7/7 tests pass, commits 07294bd + ad45a65.
-Next: Phase 25-03 (training loop) or Phase 25-04 (end-to-end demo). Phase 20-05 acceptance still needs rework.
+Last session: 2026-05-28 (Phase 25-04 Task 1 complete, at checkpoint)
+Stopped at: Phase 25-04 Task 1 complete (commit 1a78af6). Training pipeline, sbatch, recovery tests ready. At human-verify checkpoint awaiting cluster run results.
+Next: Submit `sbatch cluster/sbatch_hybrid_vae_dcm.sh` on M3, verify recovery metrics, then run `pytest tests/test_hybrid_vae_dcm_recovery.py -v`.
 Resume file: None
