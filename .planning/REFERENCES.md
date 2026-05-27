@@ -236,6 +236,22 @@ If you cannot cite a reference for a computation, STOP and find one before codin
 
 ---
 
+## Bayesian Model Selection
+
+### REF-070: Friston & Penny (2011)
+**Title:** Post hoc Bayesian model selection
+**Journal:** NeuroImage, 56(4), 2089-2099
+**DOI:** 10.1016/j.neuroimage.2011.03.062
+**Used for:**
+- Bayesian Model Reduction (BMR): analytic re-evaluation of reduced models
+  from a single full-model inversion
+- Reduced posterior via Bayes rule (Eq. 4-5)
+- Change in log model evidence (delta F) for model comparison (Eq. 6-8)
+- Greedy search over reduced model space
+**Equations needed:** 4-8 (BMR core), greedy search algorithm
+
+---
+
 ## Software References
 
 ### REF-060: Pyro
