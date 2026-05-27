@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 ## Current Position
 
 **Milestone:** v0.6.0 (restructured 2026-05-27; simulation-first pivot)
-**Phase:** Phase 27 Plan 02 COMPLETE (publication figure generation)
-**Plan:** Phase 27-02: Publication figure generation script + pipeline schematic
-**Status:** Phase 27-02 COMPLETE. 7 modular figure functions, CLI entry point, pipeline schematic generated. ruff passes.
-**Last activity:** 2026-05-28 -- Phase 27-02 complete (commit 558d568). Publication figure script with 7 functions covering v0.6.0 story.
+**Phase:** Phase 25 Plan 03 COMPLETE (VAE-DCM training infrastructure)
+**Plan:** Phase 25-03: Synthetic data generator + SVI training loop with KL annealing
+**Status:** Phase 25-03 COMPLETE. generate_synthetic_vae_dataset + train_hybrid_vae_dcm + CLI script + 5 tests (4/4 non-slow pass).
+**Last activity:** 2026-05-28 -- Phase 25-03 complete (commit d0386a6). Training infrastructure with KL annealing verified on synthetic data.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection) | Phase 24 COMPLETE (all 4 plans) | Phase 25-01 COMPLETE (VAE-DCM primitives) | Phase 25-02 COMPLETE (VAE-DCM model/guide) | Phase 27-01 COMPLETE (references + methods) | Phase 27-02 COMPLETE (publication figures)
+- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection) | Phase 24 COMPLETE (all 4 plans) | Phase 25-01 COMPLETE (VAE-DCM primitives) | Phase 25-02 COMPLETE (VAE-DCM model/guide) | Phase 25-03 COMPLETE (VAE-DCM training) | Phase 27-01 COMPLETE (references + methods) | Phase 27-02 COMPLETE (publication figures)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=============-----] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23 DONE; Ph24 DONE; Ph25-01/02 DONE; Ph27-01/02 DONE; remaining planned
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [==============----] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23 DONE; Ph24 DONE; Ph25-01/02/03 DONE; Ph27-01/02 DONE; remaining planned
 
 ## Decisions
 
@@ -65,6 +65,8 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 - **[24-02-D3] compute_empirical_csd with fs=1.0 Hz for TRIBE v2.** TRIBE v2 outputs at 1 Hz (fMRI TR); Nyquist at 0.5 Hz.
 - **[25-02-D1] SVI smoke test uses windowed average (first 5 vs last 5 finite losses).** Early SVI steps produce NaN losses from ODE divergence; NaN guard prevents gradient corruption but losses are NaN. Windowed comparison is more robust.
 - **[25-02-D2] packer.total_dim used (not n_features) for LatentCircuitDCMPacker.** Sparse packing attribute name differs from TaskDCMPacker's n_features.
+- **[25-03-D1] Beta clamped to >= 1e-6 (not 0.0) for poutine.scale.** pyro.poutine.scale raises ValueError on scale=0; at epoch 0 beta=0/warmup=0.0, so clamp to 1e-6 (effectively zero).
+- **[25-03-D2] SVI recreated each epoch with current scaled_model.** Rather than mutating scale on single SVI instance, create poutine.scale(model_fn, scale=beta) each epoch and pass to fresh SVI. Simpler, avoids Pyro messenger state issues.
 - **[27-02-D1] Generated figures are gitignored; script is source of truth.** figures/*.png and figures/*.pdf excluded by .gitignore. Regenerate via `python scripts/generate_publication_figures.py`.
 - Prior v0.3.0/v0.4.0/v0.5.0 decisions: see earlier STATE.md history in git log.
 
@@ -94,7 +96,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-28 (Phase 27-02 complete)
-Stopped at: Phase 27-02 publication figure generation complete. 7 figure functions, pipeline schematic generated. Commit 558d568.
-Next: Phase 27-03 (manuscript LaTeX integration) or Phase 25-03 (training loop). Phase 20-05 acceptance still needs rework.
+Last session: 2026-05-28 (Phase 25-03 complete)
+Stopped at: Phase 25-03 training infrastructure complete. generate_synthetic_vae_dataset + train_hybrid_vae_dcm + CLI script + 5 tests. Commit d0386a6.
+Next: Phase 25-04 (cluster-scale training + acceptance metrics) or Phase 27-03 (manuscript LaTeX). Phase 20-05 acceptance still needs rework.
 Resume file: None
