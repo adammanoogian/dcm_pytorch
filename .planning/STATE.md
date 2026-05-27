@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 ## Current Position
 
 **Milestone:** v0.6.0 (restructured 2026-05-27; simulation-first pivot)
-**Phase:** Phase 23 Plan 01 COMPLETE (BMR core)
-**Plan:** Phase 23-01: BMR core function implemented and tested
-**Status:** Phase 23-01 COMPLETE. bayesian_model_reduction() + make_reduced_prior_zero_connection() in pyro_dcm.model_selection, 8/8 tests pass, validated against exact conjugate Gaussian Bayes factor.
-**Last activity:** 2026-05-27 -- Phase 23-01 complete (commit 97ef99a). BMR Laplace approximation formula derived and validated.
+**Phase:** Phase 23 Plan 02 COMPLETE (BMR circuit selection)
+**Plan:** Phase 23-02: BMR circuit-size selection with enumeration and ranking
+**Status:** Phase 23-02 COMPLETE. enumerate_reduced_models() + bmr_circuit_selection() added to pyro_dcm.model_selection, 15/15 BMR tests pass (8 core + 7 circuit selection).
+**Last activity:** 2026-05-27 -- Phase 23-02 complete (commit ac2f851). Exhaustive subset enumeration with delta-F ranking validated.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core)
+- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [============------] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23 executing; Ph24-27 planned
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [============------] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23-01/02 DONE; Ph23-03 + Ph24-27 planned
 
 ## Decisions
 
@@ -88,7 +88,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-27 (Phase 23-01 complete)
-Stopped at: Phase 23-01 BMR core implementation complete. 8/8 tests pass, commit 97ef99a.
-Next: Phase 23 remaining plans (if any). Phase 20-05 acceptance still needs rework.
+Last session: 2026-05-27 (Phase 23-02 complete)
+Stopped at: Phase 23-02 BMR circuit selection complete. 15/15 BMR tests pass, commit ac2f851.
+Next: Phase 23-03 (if planned). Phase 20-05 acceptance still needs rework.
 Resume file: None
