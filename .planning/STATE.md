@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 ## Current Position
 
 **Milestone:** v0.6.0 (restructured 2026-05-27; simulation-first pivot)
-**Phase:** Phase 23 Plan 02 COMPLETE (BMR circuit selection)
-**Plan:** Phase 23-02: BMR circuit-size selection with enumeration and ranking
-**Status:** Phase 23-02 COMPLETE. enumerate_reduced_models() + bmr_circuit_selection() added to pyro_dcm.model_selection, 15/15 BMR tests pass (8 core + 7 circuit selection).
-**Last activity:** 2026-05-27 -- Phase 23-02 complete (commit ac2f851). Exhaustive subset enumeration with delta-F ranking validated.
+**Phase:** Phase 24 Plan 01 COMPLETE (foundation model extractor infrastructure)
+**Plan:** Phase 24-01: BaseExtractor ABC + parcellation utilities
+**Status:** Phase 24-01 COMPLETE. BaseExtractor with forward-hook activation extraction, parcellate_vertices_to_rois for Schaefer atlas on fsaverage5, 5/5 tests pass.
+**Last activity:** 2026-05-27 -- Phase 24-01 complete (commit 0280d31). Foundation subpackage created with base extractor and parcellation.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection)
+- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection) | Phase 24-01 COMPLETE (foundation extractor)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [============------] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23-01/02 DONE; Ph23-03 + Ph24-27 planned
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [============------] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23-01/02 DONE; Ph24-01 DONE; remaining phases planned
 
 ## Decisions
 
@@ -88,7 +88,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-27 (Phase 23-02 complete)
-Stopped at: Phase 23-02 BMR circuit selection complete. 15/15 BMR tests pass, commit ac2f851.
-Next: Phase 23-03 (if planned). Phase 20-05 acceptance still needs rework.
+Last session: 2026-05-27 (Phase 24-01 complete)
+Stopped at: Phase 24-01 foundation model extractor infrastructure complete. 5/5 tests pass, commit 0280d31.
+Next: Phase 24-02 (concrete extractors). Phase 20-05 acceptance still needs rework.
 Resume file: None
