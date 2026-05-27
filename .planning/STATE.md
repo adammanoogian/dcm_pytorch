@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 ## Current Position
 
 **Milestone:** v0.6.0 (restructured 2026-05-27; simulation-first pivot)
-**Phase:** Phase 24 Plan 04 COMPLETE (cross-modal comparison pipeline)
-**Plan:** Phase 24-04: Cross-modal A-matrix comparison metrics + script + tests
-**Status:** Phase 24-04 COMPLETE. Pearson r, sign kappa, CI overlap metrics with 3-panel figure. 11/11 tests pass. Phase 24 fully complete (all 4 plans done).
-**Last activity:** 2026-05-28 -- Phase 24-04 complete (commits 66eedb4, 94887d5). Cross-modal comparison pipeline validated.
+**Phase:** Phase 27 Plan 02 COMPLETE (publication figure generation)
+**Plan:** Phase 27-02: Publication figure generation script + pipeline schematic
+**Status:** Phase 27-02 COMPLETE. 7 modular figure functions, CLI entry point, pipeline schematic generated. ruff passes.
+**Last activity:** 2026-05-28 -- Phase 27-02 complete (commit 558d568). Publication figure script with 7 functions covering v0.6.0 story.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection) | Phase 24 COMPLETE (all 4 plans: base extractor, TRIBE v2, M/EEG, cross-modal) | Phase 25-01 COMPLETE (VAE-DCM primitives) | Phase 25-02 COMPLETE (VAE-DCM model/guide)
+- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection) | Phase 24 COMPLETE (all 4 plans) | Phase 25-01 COMPLETE (VAE-DCM primitives) | Phase 25-02 COMPLETE (VAE-DCM model/guide) | Phase 27-01 COMPLETE (references + methods) | Phase 27-02 COMPLETE (publication figures)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=============-----] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23 DONE; Ph24 DONE; Ph25-01/02 DONE; remaining planned
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=============-----] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23 DONE; Ph24 DONE; Ph25-01/02 DONE; Ph27-01/02 DONE; remaining planned
 
 ## Decisions
 
@@ -65,6 +65,7 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 - **[24-02-D3] compute_empirical_csd with fs=1.0 Hz for TRIBE v2.** TRIBE v2 outputs at 1 Hz (fMRI TR); Nyquist at 0.5 Hz.
 - **[25-02-D1] SVI smoke test uses windowed average (first 5 vs last 5 finite losses).** Early SVI steps produce NaN losses from ODE divergence; NaN guard prevents gradient corruption but losses are NaN. Windowed comparison is more robust.
 - **[25-02-D2] packer.total_dim used (not n_features) for LatentCircuitDCMPacker.** Sparse packing attribute name differs from TaskDCMPacker's n_features.
+- **[27-02-D1] Generated figures are gitignored; script is source of truth.** figures/*.png and figures/*.pdf excluded by .gitignore. Regenerate via `python scripts/generate_publication_figures.py`.
 - Prior v0.3.0/v0.4.0/v0.5.0 decisions: see earlier STATE.md history in git log.
 
 ## Blockers
@@ -93,7 +94,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-28 (Phase 24-04 complete)
-Stopped at: Phase 24-04 cross-modal comparison pipeline complete. 11/11 tests pass, commits 66eedb4 + 94887d5. Phase 24 fully done.
-Next: Phase 25-03 (training loop) or Phase 25-04 (end-to-end demo). Phase 20-05 acceptance still needs rework.
+Last session: 2026-05-28 (Phase 27-02 complete)
+Stopped at: Phase 27-02 publication figure generation complete. 7 figure functions, pipeline schematic generated. Commit 558d568.
+Next: Phase 27-03 (manuscript LaTeX integration) or Phase 25-03 (training loop). Phase 20-05 acceptance still needs rework.
 Resume file: None
