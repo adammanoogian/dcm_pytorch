@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 ## Current Position
 
 **Milestone:** v0.6.0 (restructured 2026-05-27; simulation-first pivot)
-**Phase:** Phase 24 Plan 02 COMPLETE (TRIBE v2 pipeline)
-**Plan:** Phase 24-02: TRIBE v2 fMRI extraction + spectral DCM pipeline
-**Status:** Phase 24-02 COMPLETE. TRIBEExtractor class, pipeline scripts, A100 sbatch. 4/4 tests pass.
-**Last activity:** 2026-05-28 -- Phase 24-02 complete (commit 0ea65a5). TRIBE v2 end-to-end pipeline ready for cluster execution.
+**Phase:** Phase 25 Plan 02 COMPLETE (hybrid VAE-DCM model/guide pair)
+**Plan:** Phase 25-02: hybrid_vae_dcm_model + HybridVAEDCMGuide
+**Status:** Phase 25-02 COMPLETE. Physics-informed VAE with DCM ODE decoder and DCMEncoderNet recognition network. 7/7 tests pass.
+**Last activity:** 2026-05-28 -- Phase 25-02 complete (commits 07294bd, ad45a65). Model/guide pair for hybrid VAE-DCM validated.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection) | Phase 24-01 COMPLETE (foundation extractor) | Phase 24-02 COMPLETE (TRIBE v2 pipeline) | Phase 25-01 COMPLETE (VAE-DCM primitives)
+- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection) | Phase 24-01 COMPLETE (foundation extractor) | Phase 24-02 COMPLETE (TRIBE v2 pipeline) | Phase 25-01 COMPLETE (VAE-DCM primitives) | Phase 25-02 COMPLETE (VAE-DCM model/guide)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=============-----] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23-01/02 DONE; Ph24-01/02 DONE; Ph25-01 DONE; remaining planned
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=============-----] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23-01/02 DONE; Ph24-01/02 DONE; Ph25-01/02 DONE; remaining planned
 
 ## Decisions
 
@@ -63,6 +63,8 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 - **[24-02-D1] TRIBE v2 import guarded with try/except ImportError, not added to pyproject.toml.** Optional GPU dependency; requires A100; install via git URL.
 - **[24-02-D2] Pipeline scripts use lazy imports after argparse.** Heavy torch/pyro imports slow; --help should be fast.
 - **[24-02-D3] compute_empirical_csd with fs=1.0 Hz for TRIBE v2.** TRIBE v2 outputs at 1 Hz (fMRI TR); Nyquist at 0.5 Hz.
+- **[25-02-D1] SVI smoke test uses windowed average (first 5 vs last 5 finite losses).** Early SVI steps produce NaN losses from ODE divergence; NaN guard prevents gradient corruption but losses are NaN. Windowed comparison is more robust.
+- **[25-02-D2] packer.total_dim used (not n_features) for LatentCircuitDCMPacker.** Sparse packing attribute name differs from TaskDCMPacker's n_features.
 - Prior v0.3.0/v0.4.0/v0.5.0 decisions: see earlier STATE.md history in git log.
 
 ## Blockers
@@ -91,7 +93,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-28 (Phase 24-02 complete)
-Stopped at: Phase 24-02 TRIBE v2 pipeline complete. TRIBEExtractor + scripts + sbatch. 4/4 tests pass, commit 0ea65a5.
-Next: Phase 24-03 (M/EEG extractors) or Phase 24-04 (cross-modal comparison). Phase 20-05 acceptance still needs rework.
+Last session: 2026-05-28 (Phase 25-02 complete)
+Stopped at: Phase 25-02 hybrid VAE-DCM model/guide pair complete. 7/7 tests pass, commits 07294bd + ad45a65.
+Next: Phase 25-03 (training loop) or Phase 25-04 (end-to-end demo). Phase 20-05 acceptance still needs rework.
 Resume file: None
