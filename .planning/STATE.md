@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 ## Current Position
 
 **Milestone:** v0.6.0 (restructured 2026-05-27; simulation-first pivot)
-**Phase:** Phase 25 Plan 02 COMPLETE (hybrid VAE-DCM model/guide pair)
-**Plan:** Phase 25-02: hybrid_vae_dcm_model + HybridVAEDCMGuide
-**Status:** Phase 25-02 COMPLETE. Physics-informed VAE with DCM ODE decoder and DCMEncoderNet recognition network. 7/7 tests pass.
-**Last activity:** 2026-05-28 -- Phase 25-02 complete (commits 07294bd, ad45a65). Model/guide pair for hybrid VAE-DCM validated.
+**Phase:** Phase 24 Plan 04 COMPLETE (cross-modal comparison pipeline)
+**Plan:** Phase 24-04: Cross-modal A-matrix comparison metrics + script + tests
+**Status:** Phase 24-04 COMPLETE. Pearson r, sign kappa, CI overlap metrics with 3-panel figure. 11/11 tests pass. Phase 24 fully complete (all 4 plans done).
+**Last activity:** 2026-05-28 -- Phase 24-04 complete (commits 66eedb4, 94887d5). Cross-modal comparison pipeline validated.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection) | Phase 24-01 COMPLETE (foundation extractor) | Phase 24-02 COMPLETE (TRIBE v2 pipeline) | Phase 25-01 COMPLETE (VAE-DCM primitives) | Phase 25-02 COMPLETE (VAE-DCM model/guide)
+- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection) | Phase 24 COMPLETE (all 4 plans: base extractor, TRIBE v2, M/EEG, cross-modal) | Phase 25-01 COMPLETE (VAE-DCM primitives) | Phase 25-02 COMPLETE (VAE-DCM model/guide)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=============-----] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23-01/02 DONE; Ph24-01/02 DONE; Ph25-01/02 DONE; remaining planned
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=============-----] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23 DONE; Ph24 DONE; Ph25-01/02 DONE; remaining planned
 
 ## Decisions
 
@@ -93,7 +93,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-28 (Phase 25-02 complete)
-Stopped at: Phase 25-02 hybrid VAE-DCM model/guide pair complete. 7/7 tests pass, commits 07294bd + ad45a65.
+Last session: 2026-05-28 (Phase 24-04 complete)
+Stopped at: Phase 24-04 cross-modal comparison pipeline complete. 11/11 tests pass, commits 66eedb4 + 94887d5. Phase 24 fully done.
 Next: Phase 25-03 (training loop) or Phase 25-04 (end-to-end demo). Phase 20-05 acceptance still needs rework.
 Resume file: None
