@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 ## Current Position
 
 **Milestone:** v0.6.0 (restructured 2026-05-26; was "Latent Circuit DCM")
-**Phase:** Phase 20 near-complete; Phase 21 complete; Phase 22 next (core contribution)
-**Plan:** Phase 20: 05 needs rework (acceptance timed out at 24h) | Phase 21: 04/04 complete
-**Status:** Phase 21 done. Roadmap restructured -- new Phases 22 (DCM on neural data model latents), 25 (hybrid VAE-DCM), 26 (SBI for spectral DCM). Phase 24 expanded (TRIBE + M/EEG foundation models).
-**Last activity:** 2026-05-26 -- Phase 21 complete: 20 RNN seeds trained (94.9% accuracy, H=256, CDDM), trajectories extracted. Roadmap restructured: dropped Langdon & Engel RNN-circuit-extraction as core focus; pivoted to DCM interpretability for models trained on real neuroimaging data. Phase 20-05 acceptance run timed out at 24h (100s ODE too slow on CPU); needs rework with shorter duration or different approach.
+**Phase:** Phase 22 in progress (core contribution: DCM interpretability for neural data models)
+**Plan:** Phase 22: 02/06 complete | Phase 20: 05 needs rework | Phase 21: 04/04 complete
+**Status:** Phase 22-02 done (LSTM autoencoder + trainer). Continuing Phase 22 (DCM on neural data model latents).
+**Last activity:** 2026-05-27 -- Completed 22-02-PLAN.md: MEGAutoencoder (LSTM, overcomplete latent), AutoencoderTrainer (spectral consistency loss via torch.fft.rfft), 12 unit tests all passing.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 needs rework | Phase 21 complete | Phase 22 not started (core contribution)
+- v0.6.0: Phase 20 Plans 01-04 complete; Plan 05 needs rework | Phase 21 complete | Phase 22 Plan 02 complete
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=======-----------] Ph20 4/5; Ph21 done; Ph22-27 not started
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [========----------] Ph20 4/5; Ph21 done; Ph22 2/6
 
 ## Decisions
 
@@ -82,7 +82,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-26 (Phase 21 complete, v0.6.0 restructured)
-Stopped at: Phase 21 complete (job 55649957, all 20 seeds trained and trajectories extracted). Acceptance run (job 55643276) timed out at 24h -- 100s ODE × 1000 steps × 10 restarts is ~44h/seed on CPU. Roadmap restructured: new core is Phase 22 (DCM interpretability for neural data models). Added Phases 25 (hybrid VAE-DCM), 26 (SBI for spectral DCM). Phase 24 expanded to TRIBE + M/EEG foundation models.
-Next: Rework Phase 20-05 acceptance (shorter duration or different config). Then plan Phase 22 (train temporal model on Cam-CAN MEG, fit spDCM to latent dynamics).
+Last session: 2026-05-27 (Phase 22-02 complete)
+Stopped at: Completed 22-02-PLAN.md (MEGAutoencoder + AutoencoderTrainer + 12 tests).
+Next: Continue Phase 22 plans (22-03 through 22-06). Phase 20-05 acceptance still needs rework.
 Resume file: None
