@@ -20,16 +20,16 @@ from __future__ import annotations
 import argparse
 import logging
 import time
-from functools import partial
 from pathlib import Path
 
 import numpy as np
-import pyro
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from pyro_dcm.models.guides import create_guide, extract_posterior_params, run_svi
-from pyro_dcm.models.spectral_dcm_model import spectral_dcm_model
+from pyro_dcm.inference.variational_laplace import (
+    extract_vl_posterior,
+    run_variational_laplace,
+)
 from pyro_dcm.neural_data_models.latent_extraction import (
     compute_latent_csd,
     extract_latent_trajectories,
@@ -79,12 +79,12 @@ def _fit_spectral_dcm(
     freqs: torch.Tensor,
     a_mask: torch.Tensor,
     *,
-    svi_steps: int,
-    n_restarts: int,
+    max_iter: int,
+    tolerance: float,
     prior_a_var: float = 1.0 / 16.0,
     eig_clamp: float = -1.0,
 ) -> dict:
-    """Fit spectral DCM and return posterior A statistics.
+    """Fit spectral DCM via Variational Laplace and return posterior A.
 
     Parameters
     ----------
@@ -94,10 +94,10 @@ def _fit_spectral_dcm(
         Frequency grid, shape ``(F,)``, float64.
     a_mask : torch.Tensor
         Connectivity mask, shape ``(N, N)``, float64.
-    svi_steps : int
-        Number of SVI optimisation steps.
-    n_restarts : int
-        Number of SVI restarts.
+    max_iter : int
+        Maximum Gauss-Newton iterations.
+    tolerance : float
+        Convergence criterion on free energy change.
     prior_a_var : float
         Prior variance for A matrix elements.
     eig_clamp : float
@@ -106,56 +106,31 @@ def _fit_spectral_dcm(
     Returns
     -------
     dict
-        Keys: ``'A_mean'``, ``'A_std'``, ``'final_loss'``,
-        ``'best_restart_idx'``.
+        Keys: ``'A_mean'``, ``'A_std'``, ``'free_energy'``,
+        ``'converged'``, ``'n_iterations'``.
     """
-    model_args = (observed_csd, freqs, a_mask)
-    model_kwargs = {"prior_a_var": prior_a_var, "eig_clamp": eig_clamp}
-
-    guide_factory = partial(
-        create_guide,
-        spectral_dcm_model,
-        guide_type="auto_normal",
-        init_scale=0.01,
+    N = a_mask.shape[0]
+    result = run_variational_laplace(
+        observed_csd,
+        freqs,
+        a_mask,
+        max_iter=max_iter,
+        tolerance=tolerance,
+        prior_variance=prior_a_var,
+        eig_clamp=eig_clamp,
     )
 
-    if n_restarts > 1:
-        guide = guide_factory()
-        result = run_svi(
-            spectral_dcm_model,
-            guide,
-            model_args=model_args,
-            model_kwargs=model_kwargs,
-            num_steps=svi_steps,
-            lr=0.01,
-            n_restarts=n_restarts,
-            guide_factory=guide_factory,
-        )
-    else:
-        pyro.clear_param_store()
-        guide = guide_factory()
-        result = run_svi(
-            spectral_dcm_model,
-            guide,
-            model_args=model_args,
-            model_kwargs=model_kwargs,
-            num_steps=svi_steps,
-            lr=0.01,
-        )
+    posterior = extract_vl_posterior(result, N, num_samples=500)
 
-    # Extract posterior A
-    posterior = extract_posterior_params(
-        guide, model_args, model=spectral_dcm_model, num_samples=500
-    )
-
-    a_mean = posterior["A"]["mean"].detach().cpu().numpy()
+    a_mean = result.theta_post["A"].detach().cpu().numpy()
     a_std = posterior["A"]["std"].detach().cpu().numpy()
 
     return {
         "A_mean": a_mean,
         "A_std": a_std,
-        "final_loss": result["final_loss"],
-        "best_restart_idx": result.get("best_restart_idx", 0),
+        "free_energy": result.free_energy[-1] if result.free_energy else 0.0,
+        "converged": result.converged,
+        "n_iterations": result.n_iterations,
     }
 
 
@@ -167,8 +142,8 @@ def run_perturbation_experiment(
     n_latent_multiplier: int = 2,
     hidden_size: int = 64,
     ae_epochs: int = 100,
-    svi_steps: int = 500,
-    n_restarts: int = 5,
+    max_iter: int = 128,
+    tolerance: float = 1e-2,
     seed: int = 42,
 ) -> dict:
     """Execute the full perturbation experiment.
@@ -187,10 +162,10 @@ def run_perturbation_experiment(
         LSTM hidden size.
     ae_epochs : int
         Autoencoder training epochs.
-    svi_steps : int
-        SVI optimisation steps per DCM fit.
-    n_restarts : int
-        SVI restarts per DCM fit.
+    max_iter : int
+        Maximum Gauss-Newton iterations per DCM fit.
+    tolerance : float
+        Convergence criterion on free energy change.
     seed : int
         Random seed.
 
@@ -277,19 +252,24 @@ def run_perturbation_experiment(
         baseline_dcm_input["csd"],
         baseline_dcm_input["freqs"],
         baseline_dcm_input["a_mask"],
-        svi_steps=svi_steps,
-        n_restarts=n_restarts,
+        max_iter=max_iter,
+        tolerance=tolerance,
     )
     logger.info(
-        "  Baseline DCM final ELBO: %.2f", baseline_posterior["final_loss"]
+        "  Baseline DCM free energy: %.2f (converged=%s, %d iters)",
+        baseline_posterior["free_energy"],
+        baseline_posterior["converged"],
+        baseline_posterior["n_iterations"],
     )
     logger.info("  Step 3 took %.1f s", time.time() - t0)
 
     # ------------------------------------------------------------------
     # Step 4: Perturbation sweep
     # ------------------------------------------------------------------
-    logger.info("Step 4: Running perturbation sweep (%d conditions)...",
-                len(PERTURBATION_CONDITIONS))
+    logger.info(
+        "Step 4: Running perturbation sweep (%d conditions)...",
+        len(PERTURBATION_CONDITIONS),
+    )
 
     results_list = []
     for cond_idx, cond in enumerate(PERTURBATION_CONDITIONS):
@@ -348,8 +328,8 @@ def run_perturbation_experiment(
             perturbed_dcm_input["csd"],
             perturbed_dcm_input["freqs"],
             perturbed_dcm_input["a_mask"],
-            svi_steps=svi_steps,
-            n_restarts=n_restarts,
+            max_iter=max_iter,
+            tolerance=tolerance,
         )
 
         # Compute delta_A
@@ -359,13 +339,13 @@ def run_perturbation_experiment(
 
         elapsed = time.time() - t0
         logger.info(
-            "    delta_A[%d,%d]=%.4f (true=%.4f), ELBO=%.2f, "
+            "    delta_A[%d,%d]=%.4f (true=%.4f), F=%.2f, "
             "took %.1f s",
             i,
             j,
             delta_a[i, j],
             true_delta,
-            perturbed_posterior["final_loss"],
+            perturbed_posterior["free_energy"],
             elapsed,
         )
 
@@ -378,7 +358,7 @@ def run_perturbation_experiment(
             "delta_A": delta_a,
             "A_mean_perturbed": perturbed_posterior["A_mean"],
             "A_std_perturbed": perturbed_posterior["A_std"],
-            "final_loss": perturbed_posterior["final_loss"],
+            "free_energy": perturbed_posterior["free_energy"],
         })
 
     # ------------------------------------------------------------------
@@ -398,7 +378,7 @@ def run_perturbation_experiment(
     A_std_perturbed_stack = np.stack(
         [r["A_std_perturbed"] for r in results_list]
     )
-    final_losses = np.array([r["final_loss"] for r in results_list])
+    free_energies = np.array([r["free_energy"] for r in results_list])
 
     save_path = output_dir / "perturbation_results.npz"
     np.savez(
@@ -413,20 +393,20 @@ def run_perturbation_experiment(
         A_mean_perturbed=A_mean_perturbed_stack,
         A_std_perturbed=A_std_perturbed_stack,
         A_ground_truth=A_base.numpy(),
-        final_losses=final_losses,
+        free_energies=free_energies,
         roi_names=np.array(SENSORIMOTOR_ROI_NAMES),
         seed=seed,
         n_train=n_train,
         n_eval=n_eval,
-        svi_steps=svi_steps,
-        n_restarts=n_restarts,
+        max_iter=max_iter,
+        tolerance=tolerance,
     )
     logger.info("  Saved results: %s", save_path)
 
     return {
         "save_path": str(save_path),
         "n_conditions": len(results_list),
-        "baseline_loss": baseline_posterior["final_loss"],
+        "baseline_free_energy": baseline_posterior["free_energy"],
     }
 
 
@@ -473,16 +453,16 @@ def main() -> None:
         help="Autoencoder training epochs",
     )
     parser.add_argument(
-        "--svi-steps",
+        "--max-iter",
         type=int,
-        default=500,
-        help="SVI optimisation steps per DCM fit",
+        default=128,
+        help="Maximum Gauss-Newton iterations per DCM fit",
     )
     parser.add_argument(
-        "--n-restarts",
-        type=int,
-        default=5,
-        help="SVI restarts per DCM fit",
+        "--tolerance",
+        type=float,
+        default=1e-2,
+        help="VL convergence criterion on free energy change",
     )
     parser.add_argument(
         "--seed",
@@ -499,8 +479,8 @@ def main() -> None:
         n_latent_multiplier=args.n_latent_multiplier,
         hidden_size=args.hidden_size,
         ae_epochs=args.ae_epochs,
-        svi_steps=args.svi_steps,
-        n_restarts=args.n_restarts,
+        max_iter=args.max_iter,
+        tolerance=args.tolerance,
         seed=args.seed,
     )
 

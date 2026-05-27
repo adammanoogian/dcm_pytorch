@@ -29,17 +29,17 @@ import argparse
 import logging
 import textwrap
 import time
-from functools import partial
 from pathlib import Path
 
 import numpy as np
-import pyro
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 from pyro_dcm.forward_models.csd_computation import compute_empirical_csd
-from pyro_dcm.models.guides import create_guide, extract_posterior_params, run_svi
-from pyro_dcm.models.spectral_dcm_model import spectral_dcm_model
+from pyro_dcm.inference.variational_laplace import (
+    extract_vl_posterior,
+    run_variational_laplace,
+)
 from pyro_dcm.neural_data_models.latent_extraction import (
     compute_latent_csd,
     extract_latent_trajectories,
@@ -81,12 +81,12 @@ def _fit_spectral_dcm(
     freqs: torch.Tensor,
     a_mask: torch.Tensor,
     *,
-    svi_steps: int,
-    n_restarts: int,
+    max_iter: int,
+    tolerance: float,
     prior_a_var: float = 1.0 / 16.0,
     eig_clamp: float = -1.0,
 ) -> dict:
-    """Fit spectral DCM and return posterior A statistics.
+    """Fit spectral DCM via Variational Laplace and return posterior A.
 
     Parameters
     ----------
@@ -96,10 +96,10 @@ def _fit_spectral_dcm(
         Frequency grid, shape ``(F,)``, float64.
     a_mask : torch.Tensor
         Connectivity mask, shape ``(N, N)``, float64.
-    svi_steps : int
-        Number of SVI optimisation steps.
-    n_restarts : int
-        Number of SVI restarts.
+    max_iter : int
+        Maximum Gauss-Newton iterations.
+    tolerance : float
+        Convergence criterion on free energy change.
     prior_a_var : float
         Prior variance for A matrix elements.
     eig_clamp : float
@@ -108,55 +108,31 @@ def _fit_spectral_dcm(
     Returns
     -------
     dict
-        Keys: ``'A_mean'``, ``'A_std'``, ``'final_loss'``,
-        ``'best_restart_idx'``.
+        Keys: ``'A_mean'``, ``'A_std'``, ``'free_energy'``,
+        ``'converged'``, ``'n_iterations'``.
     """
-    model_args = (observed_csd, freqs, a_mask)
-    model_kwargs = {"prior_a_var": prior_a_var, "eig_clamp": eig_clamp}
-
-    guide_factory = partial(
-        create_guide,
-        spectral_dcm_model,
-        guide_type="auto_normal",
-        init_scale=0.01,
+    N = a_mask.shape[0]
+    result = run_variational_laplace(
+        observed_csd,
+        freqs,
+        a_mask,
+        max_iter=max_iter,
+        tolerance=tolerance,
+        prior_variance=prior_a_var,
+        eig_clamp=eig_clamp,
     )
 
-    if n_restarts > 1:
-        guide = guide_factory()
-        result = run_svi(
-            spectral_dcm_model,
-            guide,
-            model_args=model_args,
-            model_kwargs=model_kwargs,
-            num_steps=svi_steps,
-            lr=0.01,
-            n_restarts=n_restarts,
-            guide_factory=guide_factory,
-        )
-    else:
-        pyro.clear_param_store()
-        guide = guide_factory()
-        result = run_svi(
-            spectral_dcm_model,
-            guide,
-            model_args=model_args,
-            model_kwargs=model_kwargs,
-            num_steps=svi_steps,
-            lr=0.01,
-        )
+    posterior = extract_vl_posterior(result, N, num_samples=500)
 
-    posterior = extract_posterior_params(
-        guide, model_args, model=spectral_dcm_model, num_samples=500
-    )
-
-    a_mean = posterior["A"]["mean"].detach().cpu().numpy()
+    a_mean = result.theta_post["A"].detach().cpu().numpy()
     a_std = posterior["A"]["std"].detach().cpu().numpy()
 
     return {
         "A_mean": a_mean,
         "A_std": a_std,
-        "final_loss": result["final_loss"],
-        "best_restart_idx": result.get("best_restart_idx", 0),
+        "free_energy": result.free_energy[-1] if result.free_energy else 0.0,
+        "converged": result.converged,
+        "n_iterations": result.n_iterations,
     }
 
 
@@ -260,8 +236,8 @@ def run_raw_csd_path(
     *,
     A_base: torch.Tensor,
     n_eval: int,
-    svi_steps: int,
-    n_restarts: int,
+    max_iter: int,
+    tolerance: float,
     seed: int,
 ) -> dict:
     """Run perturbation sweep with raw CSD (no autoencoder).
@@ -272,10 +248,10 @@ def run_raw_csd_path(
         Baseline connectivity, shape ``(N, N)``.
     n_eval : int
         Number of evaluation samples per condition.
-    svi_steps : int
-        SVI optimisation steps per DCM fit.
-    n_restarts : int
-        SVI restarts per DCM fit.
+    max_iter : int
+        Maximum Gauss-Newton iterations per DCM fit.
+    tolerance : float
+        Convergence criterion on free energy change.
     seed : int
         Random seed.
 
@@ -305,12 +281,12 @@ def run_raw_csd_path(
         baseline_dcm_input["csd"],
         baseline_dcm_input["freqs"],
         baseline_dcm_input["a_mask"],
-        svi_steps=svi_steps,
-        n_restarts=n_restarts,
+        max_iter=max_iter,
+        tolerance=tolerance,
     )
     logger.info(
-        "  Baseline raw DCM ELBO=%.2f (%.1f s)",
-        baseline_post["final_loss"],
+        "  Baseline raw DCM F=%.2f (%.1f s)",
+        baseline_post["free_energy"],
         time.time() - t0,
     )
 
@@ -359,8 +335,8 @@ def run_raw_csd_path(
             perturbed_dcm_input["csd"],
             perturbed_dcm_input["freqs"],
             perturbed_dcm_input["a_mask"],
-            svi_steps=svi_steps,
-            n_restarts=n_restarts,
+            max_iter=max_iter,
+            tolerance=tolerance,
         )
 
         delta_a = perturbed_post["A_mean"] - baseline_post["A_mean"]
@@ -382,7 +358,7 @@ def run_raw_csd_path(
             "delta_A": delta_a,
             "A_mean": perturbed_post["A_mean"],
             "A_std": perturbed_post["A_std"],
-            "final_loss": perturbed_post["final_loss"],
+            "free_energy": perturbed_post["free_energy"],
         })
 
     # Assemble arrays
@@ -416,8 +392,8 @@ def run_latent_csd_path(
     n_latent_multiplier: int,
     hidden_size: int,
     ae_epochs: int,
-    svi_steps: int,
-    n_restarts: int,
+    max_iter: int,
+    tolerance: float,
     seed: int,
     output_dir: Path,
 ) -> dict:
@@ -437,10 +413,10 @@ def run_latent_csd_path(
         LSTM hidden size.
     ae_epochs : int
         Autoencoder training epochs.
-    svi_steps : int
-        SVI optimisation steps per DCM fit.
-    n_restarts : int
-        SVI restarts per DCM fit.
+    max_iter : int
+        Maximum Gauss-Newton iterations per DCM fit.
+    tolerance : float
+        Convergence criterion on free energy change.
     seed : int
         Random seed.
     output_dir : Path
@@ -508,12 +484,12 @@ def run_latent_csd_path(
         baseline_dcm_input["csd"],
         baseline_dcm_input["freqs"],
         baseline_dcm_input["a_mask"],
-        svi_steps=svi_steps,
-        n_restarts=n_restarts,
+        max_iter=max_iter,
+        tolerance=tolerance,
     )
     logger.info(
-        "  Baseline latent DCM ELBO=%.2f (%.1f s)",
-        baseline_post["final_loss"],
+        "  Baseline latent DCM F=%.2f (%.1f s)",
+        baseline_post["free_energy"],
         time.time() - t0,
     )
 
@@ -563,8 +539,8 @@ def run_latent_csd_path(
             perturbed_dcm_input["csd"],
             perturbed_dcm_input["freqs"],
             perturbed_dcm_input["a_mask"],
-            svi_steps=svi_steps,
-            n_restarts=n_restarts,
+            max_iter=max_iter,
+            tolerance=tolerance,
         )
 
         delta_a = perturbed_post["A_mean"] - baseline_post["A_mean"]
@@ -586,7 +562,7 @@ def run_latent_csd_path(
             "delta_A": delta_a,
             "A_mean": perturbed_post["A_mean"],
             "A_std": perturbed_post["A_std"],
-            "final_loss": perturbed_post["final_loss"],
+            "free_energy": perturbed_post["free_energy"],
         })
 
     # Assemble arrays
@@ -724,8 +700,8 @@ def run_full_validation(
     n_latent_multiplier: int = 2,
     hidden_size: int = 64,
     ae_epochs: int = 100,
-    svi_steps: int = 500,
-    n_restarts: int = 5,
+    max_iter: int = 128,
+    tolerance: float = 1e-2,
     seed: int = 42,
 ) -> dict:
     """Execute full raw-vs-latent validation experiment.
@@ -744,10 +720,10 @@ def run_full_validation(
         LSTM hidden size.
     ae_epochs : int
         Autoencoder training epochs.
-    svi_steps : int
-        SVI optimisation steps per DCM fit.
-    n_restarts : int
-        SVI restarts per DCM fit.
+    max_iter : int
+        Maximum Gauss-Newton iterations per DCM fit.
+    tolerance : float
+        Convergence criterion on free energy change.
     seed : int
         Random seed.
 
@@ -774,8 +750,8 @@ def run_full_validation(
     raw_results = run_raw_csd_path(
         A_base=A_base,
         n_eval=n_eval,
-        svi_steps=svi_steps,
-        n_restarts=n_restarts,
+        max_iter=max_iter,
+        tolerance=tolerance,
         seed=seed,
     )
 
@@ -787,8 +763,8 @@ def run_full_validation(
         n_latent_multiplier=n_latent_multiplier,
         hidden_size=hidden_size,
         ae_epochs=ae_epochs,
-        svi_steps=svi_steps,
-        n_restarts=n_restarts,
+        max_iter=max_iter,
+        tolerance=tolerance,
         seed=seed,
         output_dir=output_dir,
     )
@@ -826,8 +802,8 @@ def run_full_validation(
         seed=seed,
         n_train=n_train,
         n_eval=n_eval,
-        svi_steps=svi_steps,
-        n_restarts=n_restarts,
+        max_iter=max_iter,
+        tolerance=tolerance,
     )
     logger.info("Saved comparison: %s", save_path)
 
@@ -856,7 +832,7 @@ def _print_sbatch_command(args: argparse.Namespace) -> None:
         #SBATCH --ntasks=1
         #SBATCH --cpus-per-task=4
         #SBATCH --mem=32G
-        #SBATCH --time=24:00:00
+        #SBATCH --time=04:00:00
         #SBATCH --output=cluster/logs/val_22_full_%j.out
         #SBATCH --error=cluster/logs/val_22_full_%j.err
         #SBATCH --partition=comp
@@ -877,8 +853,8 @@ def _print_sbatch_command(args: argparse.Namespace) -> None:
             --output-dir "{output_dir}" \\
             --n-train {n_train} \\
             --n-eval {n_eval} \\
-            --svi-steps {svi_steps} \\
-            --n-restarts {n_restarts} \\
+            --max-iter {max_iter} \\
+            --tolerance {tolerance} \\
             --ae-epochs {ae_epochs} \\
             --seed {seed}
 
@@ -895,8 +871,8 @@ def _print_sbatch_command(args: argparse.Namespace) -> None:
         output_dir=str(args.output_dir).replace("\\", "/"),
         n_train=args.n_train,
         n_eval=args.n_eval,
-        svi_steps=args.svi_steps,
-        n_restarts=args.n_restarts,
+        max_iter=args.max_iter,
+        tolerance=args.tolerance,
         ae_epochs=args.ae_epochs,
         seed=args.seed,
     )
@@ -955,16 +931,16 @@ def main() -> None:
         help="Autoencoder training epochs",
     )
     parser.add_argument(
-        "--svi-steps",
+        "--max-iter",
         type=int,
-        default=500,
-        help="SVI optimisation steps per DCM fit",
+        default=128,
+        help="Maximum Gauss-Newton iterations per DCM fit",
     )
     parser.add_argument(
-        "--n-restarts",
-        type=int,
-        default=5,
-        help="SVI restarts per DCM fit",
+        "--tolerance",
+        type=float,
+        default=1e-2,
+        help="VL convergence criterion on free energy change",
     )
     parser.add_argument(
         "--seed",
@@ -993,8 +969,8 @@ def main() -> None:
         n_latent_multiplier=args.n_latent_multiplier,
         hidden_size=args.hidden_size,
         ae_epochs=args.ae_epochs,
-        svi_steps=args.svi_steps,
-        n_restarts=args.n_restarts,
+        max_iter=args.max_iter,
+        tolerance=args.tolerance,
         seed=args.seed,
     )
 

@@ -86,11 +86,14 @@ def _predicted_residual(
     freqs: torch.Tensor,
     a_mask: torch.Tensor,
     N: int,
+    eig_clamp: float | None = -1.0 / 32.0,
 ) -> torch.Tensor:
     """Compute residual vector (observed - predicted) as real vector."""
     A_free, noise_a, noise_b, noise_c = _unpack_params(theta, N)
     A = parameterize_A(A_free * a_mask)
-    pred_csd = spectral_dcm_forward(A, freqs, noise_a, noise_b, noise_c)
+    pred_csd = spectral_dcm_forward(
+        A, freqs, noise_a, noise_b, noise_c, eig_clamp=eig_clamp
+    )
     residual = observed_csd - pred_csd
     return torch.cat([residual.real.reshape(-1), residual.imag.reshape(-1)])
 
@@ -102,6 +105,7 @@ def _compute_jacobian(
     a_mask: torch.Tensor,
     N: int,
     dx: float = 1e-6,
+    eig_clamp: float | None = -1.0 / 32.0,
 ) -> torch.Tensor:
     """Compute Jacobian of residual w.r.t. theta via finite differences.
 
@@ -113,14 +117,18 @@ def _compute_jacobian(
     Shape: (n_data, n_params).
     """
     n_params = theta.shape[0]
-    res0 = _predicted_residual(theta, observed_csd, freqs, a_mask, N)
+    res0 = _predicted_residual(
+        theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp
+    )
     n_data = res0.shape[0]
     J = torch.zeros(n_data, n_params, dtype=torch.float64, device=theta.device)
 
     for j in range(n_params):
         theta_plus = theta.clone()
         theta_plus[j] += dx
-        res_plus = _predicted_residual(theta_plus, observed_csd, freqs, a_mask, N)
+        res_plus = _predicted_residual(
+            theta_plus, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp
+        )
         J[:, j] = (res_plus - res0) / dx
 
     return J
@@ -136,6 +144,7 @@ def run_variational_laplace(
     prior_variance: float = 1.0 / 64.0,
     initial_lambda: float = 8.0,
     regularization: float = 1.0 / 128.0,
+    eig_clamp: float | None = -1.0 / 32.0,
 ) -> VariationalLaplaceResult:
     """Run Variational Laplace (Gauss-Newton) inference for spectral DCM.
 
@@ -161,10 +170,15 @@ def run_variational_laplace(
         Convergence criterion on free energy change.
     prior_variance : float
         Prior variance for all parameters (SPM12 default: 1/64).
+        Use 1/16 for MEG/latent-circuit models.
     initial_lambda : float
         Initial log-precision for observation noise.
     regularization : float
         Levenberg-Marquardt damping added to Hessian diagonal.
+    eig_clamp : float or None
+        Maximum real part of eigenvalues for A matrix clamping.
+        Default ``-1/32`` preserves fMRI behavior; use ``-1.0``
+        for MEG; ``None`` disables clamping entirely.
 
     Returns
     -------
@@ -196,7 +210,9 @@ def run_variational_laplace(
         if not torch.isfinite(theta).all():
             theta = prior_mean.clone()
 
-        res = _predicted_residual(theta, observed_csd, freqs, a_mask, N)
+        res = _predicted_residual(
+            theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp
+        )
         n_data = res.shape[0]
         precision = torch.exp(lambda_precision)
 
@@ -222,7 +238,9 @@ def run_variational_laplace(
         prev_F = F_val
 
         # Gauss-Newton: J^T @ precision @ J + prior_precision
-        J = _compute_jacobian(theta, observed_csd, freqs, a_mask, N)
+        J = _compute_jacobian(
+            theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp
+        )
 
         H_gn = precision * (J.T @ J) + prior_precision
         H_gn = H_gn + regularization * torch.eye(
@@ -255,12 +273,16 @@ def run_variational_laplace(
                 continue
             try:
                 res_trial = _predicted_residual(
-                    theta_new, observed_csd, freqs, a_mask, N
+                    theta_new, observed_csd, freqs, a_mask, N,
+                    eig_clamp=eig_clamp,
                 )
                 sse_trial = (res_trial @ res_trial).item()
                 diff_trial = theta_new - prior_mean
                 kl_trial = 0.5 * (diff_trial @ prior_precision @ diff_trial).item()
-                nll_trial = 0.5 * precision.item() * sse_trial - 0.5 * n_data * lambda_precision.item()
+                nll_trial = (
+                    0.5 * precision.item() * sse_trial
+                    - 0.5 * n_data * lambda_precision.item()
+                )
                 F_trial = -(nll_trial + kl_trial)
                 if F_trial > F_val or step < 1e-4:
                     break
@@ -274,7 +296,10 @@ def run_variational_laplace(
         # Update hyperparameter (observation log-precision)
         with torch.no_grad():
             try:
-                res_new = _predicted_residual(theta, observed_csd, freqs, a_mask, N)
+                res_new = _predicted_residual(
+                    theta, observed_csd, freqs, a_mask, N,
+                    eig_clamp=eig_clamp,
+                )
                 sse_new = (res_new @ res_new).item()
             except RuntimeError:
                 sse_new = sse
@@ -286,7 +311,9 @@ def run_variational_laplace(
     result.n_iterations = iteration + 1
 
     # Final Gauss-Newton Hessian for posterior covariance
-    J_final = _compute_jacobian(theta, observed_csd, freqs, a_mask, N)
+    J_final = _compute_jacobian(
+        theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp
+    )
     precision_final = torch.exp(lambda_precision)
     H_final = precision_final * (J_final.T @ J_final) + prior_precision
     H_final = H_final + regularization * torch.eye(
@@ -302,7 +329,7 @@ def run_variational_laplace(
         A_free_post, na_post, nb_post, nc_post = _unpack_params(theta, N)
         A_post = parameterize_A(A_free_post * a_mask)
         pred_final = spectral_dcm_forward(
-            A_post, freqs, na_post, nb_post, nc_post
+            A_post, freqs, na_post, nb_post, nc_post, eig_clamp=eig_clamp
         )
 
     result.theta_post = {
@@ -390,8 +417,16 @@ def extract_vl_posterior(
         "samples": samples_flat[:, idx : idx + n_nc].reshape(num_samples, 2, N),
     }
 
+    # Include parameterized A (from theta_post) for convenience
+    posterior["A"] = {
+        "mean": result.theta_post["A"],
+        "std": std_vec[:n_a].reshape(N, N),
+    }
+
     posterior["median"] = {
-        k: v["mean"] for k, v in posterior.items() if k != "median"
+        k: v["mean"]
+        for k, v in posterior.items()
+        if k not in ("median", "A")
     }
 
     return posterior

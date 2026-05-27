@@ -2,20 +2,21 @@
 
 Tests that known perturbations to the ground-truth connectivity A are
 detectable through the full pipeline: OU timeseries -> LSTM-AE ->
-latent CSD -> spectral DCM -> posterior delta_A.
+latent CSD -> spectral DCM (Variational Laplace) -> posterior delta_A.
 
 Both tests are marked ``@pytest.mark.slow`` (each takes ~30-90s).
 """
 from __future__ import annotations
 
 import numpy as np
-import pyro
 import pytest
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from pyro_dcm.models.guides import create_guide, extract_posterior_params, run_svi
-from pyro_dcm.models.spectral_dcm_model import spectral_dcm_model
+from pyro_dcm.inference.variational_laplace import (
+    extract_vl_posterior,
+    run_variational_laplace,
+)
 from pyro_dcm.neural_data_models.latent_extraction import (
     compute_latent_csd,
     extract_latent_trajectories,
@@ -54,10 +55,11 @@ def _run_pipeline(
     ae_model: MEGAutoencoder,
     *,
     n_eval: int,
-    svi_steps: int,
+    max_iter: int,
+    tolerance: float,
     seed: int,
 ) -> np.ndarray:
-    """Run latent CSD -> spectral DCM and return posterior A mean.
+    """Run latent CSD -> spectral DCM (VL) and return posterior A mean.
 
     Parameters
     ----------
@@ -67,8 +69,10 @@ def _run_pipeline(
         Trained autoencoder (not retrained).
     n_eval : int
         Number of evaluation samples.
-    svi_steps : int
-        SVI steps.
+    max_iter : int
+        Maximum Gauss-Newton iterations.
+    tolerance : float
+        Convergence criterion on free energy change.
     seed : int
         Seed for data generation.
 
@@ -86,28 +90,23 @@ def _run_pipeline(
     )
     dcm_input = prepare_for_spectral_dcm(csd_result)
 
-    pyro.clear_param_store()
-    guide = create_guide(
-        spectral_dcm_model, guide_type="auto_normal", init_scale=0.01
+    N = dcm_input["a_mask"].shape[0]
+    vl_result = run_variational_laplace(
+        dcm_input["csd"],
+        dcm_input["freqs"],
+        dcm_input["a_mask"],
+        max_iter=max_iter,
+        tolerance=tolerance,
+        prior_variance=1.0 / 16.0,
+        eig_clamp=-1.0,
     )
-    svi_result = run_svi(
-        spectral_dcm_model,
-        guide,
-        model_args=(dcm_input["csd"], dcm_input["freqs"], dcm_input["a_mask"]),
-        model_kwargs={"prior_a_var": 1.0 / 16.0, "eig_clamp": -1.0},
-        num_steps=svi_steps,
-        lr=0.01,
-    )
-    assert not any(
-        np.isnan(v) for v in svi_result["losses"]
-    ), "NaN in SVI losses"
 
-    posterior = extract_posterior_params(
-        guide,
-        (dcm_input["csd"], dcm_input["freqs"], dcm_input["a_mask"]),
-        model=spectral_dcm_model,
-        num_samples=200,
-    )
+    # Sanity: free energy trace should not contain NaN
+    assert all(
+        np.isfinite(f) for f in vl_result.free_energy
+    ), "NaN in VL free energy trace"
+
+    posterior = extract_vl_posterior(vl_result, N, num_samples=200)
     return posterior["A"]["mean"].detach().cpu().numpy()
 
 
@@ -124,7 +123,8 @@ def test_perturbation_changes_posterior() -> None:
     n_latent = 2 * n_roi
     n_train = 50
     n_eval = 20
-    svi_steps = 100
+    max_iter = 64
+    tolerance = 1e-2
     seed = 42
 
     # Build ground truth
@@ -149,8 +149,8 @@ def test_perturbation_changes_posterior() -> None:
 
     # Baseline DCM posterior
     A_post_base = _run_pipeline(
-        A_base, ae_model, n_eval=n_eval, svi_steps=svi_steps,
-        seed=seed + 5000,
+        A_base, ae_model, n_eval=n_eval, max_iter=max_iter,
+        tolerance=tolerance, seed=seed + 5000,
     )
 
     # Perturbed A: double connection [0,1]
@@ -162,8 +162,8 @@ def test_perturbation_changes_posterior() -> None:
     assert eigvals.real.max().item() < 0, "Perturbed A is unstable"
 
     A_post_perturbed = _run_pipeline(
-        A_perturbed, ae_model, n_eval=n_eval, svi_steps=svi_steps,
-        seed=seed + 6000,
+        A_perturbed, ae_model, n_eval=n_eval, max_iter=max_iter,
+        tolerance=tolerance, seed=seed + 6000,
     )
 
     # delta_A in latent space
@@ -202,7 +202,8 @@ def test_no_perturbation_stable_posterior() -> None:
     n_latent = 2 * n_roi
     n_train = 50
     n_eval = 20
-    svi_steps = 100
+    max_iter = 64
+    tolerance = 1e-2
     seed = 99
 
     A_base = _make_small_A(seed=seed)
@@ -225,18 +226,18 @@ def test_no_perturbation_stable_posterior() -> None:
 
     # Run baseline twice with different eval seeds
     A_post_1 = _run_pipeline(
-        A_base, ae_model, n_eval=n_eval, svi_steps=svi_steps,
-        seed=seed + 5000,
+        A_base, ae_model, n_eval=n_eval, max_iter=max_iter,
+        tolerance=tolerance, seed=seed + 5000,
     )
     A_post_2 = _run_pipeline(
-        A_base, ae_model, n_eval=n_eval, svi_steps=svi_steps,
-        seed=seed + 6000,
+        A_base, ae_model, n_eval=n_eval, max_iter=max_iter,
+        tolerance=tolerance, seed=seed + 6000,
     )
 
     delta_A = np.abs(A_post_2 - A_post_1)
     max_delta = delta_A.max()
 
-    # With same A and short SVI, stochastic variation should be limited.
+    # With same A and VL (deterministic), variation should be limited.
     # Use a generous threshold (0.5) to avoid flakiness.
     assert max_delta < 0.5, (
         f"max(|delta_A|) = {max_delta:.4f} exceeds 0.5: "
