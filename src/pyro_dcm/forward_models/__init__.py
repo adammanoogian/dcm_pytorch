@@ -8,16 +8,12 @@ from pyro_dcm.forward_models.csd_computation import (
     compute_empirical_csd,
     default_welch_params,
 )
+from pyro_dcm.forward_models.latent_observation import direct_observation
 from pyro_dcm.forward_models.neural_state import (
     NeuralStateEquation,
     compute_effective_A,
     parameterize_A,
     parameterize_B,
-)
-from pyro_dcm.forward_models.spectral_noise import (
-    default_noise_priors,
-    neuronal_noise_csd,
-    observation_noise_csd,
 )
 from pyro_dcm.forward_models.rdcm_forward import (
     compute_derivative_coefficients,
@@ -36,10 +32,15 @@ from pyro_dcm.forward_models.rdcm_posterior import (
     rigid_inversion,
     sparse_inversion,
 )
-from pyro_dcm.forward_models.latent_observation import direct_observation
+from pyro_dcm.forward_models.spectral_noise import (
+    default_noise_priors,
+    neuronal_noise_csd,
+    observation_noise_csd,
+)
 from pyro_dcm.forward_models.spectral_transfer import (
     compute_transfer_function,
     default_frequency_grid,
+    default_frequency_grid_meg,
     predicted_csd,
     spectral_dcm_forward,
 )
@@ -58,6 +59,7 @@ __all__ = [
     # Phase 2: Spectral transfer function + predicted CSD
     "compute_transfer_function",
     "default_frequency_grid",
+    "default_frequency_grid_meg",
     "predicted_csd",
     "spectral_dcm_forward",
     # Phase 2: Spectral noise models
