@@ -239,6 +239,59 @@ def predicted_csd(
     return G + Gn
 
 
+def csd_mar_roundtrip(
+    csd: torch.Tensor,
+    freqs: torch.Tensor,
+    mar_order: int = 7,
+) -> torch.Tensor:
+    """Apply CSD -> MAR -> CSD round-trip matching SPM12.
+
+    SPM12's ``spm_csd_fmri_mtf.m`` (line 157) applies this as the
+    final step::
+
+        y = spm_mar2csd(spm_csd2mar(y, M.Hz, M.p - 1), M.Hz)
+
+    This constrains predicted CSD to lie in MAR(p) model space,
+    acting as regularization/smoothing.
+
+    .. warning::
+
+        This function is **NOT differentiable** (uses numpy FFT +
+        linear solve). Safe for VL inference (finite-difference
+        Jacobians). For SVI, use ``mar_order=0`` to skip.
+
+    Parameters
+    ----------
+    csd : torch.Tensor
+        Predicted CSD, shape ``(F, N, N)``, complex128.
+    freqs : torch.Tensor
+        Frequency vector in Hz, shape ``(F,)``, float64.
+    mar_order : int
+        MAR model order for the round-trip. Default 7, matching
+        SPM12's ``M.p - 1 = 8 - 1 = 7``.
+
+    Returns
+    -------
+    torch.Tensor
+        Smoothed CSD, shape ``(F, N, N)``, complex128. Same device
+        as input.
+    """
+    import numpy as np
+
+    from pyro_dcm.forward_models.mar_csd import csd2mar, mar2csd
+
+    csd_np = csd.detach().cpu().numpy()
+    freqs_np = freqs.detach().cpu().numpy()
+    fs = 2.0 * freqs_np[-1]
+
+    mar = csd2mar(csd_np, freqs_np, p=mar_order)
+    csd_smooth = mar2csd(mar, freqs_np, fs)
+
+    return torch.tensor(
+        csd_smooth, dtype=torch.complex128, device=csd.device,
+    )
+
+
 def spectral_dcm_forward(
     A: torch.Tensor,
     freqs: torch.Tensor,
@@ -247,6 +300,7 @@ def spectral_dcm_forward(
     c: torch.Tensor,
     *,
     eig_clamp: float | None = -1.0 / 32.0,
+    mar_order: int = 7,
 ) -> torch.Tensor:
     """Complete spectral DCM predicted CSD pipeline.
 
@@ -254,6 +308,10 @@ def spectral_dcm_forward(
     transfer function (via eigendecomposition), neuronal and observation
     noise spectra, and CSD assembly. Uses C_in = C_out = identity
     following the standard spDCM convention.
+
+    When ``mar_order > 0``, applies a CSD -> MAR -> CSD round-trip as
+    the final step, matching SPM12 ``spm_csd_fmri_mtf.m`` line 157.
+    This constrains predicted CSD to lie in MAR(p) model space.
 
     Implements [REF-010] Eq. 3-7 (Friston et al. 2014), matching
     SPM12 spm_csd_fmri_mtf.m.
@@ -280,6 +338,11 @@ def spectral_dcm_forward(
         ``-1/32`` matches the SPM12 fMRI convention. Set to ``-1.0``
         for MEG, or ``None`` to disable clamping. Passed through to
         ``compute_transfer_function``.
+    mar_order : int
+        MAR model order for the CSD -> MAR -> CSD round-trip. Default
+        7 matches SPM12's ``M.p - 1 = 8 - 1 = 7``. Set to 0 to
+        disable the round-trip (required for SVI/autograd paths since
+        the round-trip is not differentiable).
 
     Returns
     -------
@@ -310,6 +373,10 @@ def spectral_dcm_forward(
     Gu = neuronal_noise_csd(freqs, a, n_regions=N)
     Gn = observation_noise_csd(freqs, b, c, N)
 
-
     # Assemble predicted CSD
-    return predicted_csd(H, Gu, Gn)
+    raw_csd = predicted_csd(H, Gu, Gn)
+
+    # MAR round-trip (SPM12 spm_csd_fmri_mtf.m line 157)
+    if mar_order > 0:
+        return csd_mar_roundtrip(raw_csd, freqs, mar_order)
+    return raw_csd

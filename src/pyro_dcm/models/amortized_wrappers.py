@@ -295,7 +295,9 @@ def amortized_spectral_dcm_model(
     # Log-space contract: csd_noise_scale in log-space
     csd_noise_scale = params["csd_noise_scale"].exp()
 
-    predicted_csd = spectral_dcm_forward(A, freqs, noise_a, noise_b, noise_c)
+    predicted_csd = spectral_dcm_forward(
+        A, freqs, noise_a, noise_b, noise_c, mar_order=0,
+    )
     pyro.deterministic("predicted_csd", predicted_csd)
 
     pred_real = decompose_csd_for_likelihood(predicted_csd)

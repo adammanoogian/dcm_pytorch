@@ -244,7 +244,7 @@ class TestSpectralDCMForward:
         assert torch.all(torch.isfinite(S.imag))
 
     def test_differentiable(self) -> None:
-        """Autograd flows through the forward model w.r.t. A."""
+        """Autograd flows through the forward model w.r.t. A (without MAR)."""
         N = 3
         A = torch.tensor(
             [[-0.5, 0.1, 0.0], [0.2, -0.5, 0.1], [0.0, 0.3, -0.5]],
@@ -256,8 +256,53 @@ class TestSpectralDCMForward:
         b = torch.zeros(2, 1, dtype=torch.float64)
         c = torch.zeros(1, N, dtype=torch.float64)
 
-        S = spectral_dcm_forward(A, freqs, a, b, c)
+        # mar_order=0: MAR round-trip is NOT differentiable
+        S = spectral_dcm_forward(A, freqs, a, b, c, mar_order=0)
         loss = S.abs().sum()
         grads = torch.autograd.grad(loss, A)
         assert grads[0] is not None
         assert torch.all(torch.isfinite(grads[0]))
+
+    def test_mar_roundtrip_smoothing(self) -> None:
+        """MAR round-trip should produce valid CSD with same shape."""
+        N = 3
+        A = torch.tensor(
+            [[-0.5, 0.1, 0.0], [0.2, -0.5, 0.1], [0.0, 0.3, -0.5]],
+            dtype=torch.float64,
+        )
+        freqs = default_frequency_grid(TR=2.0, n_freqs=32)
+        a = torch.zeros(2, 1, dtype=torch.float64)
+        b = torch.zeros(2, 1, dtype=torch.float64)
+        c = torch.zeros(1, N, dtype=torch.float64)
+
+        # With MAR round-trip
+        csd_smooth = spectral_dcm_forward(
+            A, freqs, a, b, c, mar_order=7,
+        )
+        assert csd_smooth.shape == (32, N, N)
+        assert csd_smooth.dtype == torch.complex128
+        assert torch.all(torch.isfinite(csd_smooth.real))
+        assert torch.all(torch.isfinite(csd_smooth.imag))
+
+        # Without MAR round-trip
+        csd_raw = spectral_dcm_forward(
+            A, freqs, a, b, c, mar_order=0,
+        )
+        assert csd_raw.shape == (32, N, N)
+
+        # Shapes match, values differ (smoothing effect)
+        assert not torch.allclose(csd_smooth, csd_raw, atol=1e-6)
+
+    def test_mar_order_zero_bypasses_roundtrip(self) -> None:
+        """mar_order=0 returns raw CSD without MAR smoothing."""
+        N = 2
+        A = torch.diag(torch.tensor([-0.5, -0.5], dtype=torch.float64))
+        freqs = default_frequency_grid(TR=2.0, n_freqs=16)
+        a = torch.zeros(2, 1, dtype=torch.float64)
+        b = torch.zeros(2, 1, dtype=torch.float64)
+        c = torch.zeros(1, N, dtype=torch.float64)
+
+        csd = spectral_dcm_forward(
+            A, freqs, a, b, c, mar_order=0,
+        )
+        assert torch.all(torch.isfinite(csd.real))

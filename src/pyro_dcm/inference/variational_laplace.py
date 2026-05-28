@@ -98,12 +98,14 @@ def _predicted_residual(
     a_mask: torch.Tensor,
     N: int,
     eig_clamp: float | None = -1.0 / 32.0,
+    mar_order: int = 7,
 ) -> torch.Tensor:
     """Compute residual vector (observed - predicted) as real vector."""
     A_free, noise_a, noise_b, noise_c = _unpack_params(theta, N)
     A = parameterize_A(A_free * a_mask.to(A_free.device))
     pred_csd = spectral_dcm_forward(
-        A, freqs, noise_a, noise_b, noise_c, eig_clamp=eig_clamp
+        A, freqs, noise_a, noise_b, noise_c, eig_clamp=eig_clamp,
+        mar_order=mar_order,
     )
     residual = observed_csd - pred_csd
     return torch.cat([residual.real.reshape(-1), residual.imag.reshape(-1)])
@@ -117,6 +119,7 @@ def _compute_jacobian(
     N: int,
     dx: float = 1e-6,
     eig_clamp: float | None = -1.0 / 32.0,
+    mar_order: int = 7,
 ) -> torch.Tensor:
     """Compute Jacobian of residual w.r.t. theta via finite differences.
 
@@ -129,7 +132,8 @@ def _compute_jacobian(
     """
     n_params = theta.shape[0]
     res0 = _predicted_residual(
-        theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp
+        theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp,
+        mar_order=mar_order,
     )
     n_data = res0.shape[0]
     J = torch.zeros(n_data, n_params, dtype=torch.float64, device=theta.device)
@@ -138,7 +142,8 @@ def _compute_jacobian(
         theta_plus = theta.clone()
         theta_plus[j] += dx
         res_plus = _predicted_residual(
-            theta_plus, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp
+            theta_plus, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp,
+            mar_order=mar_order,
         )
         J[:, j] = (res_plus - res0) / dx
 
@@ -156,6 +161,7 @@ def run_variational_laplace(
     initial_lambda: float = 8.0,
     regularization: float = 1.0 / 128.0,
     eig_clamp: float | None = -1.0 / 32.0,
+    mar_order: int = 7,
 ) -> VariationalLaplaceResult:
     """Run Variational Laplace (Gauss-Newton) inference for spectral DCM.
 
@@ -190,6 +196,11 @@ def run_variational_laplace(
         Maximum real part of eigenvalues for A matrix clamping.
         Default ``-1/32`` preserves fMRI behavior; use ``-1.0``
         for MEG; ``None`` disables clamping entirely.
+    mar_order : int
+        MAR model order for the CSD -> MAR -> CSD round-trip. Default
+        7 matches SPM12's ``M.p - 1 = 8 - 1 = 7``. The round-trip is
+        safe for VL (uses finite-difference Jacobians). Set to 0 to
+        disable.
 
     Returns
     -------
@@ -222,7 +233,8 @@ def run_variational_laplace(
             theta = prior_mean.clone()
 
         res = _predicted_residual(
-            theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp
+            theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp,
+            mar_order=mar_order,
         )
         n_data = res.shape[0]
         precision = torch.exp(lambda_precision)
@@ -250,7 +262,8 @@ def run_variational_laplace(
 
         # Gauss-Newton: J^T @ precision @ J + prior_precision
         J = _compute_jacobian(
-            theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp
+            theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp,
+            mar_order=mar_order,
         )
 
         H_gn = precision * (J.T @ J) + prior_precision
@@ -285,7 +298,7 @@ def run_variational_laplace(
             try:
                 res_trial = _predicted_residual(
                     theta_new, observed_csd, freqs, a_mask, N,
-                    eig_clamp=eig_clamp,
+                    eig_clamp=eig_clamp, mar_order=mar_order,
                 )
                 sse_trial = (res_trial @ res_trial).item()
                 diff_trial = theta_new - prior_mean
@@ -309,7 +322,7 @@ def run_variational_laplace(
             try:
                 res_new = _predicted_residual(
                     theta, observed_csd, freqs, a_mask, N,
-                    eig_clamp=eig_clamp,
+                    eig_clamp=eig_clamp, mar_order=mar_order,
                 )
                 sse_new = (res_new @ res_new).item()
             except RuntimeError:
@@ -323,7 +336,8 @@ def run_variational_laplace(
 
     # Final Gauss-Newton Hessian for posterior covariance
     J_final = _compute_jacobian(
-        theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp
+        theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp,
+        mar_order=mar_order,
     )
     precision_final = torch.exp(lambda_precision)
     H_final = precision_final * (J_final.T @ J_final) + prior_precision
@@ -340,7 +354,8 @@ def run_variational_laplace(
         A_free_post, na_post, nb_post, nc_post = _unpack_params(theta, N)
         A_post = parameterize_A(A_free_post * a_mask.to(A_free_post.device))
         pred_final = spectral_dcm_forward(
-            A_post, freqs, na_post, nb_post, nc_post, eig_clamp=eig_clamp
+            A_post, freqs, na_post, nb_post, nc_post, eig_clamp=eig_clamp,
+            mar_order=mar_order,
         )
 
     result.theta_post = {
