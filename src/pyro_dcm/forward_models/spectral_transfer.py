@@ -11,6 +11,12 @@ Eigenvalue stabilization follows the SPM convention of clamping real
 parts to max(-1/32) for fMRI frequency ranges. For MEG/EEG
 electrophysiology (1-45 Hz), the clamp threshold can be relaxed via
 the ``eig_clamp`` parameter.
+
+When ``hemodynamic=True`` (default), the transfer function is computed
+through the full 5N-dimensional hemodynamic system (neural +
+vasodilation + flow + volume + deoxyHb), matching SPM12's
+``spm_fx_fmri`` + ``spm_gx_fmri`` + ``spm_dcm_mtf`` pipeline. This
+includes P.C/16 input scaling (Divergence 7 from RESEARCH.md).
 """
 
 from __future__ import annotations
@@ -21,6 +27,245 @@ from pyro_dcm.forward_models.spectral_noise import (
     neuronal_noise_csd,
     observation_noise_csd,
 )
+
+# ---------------------------------------------------------------------------
+# Hemodynamic constants (SPM12 spm_fx_fmri.m, spm_gx_fmri.m)
+# ---------------------------------------------------------------------------
+
+#: Signal decay rate (1/s). SPM12: H(1).
+H_KAPPA: float = 0.64
+
+#: Autoregulation gain (1/s). SPM12: H(2).
+H_GAMMA: float = 0.32
+
+#: Transit time (s). SPM12: H(3).
+H_TAU: float = 2.00
+
+#: Grubb's exponent (dimensionless). SPM12: H(4).
+H_ALPHA: float = 0.32
+
+#: Resting oxygen extraction fraction. SPM12: H(5) / E0.
+H_E0: float = 0.4
+
+
+def _hemodynamic_fx(
+    x: torch.Tensor,
+    A: torch.Tensor,
+    C: torch.Tensor,
+    P_decay: torch.Tensor,
+    P_transit: torch.Tensor,
+) -> torch.Tensor:
+    """Hemodynamic state equation matching SPM12 ``spm_fx_fmri.m``.
+
+    Computes dx/dt for the 5N-dimensional state vector:
+    ``[x_neural(N), s(N), lnf(N), lnv(N), lnq(N)]``.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        State vector, shape ``(5*N,)``.
+    A : torch.Tensor
+        Neural effective connectivity, shape ``(N, N)``. Already
+        parameterized (negative self-connections).
+    C : torch.Tensor
+        Input matrix, shape ``(N, N)``. Typically ``I/16`` matching
+        SPM12 ``P.C = P.C/16`` (spm_fx_fmri.m line 49).
+    P_decay : torch.Tensor
+        Log signal decay deviation, shape ``(1,)``.
+    P_transit : torch.Tensor
+        Log transit time deviation per region, shape ``(N,)``.
+
+    Returns
+    -------
+    torch.Tensor
+        Time derivative dx/dt, shape ``(5*N,)``.
+    """
+    N = A.shape[0]
+
+    # Unpack states
+    x_neural = x[:N]
+    s = x[N : 2 * N]
+    lnf = x[2 * N : 3 * N]
+    lnv = x[3 * N : 4 * N]
+    lnq = x[4 * N : 5 * N]
+
+    f = torch.exp(lnf)
+    v = torch.exp(lnv)
+    q = torch.exp(lnq)
+
+    # Modulated hemodynamic parameters
+    sd = H_KAPPA * torch.exp(P_decay)  # signal decay
+    tt = H_TAU * torch.exp(P_transit)  # transit time per region
+
+    # Outflow: fv = v^(1/alpha)
+    fv = v ** (1.0 / H_ALPHA)
+
+    # Oxygen extraction fraction: E(f) = (1 - (1-E0)^(1/f)) / E0
+    ff = (1.0 - (1.0 - H_E0) ** (1.0 / f)) / H_E0
+
+    # Neural dynamics: dx_neural/dt = A @ x_neural  (input u=0 for Jacobian)
+    dx_neural = A @ x_neural
+
+    # Vasodilation: ds/dt = x_neural - sd*s - gamma*(f - 1)
+    ds = x_neural - sd * s - H_GAMMA * (f - 1.0)
+
+    # Flow (in log space): dlnf/dt = s/f  (SPM12: f(:,3) = x(:,2)./x(:,3))
+    # Note: x(:,3) in SPM12 is the exponentiated flow (f), and the state
+    # equation gives d(lnf)/dt = s/f (chain rule through exp).
+    dlnf = s / f
+
+    # Volume (in log space): dlnv/dt = (f - fv)/(tt*v)
+    dlnv = (f - fv) / (tt * v)
+
+    # DeoxyHb (in log space): dlnq/dt = (ff*f - fv*q/v) / (tt*q)
+    dlnq = (ff * f - fv * q / v) / (tt * q)
+
+    return torch.cat([dx_neural, ds, dlnf, dlnv, dlnq])
+
+
+def compute_hemodynamic_jacobian(
+    A: torch.Tensor,
+    P_decay: torch.Tensor,
+    P_transit: torch.Tensor,
+    P_epsilon: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Compute full 5N x 5N hemodynamic Jacobian at steady state.
+
+    Matches SPM12's ``spm_fx_fmri`` + ``spm_gx_fmri`` Jacobian
+    computation at the steady state x=0 (log-space). Uses finite
+    differences for the state Jacobian (safer than hand-transcribing
+    SPM12's analytical form) and the analytical BOLD observation
+    function from Stephan et al. (2007).
+
+    Parameters
+    ----------
+    A : torch.Tensor
+        Neural effective connectivity, shape ``(N, N)``, float64.
+        Already parameterized (negative self-connections).
+    P_decay : torch.Tensor
+        Log signal decay deviation, shape ``(1,)``, float64.
+    P_transit : torch.Tensor
+        Log transit time deviation per region, shape ``(N,)``, float64.
+    P_epsilon : torch.Tensor
+        Log BOLD signal ratio deviation, shape ``(1,)``, float64.
+
+    Returns
+    -------
+    dfdx : torch.Tensor
+        Full system Jacobian, shape ``(5N, 5N)``, float64.
+    dfdu : torch.Tensor
+        Input projection, shape ``(5N, N)``, float64. Incorporates
+        P.C/16 scaling (SPM12 spm_fx_fmri.m line 49).
+    dgdx : torch.Tensor
+        BOLD observation Jacobian, shape ``(N, 5N)``, float64.
+        Matches SPM12 ``spm_gx_fmri.m`` (Stephan 2007 params).
+    """
+    N = A.shape[0]
+    dtype = A.dtype
+    device = A.device
+
+    # Input matrix: C = I/16 (SPM12 spm_fx_fmri.m line 49)
+    C = torch.eye(N, dtype=dtype, device=device) / 16.0
+
+    # Steady state: all zeros in log space
+    x0 = torch.zeros(5 * N, dtype=dtype, device=device)
+
+    # --- dfdx via finite differences ---
+    dx = 1e-8
+    f0 = _hemodynamic_fx(x0, A, C, P_decay, P_transit)
+    dfdx = torch.zeros(5 * N, 5 * N, dtype=dtype, device=device)
+    for j in range(5 * N):
+        x_pert = x0.clone()
+        x_pert[j] += dx
+        f_pert = _hemodynamic_fx(x_pert, A, C, P_decay, P_transit)
+        dfdx[:, j] = (f_pert - f0) / dx
+
+    # --- dfdu: input projection (5N, N) ---
+    # Neural input only: dfdu = [C; 0; 0; 0; 0]
+    dfdu = torch.zeros(5 * N, N, dtype=dtype, device=device)
+    dfdu[:N, :] = C
+
+    # --- dgdx: BOLD observation function (SPM12 spm_gx_fmri.m) ---
+    # Stephan 2007 parameterization
+    TE = 0.04
+    V0 = 4.0  # percentage
+    nu0 = 40.3
+    r0 = 25.0
+
+    ep = torch.exp(P_epsilon)
+    k1 = 4.3 * nu0 * H_E0 * TE  # = 2.7716
+    k2_val = ep * r0 * H_E0 * TE
+    k3_val = 1.0 - ep
+
+    # At steady state (v=1, q=1):
+    # g = V0*(k1*(1-q) + k2*(1-q/v) + k3*(1-v))
+    # dg/d(lnv) = dg/dv * v = V0*(k2*q/v^2 - k3)*v  at v=1,q=1: V0*(k2-k3)
+    # dg/d(lnq) = dg/dq * q = V0*(-k1 - k2/v)*q      at v=1,q=1: V0*(-k1-k2)
+    dgdx = torch.zeros(N, 5 * N, dtype=dtype, device=device)
+    for i in range(N):
+        k2_i = k2_val.item() if k2_val.dim() == 0 else k2_val[0].item()
+        k3_i = k3_val.item() if k3_val.dim() == 0 else k3_val[0].item()
+
+        # d(BOLD_i)/d(lnv_i) -- volume state is block 3 (index 3*N+i)
+        dgdx[i, 3 * N + i] = V0 * (k2_i - k3_i)
+        # d(BOLD_i)/d(lnq_i) -- deoxyHb state is block 4 (index 4*N+i)
+        dgdx[i, 4 * N + i] = V0 * (-k1 - k2_i)
+
+    return dfdx, dfdu, dgdx
+
+
+def compute_transfer_function_hemodynamic(
+    dfdx: torch.Tensor,
+    dfdu: torch.Tensor,
+    dgdx: torch.Tensor,
+    freqs: torch.Tensor,
+    *,
+    eig_clamp: float | None = -1.0 / 32.0,
+) -> torch.Tensor:
+    """Transfer function through full hemodynamic system.
+
+    Matches SPM12 ``spm_dcm_mtf.m`` eigendecomposition approach applied
+    to the 5N x 5N hemodynamic Jacobian. Uses ``torch.linalg.pinv``
+    for the eigenvector inverse, matching SPM12's ``pinv(v)`` (line 125
+    of spm_dcm_mtf.m) for numerical stability.
+
+    Parameters
+    ----------
+    dfdx : torch.Tensor
+        Full system Jacobian, shape ``(5N, 5N)``, float64.
+    dfdu : torch.Tensor
+        Input projection, shape ``(5N, N)``, float64.
+    dgdx : torch.Tensor
+        BOLD observation Jacobian, shape ``(N, 5N)``, float64.
+    freqs : torch.Tensor
+        Frequencies in Hz, shape ``(F,)``, float64.
+    eig_clamp : float or None
+        Maximum value for real parts of eigenvalues. Default ``-1/32``
+        matches SPM12 fMRI convention.
+
+    Returns
+    -------
+    torch.Tensor
+        Transfer function H, shape ``(F, N, N)``, complex128.
+    """
+    eigvals, eigvecs = torch.linalg.eig(dfdx.to(torch.complex128))
+
+    # Stabilize eigenvalues (SPM12: s = 1j*imag(s) + min(real(s), -1/32))
+    if eig_clamp is not None:
+        eigvals = torch.complex(
+            torch.clamp(eigvals.real, max=eig_clamp),
+            eigvals.imag,
+        )
+
+    # SPM12 uses pinv(v) for numerical stability (spm_dcm_mtf.m line 125)
+    dgdv = dgdx.to(torch.complex128) @ eigvecs
+    dvdu = torch.linalg.pinv(eigvecs) @ dfdu.to(torch.complex128)
+
+    w = freqs.to(torch.complex128)
+    Sk = 1.0 / (1j * 2.0 * torch.pi * w[:, None] - eigvals[None, :])
+
+    H = torch.einsum("ik,kj,fk->fij", dgdv, dvdu, Sk)
+    return H
 
 
 def default_frequency_grid(
@@ -301,13 +546,26 @@ def spectral_dcm_forward(
     *,
     eig_clamp: float | None = -1.0 / 32.0,
     mar_order: int = 7,
+    hemodynamic: bool = True,
+    P_transit: torch.Tensor | None = None,
+    P_decay: torch.Tensor | None = None,
+    P_epsilon: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Complete spectral DCM predicted CSD pipeline.
 
     Convenience function wrapping the full predicted CSD computation:
     transfer function (via eigendecomposition), neuronal and observation
-    noise spectra, and CSD assembly. Uses C_in = C_out = identity
-    following the standard spDCM convention.
+    noise spectra, and CSD assembly.
+
+    When ``hemodynamic=True`` (default, matching SPM12), the transfer
+    function is computed through the full 5N-dimensional hemodynamic
+    system using ``compute_hemodynamic_jacobian`` and
+    ``compute_transfer_function_hemodynamic``. This includes P.C/16
+    input scaling (Divergence 7 from RESEARCH.md) and the Stephan 2007
+    BOLD observation function.
+
+    When ``hemodynamic=False``, uses the neural-only N x N transfer
+    function with C_in = C_out = identity (old behavior).
 
     When ``mar_order > 0``, applies a CSD -> MAR -> CSD round-trip as
     the final step, matching SPM12 ``spm_csd_fmri_mtf.m`` line 157.
@@ -343,6 +601,19 @@ def spectral_dcm_forward(
         7 matches SPM12's ``M.p - 1 = 8 - 1 = 7``. Set to 0 to
         disable the round-trip (required for SVI/autograd paths since
         the round-trip is not differentiable).
+    hemodynamic : bool
+        If True (default), compute transfer function through the full
+        5N-dimensional hemodynamic system matching SPM12. If False,
+        use neural-only N x N transfer function (old behavior).
+    P_transit : torch.Tensor or None
+        Log transit time deviation per region, shape ``(N,)``. If None,
+        defaults to zeros (prior mean).
+    P_decay : torch.Tensor or None
+        Log signal decay deviation, shape ``(1,)``. If None, defaults
+        to zeros (prior mean).
+    P_epsilon : torch.Tensor or None
+        Log BOLD signal ratio deviation, shape ``(1,)``. If None,
+        defaults to zeros (prior mean).
 
     Returns
     -------
@@ -362,12 +633,31 @@ def spectral_dcm_forward(
     """
     N = A.shape[0]
 
-    # Standard spDCM convention: C_in = C_out = identity
-    C_in = torch.eye(N, dtype=torch.float64, device=A.device)
-    C_out = torch.eye(N, dtype=torch.float64, device=A.device)
+    if hemodynamic:
+        # Default hemodynamic params at prior mean (zeros)
+        if P_transit is None:
+            P_transit = torch.zeros(N, dtype=A.dtype, device=A.device)
+        if P_decay is None:
+            P_decay = torch.zeros(1, dtype=A.dtype, device=A.device)
+        if P_epsilon is None:
+            P_epsilon = torch.zeros(1, dtype=A.dtype, device=A.device)
 
-    # Compute transfer function via eigendecomposition
-    H = compute_transfer_function(A, C_in, C_out, freqs, eig_clamp=eig_clamp)
+        # Full 5N x 5N hemodynamic Jacobian at steady state
+        dfdx, dfdu, dgdx = compute_hemodynamic_jacobian(
+            A, P_decay, P_transit, P_epsilon,
+        )
+
+        # Transfer function through hemodynamic system
+        H = compute_transfer_function_hemodynamic(
+            dfdx, dfdu, dgdx, freqs, eig_clamp=eig_clamp,
+        )
+    else:
+        # Neural-only transfer function (old behavior)
+        C_in = torch.eye(N, dtype=torch.float64, device=A.device)
+        C_out = torch.eye(N, dtype=torch.float64, device=A.device)
+        H = compute_transfer_function(
+            A, C_in, C_out, freqs, eig_clamp=eig_clamp,
+        )
 
     # Compute noise spectra
     Gu = neuronal_noise_csd(freqs, a, n_regions=N)
