@@ -162,9 +162,9 @@ class TestEigClampParameterization:
             torch.tensor([-2.0, -0.5], dtype=torch.float64)
         )
         freqs = default_frequency_grid(TR=2.0, n_freqs=16)
-        a = torch.zeros(2, 2, dtype=torch.float64)
+        a = torch.zeros(2, 1, dtype=torch.float64)
         b = torch.zeros(2, 1, dtype=torch.float64)
-        c = torch.zeros(2, 2, dtype=torch.float64)
+        c = torch.zeros(1, 2, dtype=torch.float64)
 
         csd_fmri = spectral_dcm_forward(A, freqs, a, b, c)
         csd_meg = spectral_dcm_forward(
@@ -247,8 +247,13 @@ class TestSpectralDcmModelMeg:
         a = torch.zeros(2, N, dtype=torch.float64)
         b = torch.zeros(2, 1, dtype=torch.float64)
         c_noise = torch.zeros(2, N, dtype=torch.float64)
-        Gu = neuronal_noise_csd(meg_freqs, a)
-        Gn = observation_noise_csd(meg_freqs, b, c_noise, N)
+        Gu = neuronal_noise_csd(
+            meg_freqs, a, noise_parameterization="extended"
+        )
+        Gn = observation_noise_csd(
+            meg_freqs, b, c_noise, N,
+            noise_parameterization="extended",
+        )
         obs_csd = predicted_csd(H, Gu, Gn)
 
         a_mask = torch.ones(N, N, dtype=torch.float64)

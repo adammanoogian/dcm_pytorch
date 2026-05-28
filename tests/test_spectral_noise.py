@@ -4,6 +4,7 @@ Tests validate:
 - Neuronal noise CSD shape, dtype, diagonal structure, and 1/f behavior
 - Observation noise CSD shape, global fill, and regional diagonal
 - Default noise prior shapes, values, and total parameter count
+- SPM12 /sum(G) normalization (total power = amplitude at default params)
 """
 
 from __future__ import annotations
@@ -22,27 +23,27 @@ from pyro_dcm.forward_models.spectral_transfer import default_frequency_grid
 
 
 class TestNeuronalNoiseCSD:
-    """Tests for neuronal_noise_csd."""
+    """Tests for neuronal_noise_csd (spm_fmri mode)."""
 
     @pytest.fixture()
     def setup(self) -> dict[str, torch.Tensor]:
         """Set up test data."""
         N = 3
         freqs = default_frequency_grid(TR=2.0, n_freqs=32)
-        a = torch.zeros(2, N, dtype=torch.float64)
+        a = torch.zeros(2, 1, dtype=torch.float64)
         return {"freqs": freqs, "a": a, "N": N}
 
     def test_shape(self, setup: dict[str, torch.Tensor]) -> None:
         """Output shape is (F, N, N) = (32, 3, 3) complex128."""
         d = setup
-        Gu = neuronal_noise_csd(d["freqs"], d["a"])
+        Gu = neuronal_noise_csd(d["freqs"], d["a"], n_regions=d["N"])
         assert Gu.shape == (32, d["N"], d["N"])
         assert Gu.dtype == torch.complex128
 
     def test_diagonal(self, setup: dict[str, torch.Tensor]) -> None:
         """Off-diagonal elements are zero."""
         d = setup
-        Gu = neuronal_noise_csd(d["freqs"], d["a"])
+        Gu = neuronal_noise_csd(d["freqs"], d["a"], n_regions=d["N"])
         for i in range(d["N"]):
             for j in range(d["N"]):
                 if i != j:
@@ -51,7 +52,7 @@ class TestNeuronalNoiseCSD:
     def test_positive_real(self, setup: dict[str, torch.Tensor]) -> None:
         """Diagonal elements have positive real parts and zero imaginary."""
         d = setup
-        Gu = neuronal_noise_csd(d["freqs"], d["a"])
+        Gu = neuronal_noise_csd(d["freqs"], d["a"], n_regions=d["N"])
         for i in range(d["N"]):
             assert torch.all(Gu[:, i, i].real > 0)
             assert torch.allclose(
@@ -65,7 +66,7 @@ class TestNeuronalNoiseCSD:
     ) -> None:
         """For default params (a=zeros), power decreases with frequency."""
         d = setup
-        Gu = neuronal_noise_csd(d["freqs"], d["a"])
+        Gu = neuronal_noise_csd(d["freqs"], d["a"], n_regions=d["N"])
         for i in range(d["N"]):
             # First frequency bin has more power than last (1/f)
             assert Gu[0, i, i].real > Gu[-1, i, i].real
@@ -74,12 +75,12 @@ class TestNeuronalNoiseCSD:
         """Doubling log amplitude doubles the noise power."""
         N = 3
         freqs = default_frequency_grid()
-        a_base = torch.zeros(2, N, dtype=torch.float64)
+        a_base = torch.zeros(2, 1, dtype=torch.float64)
         a_double = a_base.clone()
-        a_double[0, :] += math.log(2.0)
+        a_double[0, 0] += math.log(2.0)
 
-        Gu_base = neuronal_noise_csd(freqs, a_base)
-        Gu_double = neuronal_noise_csd(freqs, a_double)
+        Gu_base = neuronal_noise_csd(freqs, a_base, n_regions=N)
+        Gu_double = neuronal_noise_csd(freqs, a_double, n_regions=N)
 
         for i in range(N):
             assert torch.allclose(
@@ -94,15 +95,15 @@ class TestNeuronalNoiseCSD:
         freqs = default_frequency_grid()
 
         # Low exponent
-        a_low = torch.zeros(2, N, dtype=torch.float64)
-        a_low[1, :] = 0.0  # exp(0) = 1 -> w^(-1)
+        a_low = torch.zeros(2, 1, dtype=torch.float64)
+        a_low[1, 0] = 0.0  # exp(0) = 1 -> w^(-1)
 
         # High exponent
-        a_high = torch.zeros(2, N, dtype=torch.float64)
-        a_high[1, :] = math.log(2.0)  # exp(ln2) = 2 -> w^(-2)
+        a_high = torch.zeros(2, 1, dtype=torch.float64)
+        a_high[1, 0] = math.log(2.0)  # exp(ln2) = 2 -> w^(-2)
 
-        Gu_low = neuronal_noise_csd(freqs, a_low)
-        Gu_high = neuronal_noise_csd(freqs, a_high)
+        Gu_low = neuronal_noise_csd(freqs, a_low, n_regions=N)
+        Gu_high = neuronal_noise_csd(freqs, a_high, n_regions=N)
 
         # Ratio of first to last frequency bin
         ratio_low = (
@@ -117,7 +118,7 @@ class TestNeuronalNoiseCSD:
 
 
 class TestObservationNoiseCSD:
-    """Tests for observation_noise_csd."""
+    """Tests for observation_noise_csd (spm_fmri mode)."""
 
     @pytest.fixture()
     def setup(self) -> dict[str, torch.Tensor]:
@@ -125,7 +126,7 @@ class TestObservationNoiseCSD:
         N = 3
         freqs = default_frequency_grid(TR=2.0, n_freqs=32)
         b = torch.zeros(2, 1, dtype=torch.float64)
-        c = torch.zeros(2, N, dtype=torch.float64)
+        c = torch.zeros(1, N, dtype=torch.float64)
         return {"freqs": freqs, "b": b, "c": c, "N": N}
 
     def test_shape(self, setup: dict[str, torch.Tensor]) -> None:
@@ -153,8 +154,8 @@ class TestObservationNoiseCSD:
         freqs = default_frequency_grid()
         # Set b to very negative (effectively zero global noise)
         b = torch.tensor([[-20.0], [-20.0]], dtype=torch.float64)
-        # Non-zero regional noise
-        c = torch.zeros(2, N, dtype=torch.float64)
+        # Non-zero regional noise (amplitude only in spm_fmri mode)
+        c = torch.zeros(1, N, dtype=torch.float64)
 
         Gn = observation_noise_csd(freqs, b, c, N)
 
@@ -173,8 +174,18 @@ class TestDefaultNoisePriors:
     """Tests for default_noise_priors."""
 
     def test_shapes(self) -> None:
-        """For n_regions=5, all shapes are correct."""
+        """For n_regions=5, spm_fmri shapes are (2,1), (2,1), (1,5)."""
         priors = default_noise_priors(5)
+        assert priors["a_prior_mean"].shape == (2, 1)
+        assert priors["a_prior_var"].shape == (2, 1)
+        assert priors["b_prior_mean"].shape == (2, 1)
+        assert priors["b_prior_var"].shape == (2, 1)
+        assert priors["c_prior_mean"].shape == (1, 5)
+        assert priors["c_prior_var"].shape == (1, 5)
+
+    def test_shapes_extended(self) -> None:
+        """For n_regions=5, extended shapes are (2,5), (2,1), (2,5)."""
+        priors = default_noise_priors(5, noise_parameterization="extended")
         assert priors["a_prior_mean"].shape == (2, 5)
         assert priors["a_prior_var"].shape == (2, 5)
         assert priors["b_prior_mean"].shape == (2, 1)
@@ -200,12 +211,71 @@ class TestDefaultNoisePriors:
             assert val.dtype == torch.float64
 
     def test_total_param_count(self) -> None:
-        """Total params = 4N + 2 for N regions."""
+        """Total params = N + 4 for N regions (spm_fmri mode)."""
         for N in [1, 3, 5, 10]:
             priors = default_noise_priors(N)
             total = sum(t.numel() for t in priors.values()) // 2
             # Divide by 2 because we have mean+var for each param
+            expected = N + 4
+            assert total == expected, (
+                f"Expected {expected} params for N={N}, got {total}"
+            )
+
+    def test_total_param_count_extended(self) -> None:
+        """Total params = 4N + 2 for N regions (extended mode)."""
+        for N in [1, 3, 5, 10]:
+            priors = default_noise_priors(
+                N, noise_parameterization="extended"
+            )
+            total = sum(t.numel() for t in priors.values()) // 2
             expected = 4 * N + 2
             assert total == expected, (
                 f"Expected {expected} params for N={N}, got {total}"
             )
+
+
+class TestSPM12Normalization:
+    """Tests for SPM12 /sum(G) normalization."""
+
+    def test_neuronal_noise_total_power_equals_amplitude(self) -> None:
+        """Sum of noise spectrum equals amplitude parameter (SPM12)."""
+        freqs = default_frequency_grid(TR=2.0, n_freqs=32)
+        a = torch.zeros(2, 1, dtype=torch.float64)
+        Gu = neuronal_noise_csd(freqs, a, n_regions=3)
+        # At default params (a=0): exp(0) = 1, so sum across freqs = 1.0
+        for i in range(3):
+            total_power = Gu[:, i, i].real.sum()
+            assert torch.isclose(
+                total_power,
+                torch.tensor(1.0, dtype=torch.float64),
+                atol=1e-10,
+            )
+
+    def test_neuronal_noise_scaled_amplitude(self) -> None:
+        """With a[0,0]=ln(2), total power should be 2.0."""
+        freqs = default_frequency_grid(TR=2.0, n_freqs=32)
+        a = torch.zeros(2, 1, dtype=torch.float64)
+        a[0, 0] = math.log(2.0)
+        Gu = neuronal_noise_csd(freqs, a, n_regions=2)
+        for i in range(2):
+            total_power = Gu[:, i, i].real.sum()
+            assert torch.isclose(
+                total_power,
+                torch.tensor(2.0, dtype=torch.float64),
+                atol=1e-10,
+            )
+
+    def test_observation_global_total_power(self) -> None:
+        """Global observation noise total power equals amplitude."""
+        freqs = default_frequency_grid(TR=2.0, n_freqs=32)
+        b = torch.zeros(2, 1, dtype=torch.float64)
+        # Set c to very negative to isolate global component
+        c = torch.full((1, 3), -20.0, dtype=torch.float64)
+        Gn = observation_noise_csd(freqs, b, c, 3)
+        # Off-diagonal (pure global): sum should be exp(b[0,0]) = 1.0
+        total_power_offdiag = Gn[:, 0, 1].real.sum()
+        assert torch.isclose(
+            total_power_offdiag,
+            torch.tensor(1.0, dtype=torch.float64),
+            atol=1e-10,
+        )

@@ -154,9 +154,9 @@ class TestModelStructure:
         N = spectral_data["N"]
 
         assert trace.nodes["A_free"]["value"].shape == (N, N)
-        assert trace.nodes["noise_a"]["value"].shape == (2, N)
+        assert trace.nodes["noise_a"]["value"].shape == (2, 1)
         assert trace.nodes["noise_b"]["value"].shape == (2, 1)
-        assert trace.nodes["noise_c"]["value"].shape == (2, N)
+        assert trace.nodes["noise_c"]["value"].shape == (1, N)
 
     def test_model_a_diagonal_negative(
         self, spectral_data: dict

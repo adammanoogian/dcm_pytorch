@@ -63,12 +63,12 @@ def simulate_spectral_dcm(
         in log-space, from ``default_noise_priors``). If provided,
         must contain keys:
 
-        - ``'a'``: torch.Tensor, shape ``(2, N)``, float64.
-          Neuronal noise [log-amplitude, log-exponent] per region.
+        - ``'a'``: torch.Tensor, shape ``(2, 1)``, float64.
+          Shared neuronal noise [log-amplitude, log-exponent].
         - ``'b'``: torch.Tensor, shape ``(2, 1)``, float64.
           Global observation noise [log-amplitude, log-exponent].
-        - ``'c'``: torch.Tensor, shape ``(2, N)``, float64.
-          Regional observation noise [log-amplitude, log-exponent].
+        - ``'c'``: torch.Tensor, shape ``(1, N)``, float64.
+          Regional observation noise [log-amplitude].
     TR : float, optional
         Repetition time in seconds. Default 2.0.
     n_freqs : int, optional
@@ -146,8 +146,9 @@ def simulate_spectral_dcm(
     C_in = torch.eye(N, dtype=torch.float64, device=A.device)
     C_out = torch.eye(N, dtype=torch.float64, device=A.device)
     H = compute_transfer_function(A, C_in, C_out, freqs)
-    Gu = neuronal_noise_csd(freqs, a)
+    Gu = neuronal_noise_csd(freqs, a, n_regions=N)
     Gn = observation_noise_csd(freqs, b, c, N)
+
 
     return {
         "csd": csd,

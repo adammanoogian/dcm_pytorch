@@ -114,8 +114,8 @@ def spectral_dcm_model(
       matching SPM12 spm_dcm_fmri_priors.m. Structural masking zeros
       out absent connections before the parameterize_A transform.
     - Noise parameters (a, b, c) follow SPM12 conventions:
-      a (2, N) neuronal, b (2, 1) global observation, c (2, N)
-      regional observation.
+      a (2, 1) shared neuronal, b (2, 1) global observation, c (1, N)
+      regional observation amplitude only.
     - The predicted CSD (complex128) is stored as a Pyro deterministic
       site for downstream analysis.
     - Only the decomposed real vector is used in the likelihood.
@@ -155,13 +155,13 @@ def spectral_dcm_model(
     # Deterministic transform: parameterize_A ensures negative diagonal
     A = pyro.deterministic("A", parameterize_A(A_free))
 
-    # --- Sample noise parameters (SPM12 priors) ---
-    # Neuronal noise: (2, N) - [log amplitude, log exponent] per region
+    # --- Sample noise parameters (SPM12 priors, spm_fmri mode) ---
+    # Neuronal noise: (2, 1) shared [log amplitude, log exponent]
     noise_a = pyro.sample(
         "noise_a",
         dist.Normal(
-            torch.zeros(2, N, dtype=torch.float64),
-            prior_std * torch.ones(2, N, dtype=torch.float64),
+            torch.zeros(2, 1, dtype=torch.float64),
+            prior_std * torch.ones(2, 1, dtype=torch.float64),
         ).to_event(2),
     )
 
@@ -174,12 +174,12 @@ def spectral_dcm_model(
         ).to_event(2),
     )
 
-    # Regional observation noise: (2, N)
+    # Regional observation noise: (1, N) amplitude only
     noise_c = pyro.sample(
         "noise_c",
         dist.Normal(
-            torch.zeros(2, N, dtype=torch.float64),
-            prior_std * torch.ones(2, N, dtype=torch.float64),
+            torch.zeros(1, N, dtype=torch.float64),
+            prior_std * torch.ones(1, N, dtype=torch.float64),
         ).to_event(2),
     )
 

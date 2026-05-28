@@ -220,9 +220,9 @@ class TestSpectralDCMForward:
             dtype=torch.float64,
         )
         freqs = default_frequency_grid(TR=2.0, n_freqs=32)
-        a = torch.zeros(2, N, dtype=torch.float64)
+        a = torch.zeros(2, 1, dtype=torch.float64)
         b = torch.zeros(2, 1, dtype=torch.float64)
-        c = torch.zeros(2, N, dtype=torch.float64)
+        c = torch.zeros(1, N, dtype=torch.float64)
         return {"A": A, "freqs": freqs, "a": a, "b": b, "c": c, "N": N}
 
     def test_shape(
@@ -252,9 +252,9 @@ class TestSpectralDCMForward:
             requires_grad=True,
         )
         freqs = default_frequency_grid(TR=2.0, n_freqs=32)
-        a = torch.zeros(2, N, dtype=torch.float64)
+        a = torch.zeros(2, 1, dtype=torch.float64)
         b = torch.zeros(2, 1, dtype=torch.float64)
-        c = torch.zeros(2, N, dtype=torch.float64)
+        c = torch.zeros(1, N, dtype=torch.float64)
 
         S = spectral_dcm_forward(A, freqs, a, b, c)
         loss = S.abs().sum()

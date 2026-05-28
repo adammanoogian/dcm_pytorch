@@ -63,21 +63,32 @@ def _unpack_params(
     theta: torch.Tensor,
     N: int,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Reshape flat parameter vector back into named tensors."""
+    """Reshape flat parameter vector back into named tensors.
+
+    SPM12 fMRI noise layout:
+      A_free: (N, N)   -- N*N params
+      noise_a: (2, 1)  -- 2 params (shared neuronal)
+      noise_b: (2, 1)  -- 2 params (global observation)
+      noise_c: (1, N)  -- N params (regional amplitude only)
+    """
     idx = 0
     A_free = theta[idx : idx + N * N].reshape(N, N)
     idx += N * N
-    noise_a = theta[idx : idx + 2 * N].reshape(2, N)
-    idx += 2 * N
+    noise_a = theta[idx : idx + 2].reshape(2, 1)
+    idx += 2
     noise_b = theta[idx : idx + 2].reshape(2, 1)
     idx += 2
-    noise_c = theta[idx : idx + 2 * N].reshape(2, N)
+    noise_c = theta[idx : idx + N].reshape(1, N)
+    idx += N
     return A_free, noise_a, noise_b, noise_c
 
 
 def _param_count(N: int) -> int:
-    """Total number of free parameters for N regions."""
-    return N * N + 2 * N + 2 + 2 * N
+    """Total number of free parameters for N regions.
+
+    A_free(N*N) + noise_a(2) + noise_b(2) + noise_c(N) = N*N + N + 4.
+    """
+    return N * N + 2 + 2 + N
 
 
 def _predicted_residual(
@@ -395,11 +406,11 @@ def extract_vl_posterior(
     }
     idx += n_a
 
-    n_na = 2 * N
+    n_na = 2  # noise_a is (2, 1) shared
     posterior["noise_a"] = {
         "mean": result.theta_post["noise_a"],
-        "std": std_vec[idx : idx + n_na].reshape(2, N),
-        "samples": samples_flat[:, idx : idx + n_na].reshape(num_samples, 2, N),
+        "std": std_vec[idx : idx + n_na].reshape(2, 1),
+        "samples": samples_flat[:, idx : idx + n_na].reshape(num_samples, 2, 1),
     }
     idx += n_na
 
@@ -410,11 +421,11 @@ def extract_vl_posterior(
     }
     idx += 2
 
-    n_nc = 2 * N
+    n_nc = N  # noise_c is (1, N) amplitude only
     posterior["noise_c"] = {
         "mean": result.theta_post["noise_c"],
-        "std": std_vec[idx : idx + n_nc].reshape(2, N),
-        "samples": samples_flat[:, idx : idx + n_nc].reshape(num_samples, 2, N),
+        "std": std_vec[idx : idx + n_nc].reshape(1, N),
+        "samples": samples_flat[:, idx : idx + n_nc].reshape(num_samples, 1, N),
     }
 
     # Include parameterized A (from theta_post) for convenience
