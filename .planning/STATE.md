@@ -84,8 +84,9 @@ None currently.
 
 ### Pending Todos
 
-1 pending — see `.planning/todos/pending/`.
+2 pending — see `.planning/todos/pending/`.
 - Neural ODE DCM (Approach 2) — separate milestone v0.7.0+ after v0.6.0 informs whether bilinear suffices
+- ROI projection for latent circuit DCM — map PCA circuit nodes back to brain ROIs; blocked on behavioral + neuroimaging dataset
 
 ## Key Risks
 
