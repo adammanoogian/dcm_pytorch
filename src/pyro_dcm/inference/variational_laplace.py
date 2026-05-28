@@ -2,8 +2,8 @@
 
 Implements SPM12's ``spm_nlsi_GN`` Gauss-Newton optimization under the
 Laplace approximation. Uses the Gauss-Newton Hessian approximation
-(J^T @ precision @ J + prior_precision) to avoid second derivatives
-through eigendecomposition, matching SPM12's approach.
+(J^H @ iS @ J + prior_precision) with data-driven Wishart observation
+precision Q from ``spm_dcm_csd_Q``, matching SPM12's approach.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import torch
 
 from pyro_dcm.forward_models.neural_state import parameterize_A
 from pyro_dcm.forward_models.spectral_transfer import spectral_dcm_forward
+from pyro_dcm.inference.csd_precision import compute_csd_precision
 
 
 @dataclass
@@ -123,7 +124,11 @@ def _predicted_residual(
     eig_clamp: float | None = -1.0 / 32.0,
     mar_order: int = 7,
 ) -> torch.Tensor:
-    """Compute residual vector (observed - predicted) as real vector."""
+    """Compute residual vector (observed - predicted) as complex vector.
+
+    Returns the complex residual matching SPM12's spm_vec(y) - spm_vec(f),
+    which keeps complex entries as-is. Shape: (F*N*N,) complex128.
+    """
     (A_free, noise_a, noise_b, noise_c,
      P_transit, P_decay, P_epsilon) = _unpack_params(theta, N)
     A = parameterize_A(A_free * a_mask.to(A_free.device))
@@ -134,7 +139,7 @@ def _predicted_residual(
         P_transit=P_transit, P_decay=P_decay, P_epsilon=P_epsilon,
     )
     residual = observed_csd - pred_csd
-    return torch.cat([residual.real.reshape(-1), residual.imag.reshape(-1)])
+    return residual.reshape(-1)
 
 
 def _compute_jacobian(
@@ -153,8 +158,8 @@ def _compute_jacobian(
     eigendecomposition is numerically unstable when eigenvalues are
     degenerate, so central finite differences are used instead.
 
-    Returns J where J[i, j] = d(residual_i) / d(theta_j).
-    Shape: (n_data, n_params).
+    Returns complex-valued J where J[i, j] = d(residual_i) / d(theta_j).
+    Shape: (n_data, n_params), dtype complex128.
     """
     n_params = theta.shape[0]
     res0 = _predicted_residual(
@@ -162,7 +167,7 @@ def _compute_jacobian(
         mar_order=mar_order,
     )
     n_data = res0.shape[0]
-    J = torch.zeros(n_data, n_params, dtype=torch.float64, device=theta.device)
+    J = torch.zeros(n_data, n_params, dtype=torch.complex128, device=theta.device)
 
     for j in range(n_params):
         theta_plus = theta.clone()
@@ -184,7 +189,6 @@ def run_variational_laplace(
     max_iter: int = 128,
     tolerance: float = 1e-2,
     prior_variance: float = 1.0 / 64.0,
-    initial_lambda: float = 8.0,
     regularization: float = 1.0 / 128.0,
     eig_clamp: float | None = -1.0 / 32.0,
     mar_order: int = 7,
@@ -192,10 +196,9 @@ def run_variational_laplace(
     """Run Variational Laplace (Gauss-Newton) inference for spectral DCM.
 
     Implements SPM12's ``spm_nlsi_GN`` optimization using the
-    Gauss-Newton Hessian approximation: H ≈ J^T @ Λ @ J + Π_prior,
-    where J is the Jacobian of the predicted CSD residual and Λ is
-    the observation precision. This avoids second derivatives through
-    eigendecomposition.
+    Gauss-Newton Hessian approximation: H = real(J^H @ iS @ J) + ipC,
+    where J is the complex Jacobian of the CSD residual and iS is the
+    data-driven Wishart observation precision from ``spm_dcm_csd_Q``.
 
     Parameters
     ----------
@@ -214,8 +217,6 @@ def run_variational_laplace(
     prior_variance : float
         Prior variance for all parameters (SPM12 default: 1/64).
         Use 1/16 for MEG/latent-circuit models.
-    initial_lambda : float
-        Initial log-precision for observation noise.
     regularization : float
         Levenberg-Marquardt damping added to Hessian diagonal.
     eig_clamp : float or None
@@ -255,35 +256,56 @@ def run_variational_laplace(
     ]).to(device)
     prior_precision = torch.diag(1.0 / prior_var_vec)
 
+    # Compute data-driven observation precision Q (spm_dcm_csd_Q)
+    Q_list, nq = compute_csd_precision(observed_csd)
+
+    # Initialize hyperparameters h for observation precision components
+    # SPM12 initializes h = hE = sparse(nh,1) - log(var(spm_vec(y))) + 4
+    # For now, h = 0 (ReML M-step in Plan 02 will update h)
+    nh = len(Q_list)
+    h = torch.zeros(nh, dtype=torch.float64, device=device)
+
+    # Compute iS = sum(Q{i} * exp(h(i))) -- observation precision
+    # For fMRI, nh=1, so iS = Q[0] * exp(h[0])
+    def _compute_iS() -> torch.Tensor:
+        iS = torch.zeros_like(Q_list[0])
+        for i_h in range(nh):
+            iS = iS + Q_list[i_h] * (torch.exp(torch.tensor(-32.0)) + torch.exp(h[i_h]))
+        return iS
+
     theta = prior_mean.clone()
-    lambda_precision = torch.tensor(
-        initial_lambda, dtype=torch.float64, device=device
-    )
 
     result = VariationalLaplaceResult()
     prev_F = float("inf")
     convergence_count = 0
 
+    # SPM12 Levenberg-Marquardt regularization parameter (v in spm_nlsi_GN)
+    v = 4.0  # initial value, decreased on success, increased on failure
+
     for iteration in range(max_iter):
         if not torch.isfinite(theta).all():
             theta = prior_mean.clone()
 
-        res = _predicted_residual(
+        # Compute complex residual: e = spm_vec(y) - spm_vec(f)
+        e = _predicted_residual(
             theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp,
             mar_order=mar_order,
         )
-        n_data = res.shape[0]
-        precision = torch.exp(lambda_precision)
 
-        # Negative log-likelihood
-        sse = (res @ res).item()
-        nll = 0.5 * precision.item() * sse - 0.5 * n_data * lambda_precision.item()
+        # Compute observation precision iS
+        iS = _compute_iS()
 
-        # KL from prior
-        diff = theta - prior_mean
-        kl = 0.5 * (diff @ prior_precision @ diff).item()
+        # Parameter deviation from prior
+        p = theta - prior_mean
 
-        F_val = -(nll + kl)
+        # Free energy: F = L(1) + L(2) where
+        # L(1) = -0.5 * real(e' @ iS @ e)   [observation fit]
+        # L(2) = -0.5 * p' @ ipC @ p         [prior divergence]
+        # (L(3) hyperprior term added in Plan 02 with ReML)
+        ny = e.shape[0]
+        L1 = -0.5 * (e.conj() @ iS @ e).real.item()
+        L2 = -0.5 * (p @ prior_precision @ p).item()
+        F_val = L1 + L2
         result.free_energy.append(F_val)
 
         dF = abs(prev_F - F_val)
@@ -296,87 +318,87 @@ def run_variational_laplace(
             convergence_count = 0
         prev_F = F_val
 
-        # Gauss-Newton: J^T @ precision @ J + prior_precision
+        # Compute complex Jacobian: J[i,j] = d(e_i)/d(theta_j)
         J = _compute_jacobian(
             theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp,
             mar_order=mar_order,
         )
 
-        H_gn = precision * (J.T @ J) + prior_precision
+        # Gauss-Newton Hessian: Pp = real(J^H @ iS @ J)
+        # SPM12 line 388: Pp = real(J'*iS*J)
+        Pp = (J.conj().T @ iS @ J).real
+        H_gn = Pp + prior_precision
+
+        # Levenberg-Marquardt regularization (SPM12-style)
+        # SPM12 uses spm_dx(dFdpp, dFdp, {v}) which applies (H + exp(v)*diag(H))
         H_gn = H_gn + regularization * torch.eye(
             n_params, dtype=torch.float64, device=device
         )
 
-        # Gradient: precision * J^T @ residual + prior_precision @ (theta - mu_0)
-        grad = -precision * (J.T @ res) + prior_precision @ (theta - prior_mean)
+        # Gradient: dFdp = -real(J^H @ iS @ e) - ipC @ p
+        # SPM12 line 468: dFdp = -real(J'*iS*e) - ipC*p
+        grad = -(J.conj().T @ iS @ e).real - prior_precision @ p
+
+        # Solve for update: dp = -H_gn^{-1} @ grad (Newton step on F)
+        # Note: grad = dF/dp, and we want to maximize F, so dp = H^{-1} @ grad
+        # But H_gn = -dF^2/dp^2 (negative Hessian), so dp = -H_gn^{-1} @ (-grad)
+        # = H_gn^{-1} @ grad... Let me follow SPM12 exactly:
+        # dFdpp = -Pp - ipC (line 469)
+        # dp = spm_dx(dFdpp, dFdp, {v})
+        # spm_dx with {v}: dp = inv(-dFdpp + exp(v)*diag(-dFdpp)) * dFdp
+        # = inv(H_gn + exp(v)*diag(H_gn)) * grad
+        lm_factor = torch.exp(torch.tensor(v, dtype=torch.float64))
+        H_reg = H_gn + lm_factor * torch.diag(H_gn.diagonal())
 
         try:
-            L = torch.linalg.cholesky(H_gn)
+            L_chol = torch.linalg.cholesky(H_reg)
             dtheta = torch.cholesky_solve(
-                -grad.unsqueeze(1), L
+                grad.unsqueeze(1), L_chol
             ).squeeze(1)
         except torch.linalg.LinAlgError:
             dtheta = torch.linalg.solve(
-                H_gn + 0.1 * torch.eye(
+                H_reg + 0.1 * torch.eye(
                     n_params, dtype=torch.float64, device=device
                 ),
-                -grad,
+                grad,
             )
 
-        # Adaptive step size (SPM12-style): backtrack until F improves
-        step = 1.0
-        theta_new = theta + step * dtheta
-        for _ in range(8):
-            if not torch.isfinite(theta_new).all():
-                step *= 0.5
-                theta_new = theta + step * dtheta
-                continue
+        # Trial step: check if free energy improves
+        theta_new = theta + dtheta
+        if torch.isfinite(theta_new).all():
             try:
-                res_trial = _predicted_residual(
+                e_trial = _predicted_residual(
                     theta_new, observed_csd, freqs, a_mask, N,
                     eig_clamp=eig_clamp, mar_order=mar_order,
                 )
-                sse_trial = (res_trial @ res_trial).item()
-                diff_trial = theta_new - prior_mean
-                kl_trial = 0.5 * (diff_trial @ prior_precision @ diff_trial).item()
-                nll_trial = (
-                    0.5 * precision.item() * sse_trial
-                    - 0.5 * n_data * lambda_precision.item()
-                )
-                F_trial = -(nll_trial + kl_trial)
-                if F_trial > F_val or step < 1e-4:
-                    break
+                p_trial = theta_new - prior_mean
+                L1_trial = -0.5 * (e_trial.conj() @ iS @ e_trial).real.item()
+                L2_trial = -0.5 * (p_trial @ prior_precision @ p_trial).item()
+                F_trial = L1_trial + L2_trial
             except RuntimeError:
-                pass
-            step *= 0.5
-            theta_new = theta + step * dtheta
+                F_trial = float("-inf")
+        else:
+            F_trial = float("-inf")
 
-        theta = theta_new
-
-        # Update hyperparameter (observation log-precision)
-        with torch.no_grad():
-            try:
-                res_new = _predicted_residual(
-                    theta, observed_csd, freqs, a_mask, N,
-                    eig_clamp=eig_clamp, mar_order=mar_order,
-                )
-                sse_new = (res_new @ res_new).item()
-            except RuntimeError:
-                sse_new = sse
-            lambda_precision = torch.tensor(
-                max(-4.0, torch.log(torch.tensor(n_data / max(sse_new, 1e-16))).item()),
-                dtype=torch.float64, device=device,
-            )
+        # SPM12 accept/reject logic (lines 456-489)
+        if F_trial > F_val or iteration < 3:
+            # Accept: decrease regularization
+            theta = theta_new
+            v = min(v + 1.0 / 2.0, 4.0)
+        else:
+            # Reject: increase regularization, keep current theta
+            v = min(v - 2.0, -4.0)
 
     result.n_iterations = iteration + 1
 
     # Final Gauss-Newton Hessian for posterior covariance
+    iS_final = _compute_iS()
     J_final = _compute_jacobian(
         theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp,
         mar_order=mar_order,
     )
-    precision_final = torch.exp(lambda_precision)
-    H_final = precision_final * (J_final.T @ J_final) + prior_precision
+    Pp_final = (J_final.conj().T @ iS_final @ J_final).real
+    H_final = Pp_final + prior_precision
     H_final = H_final + regularization * torch.eye(
         n_params, dtype=torch.float64, device=device
     )
