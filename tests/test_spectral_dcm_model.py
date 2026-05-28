@@ -134,6 +134,9 @@ class TestModelStructure:
             "noise_a",
             "noise_b",
             "noise_c",
+            "P_transit",
+            "P_decay",
+            "P_epsilon",
             "csd_noise_scale",
             "obs_csd",
         }
@@ -157,6 +160,9 @@ class TestModelStructure:
         assert trace.nodes["noise_a"]["value"].shape == (2, 1)
         assert trace.nodes["noise_b"]["value"].shape == (2, 1)
         assert trace.nodes["noise_c"]["value"].shape == (1, N)
+        assert trace.nodes["P_transit"]["value"].shape == (N,)
+        assert trace.nodes["P_decay"]["value"].shape == (1,)
+        assert trace.nodes["P_epsilon"]["value"].shape == (1,)
 
     def test_model_a_diagonal_negative(
         self, spectral_data: dict

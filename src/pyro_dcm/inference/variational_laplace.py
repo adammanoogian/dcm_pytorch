@@ -49,27 +49,43 @@ def _pack_params(
     noise_a: torch.Tensor,
     noise_b: torch.Tensor,
     noise_c: torch.Tensor,
+    P_transit: torch.Tensor,
+    P_decay: torch.Tensor,
+    P_epsilon: torch.Tensor,
 ) -> torch.Tensor:
-    """Flatten parameter tensors into a single vector."""
+    """Flatten parameter tensors into a single vector.
+
+    Layout: A_free(N*N) + noise_a(2) + noise_b(2) + noise_c(N) +
+    P_transit(N) + P_decay(1) + P_epsilon(1) = N*N + 2N + 6.
+    """
     return torch.cat([
         A_free.reshape(-1),
         noise_a.reshape(-1),
         noise_b.reshape(-1),
         noise_c.reshape(-1),
+        P_transit.reshape(-1),
+        P_decay.reshape(-1),
+        P_epsilon.reshape(-1),
     ])
 
 
 def _unpack_params(
     theta: torch.Tensor,
     N: int,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[
+    torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor,
+    torch.Tensor, torch.Tensor, torch.Tensor,
+]:
     """Reshape flat parameter vector back into named tensors.
 
-    SPM12 fMRI noise layout:
-      A_free: (N, N)   -- N*N params
-      noise_a: (2, 1)  -- 2 params (shared neuronal)
-      noise_b: (2, 1)  -- 2 params (global observation)
-      noise_c: (1, N)  -- N params (regional amplitude only)
+    SPM12 fMRI parameter layout:
+      A_free:    (N, N)  -- N*N params
+      noise_a:   (2, 1)  -- 2 params (shared neuronal)
+      noise_b:   (2, 1)  -- 2 params (global observation)
+      noise_c:   (1, N)  -- N params (regional amplitude only)
+      P_transit: (N,)    -- N params (per-region transit time)
+      P_decay:   (1,)    -- 1 param  (shared signal decay)
+      P_epsilon: (1,)    -- 1 param  (BOLD signal ratio)
     """
     idx = 0
     A_free = theta[idx : idx + N * N].reshape(N, N)
@@ -80,15 +96,22 @@ def _unpack_params(
     idx += 2
     noise_c = theta[idx : idx + N].reshape(1, N)
     idx += N
-    return A_free, noise_a, noise_b, noise_c
+    P_transit = theta[idx : idx + N]
+    idx += N
+    P_decay = theta[idx : idx + 1]
+    idx += 1
+    P_epsilon = theta[idx : idx + 1]
+    idx += 1
+    return A_free, noise_a, noise_b, noise_c, P_transit, P_decay, P_epsilon
 
 
 def _param_count(N: int) -> int:
     """Total number of free parameters for N regions.
 
-    A_free(N*N) + noise_a(2) + noise_b(2) + noise_c(N) = N*N + N + 4.
+    A_free(N*N) + noise_a(2) + noise_b(2) + noise_c(N)
+    + P_transit(N) + P_decay(1) + P_epsilon(1) = N*N + 2N + 6.
     """
-    return N * N + 2 + 2 + N
+    return N * N + 2 + 2 + N + N + 1 + 1
 
 
 def _predicted_residual(
@@ -101,11 +124,14 @@ def _predicted_residual(
     mar_order: int = 7,
 ) -> torch.Tensor:
     """Compute residual vector (observed - predicted) as real vector."""
-    A_free, noise_a, noise_b, noise_c = _unpack_params(theta, N)
+    (A_free, noise_a, noise_b, noise_c,
+     P_transit, P_decay, P_epsilon) = _unpack_params(theta, N)
     A = parameterize_A(A_free * a_mask.to(A_free.device))
     pred_csd = spectral_dcm_forward(
         A, freqs, noise_a, noise_b, noise_c, eig_clamp=eig_clamp,
         mar_order=mar_order,
+        hemodynamic=True,
+        P_transit=P_transit, P_decay=P_decay, P_epsilon=P_epsilon,
     )
     residual = observed_csd - pred_csd
     return torch.cat([residual.real.reshape(-1), residual.imag.reshape(-1)])
@@ -215,9 +241,19 @@ def run_variational_laplace(
     device = observed_csd.device
 
     prior_mean = torch.zeros(n_params, dtype=torch.float64, device=device)
-    prior_precision = (1.0 / prior_variance) * torch.eye(
-        n_params, dtype=torch.float64, device=device
-    )
+
+    # Build block-diagonal prior precision:
+    # - A_free + noise params: prior_variance (default 1/64)
+    # - Hemodynamic params (P_transit, P_decay, P_epsilon): 1/256
+    #   (SPM12 spm_dcm_fmri_priors.m convention)
+    hemo_var = 1.0 / 256.0
+    n_connectivity_noise = N * N + 2 + 2 + N  # A_free + a + b + c
+    n_hemo = N + 1 + 1  # P_transit + P_decay + P_epsilon
+    prior_var_vec = torch.cat([
+        torch.full((n_connectivity_noise,), prior_variance, dtype=torch.float64),
+        torch.full((n_hemo,), hemo_var, dtype=torch.float64),
+    ]).to(device)
+    prior_precision = torch.diag(1.0 / prior_var_vec)
 
     theta = prior_mean.clone()
     lambda_precision = torch.tensor(
@@ -351,11 +387,14 @@ def run_variational_laplace(
         result.sigma_post = torch.linalg.pinv(H_final)
 
     with torch.no_grad():
-        A_free_post, na_post, nb_post, nc_post = _unpack_params(theta, N)
+        (A_free_post, na_post, nb_post, nc_post,
+         pt_post, pd_post, pe_post) = _unpack_params(theta, N)
         A_post = parameterize_A(A_free_post * a_mask.to(A_free_post.device))
         pred_final = spectral_dcm_forward(
             A_post, freqs, na_post, nb_post, nc_post, eig_clamp=eig_clamp,
             mar_order=mar_order,
+            hemodynamic=True,
+            P_transit=pt_post, P_decay=pd_post, P_epsilon=pe_post,
         )
 
     result.theta_post = {
@@ -364,6 +403,9 @@ def run_variational_laplace(
         "noise_a": na_post,
         "noise_b": nb_post,
         "noise_c": nc_post,
+        "P_transit": pt_post,
+        "P_decay": pd_post,
+        "P_epsilon": pe_post,
     }
     result.predicted_csd = pred_final
 
@@ -397,6 +439,9 @@ def extract_vl_posterior(
         result.theta_post["noise_a"],
         result.theta_post["noise_b"],
         result.theta_post["noise_c"],
+        result.theta_post["P_transit"],
+        result.theta_post["P_decay"],
+        result.theta_post["P_epsilon"],
     )
 
     try:
@@ -441,6 +486,28 @@ def extract_vl_posterior(
         "mean": result.theta_post["noise_c"],
         "std": std_vec[idx : idx + n_nc].reshape(1, N),
         "samples": samples_flat[:, idx : idx + n_nc].reshape(num_samples, 1, N),
+    }
+    idx += n_nc
+
+    # Hemodynamic parameters
+    posterior["P_transit"] = {
+        "mean": result.theta_post["P_transit"],
+        "std": std_vec[idx : idx + N],
+        "samples": samples_flat[:, idx : idx + N],
+    }
+    idx += N
+
+    posterior["P_decay"] = {
+        "mean": result.theta_post["P_decay"],
+        "std": std_vec[idx : idx + 1],
+        "samples": samples_flat[:, idx : idx + 1],
+    }
+    idx += 1
+
+    posterior["P_epsilon"] = {
+        "mean": result.theta_post["P_epsilon"],
+        "std": std_vec[idx : idx + 1],
+        "samples": samples_flat[:, idx : idx + 1],
     }
 
     # Include parameterized A (from theta_post) for convenience

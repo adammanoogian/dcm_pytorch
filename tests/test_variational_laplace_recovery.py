@@ -189,9 +189,13 @@ class TestVLPosteriorFormat:
         assert "noise_a" in posterior
         assert "noise_b" in posterior
         assert "noise_c" in posterior
+        assert "P_transit" in posterior
+        assert "P_decay" in posterior
+        assert "P_epsilon" in posterior
         assert "median" in posterior
 
-        for key in ["A_free", "noise_a", "noise_b", "noise_c"]:
+        for key in ["A_free", "noise_a", "noise_b", "noise_c",
+                     "P_transit", "P_decay", "P_epsilon"]:
             assert "mean" in posterior[key]
             assert "std" in posterior[key]
             assert "samples" in posterior[key]
@@ -202,3 +206,6 @@ class TestVLPosteriorFormat:
         assert posterior["noise_a"]["mean"].shape == (2, 1)
         assert posterior["noise_b"]["mean"].shape == (2, 1)
         assert posterior["noise_c"]["mean"].shape == (1, N)
+        assert posterior["P_transit"]["mean"].shape == (N,)
+        assert posterior["P_decay"]["mean"].shape == (1,)
+        assert posterior["P_epsilon"]["mean"].shape == (1,)

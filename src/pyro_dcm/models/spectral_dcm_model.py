@@ -183,15 +183,40 @@ def spectral_dcm_model(
         ).to_event(2),
     )
 
+    # --- Hemodynamic parameters (SPM12 spm_dcm_fmri_priors.m: var=1/256) ---
+    hemo_std = (1.0 / 256.0) ** 0.5
+    P_transit = pyro.sample(
+        "P_transit",
+        dist.Normal(
+            torch.zeros(N, dtype=torch.float64),
+            hemo_std * torch.ones(N, dtype=torch.float64),
+        ).to_event(1),
+    )
+    P_decay = pyro.sample(
+        "P_decay",
+        dist.Normal(
+            torch.zeros(1, dtype=torch.float64),
+            hemo_std * torch.ones(1, dtype=torch.float64),
+        ).to_event(1),
+    )
+    P_epsilon = pyro.sample(
+        "P_epsilon",
+        dist.Normal(
+            torch.zeros(1, dtype=torch.float64),
+            hemo_std * torch.ones(1, dtype=torch.float64),
+        ).to_event(1),
+    )
+
     # --- Forward model ---
     # Compute predicted CSD via spectral DCM pipeline
     # mar_order=0: MAR round-trip is NOT differentiable (numpy FFT +
     # linear solve), so it must be disabled for SVI/autograd paths.
-    # Use VL inference for the full SPM12-matching pipeline with
-    # mar_order=7.
+    # hemodynamic=False: hemodynamic Jacobian uses finite differences
+    # which breaks autograd. Use VL inference for the full SPM12-matching
+    # pipeline with hemodynamic=True + mar_order=7.
     predicted_csd_complex = spectral_dcm_forward(
         A, freqs, noise_a, noise_b, noise_c, eig_clamp=eig_clamp,
-        mar_order=0,
+        mar_order=0, hemodynamic=False,
     )
 
     # Store complex predicted CSD as deterministic for analysis

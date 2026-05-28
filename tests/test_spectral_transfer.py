@@ -17,7 +17,9 @@ import pytest
 import torch
 
 from pyro_dcm.forward_models.spectral_transfer import (
+    compute_hemodynamic_jacobian,
     compute_transfer_function,
+    compute_transfer_function_hemodynamic,
     default_frequency_grid,
     predicted_csd,
     spectral_dcm_forward,
@@ -244,7 +246,11 @@ class TestSpectralDCMForward:
         assert torch.all(torch.isfinite(S.imag))
 
     def test_differentiable(self) -> None:
-        """Autograd flows through the forward model w.r.t. A (without MAR)."""
+        """Autograd flows through the forward model w.r.t. A (without MAR).
+
+        Uses hemodynamic=False because the hemodynamic Jacobian is
+        computed via finite differences (not autograd-compatible).
+        """
         N = 3
         A = torch.tensor(
             [[-0.5, 0.1, 0.0], [0.2, -0.5, 0.1], [0.0, 0.3, -0.5]],
@@ -257,7 +263,10 @@ class TestSpectralDCMForward:
         c = torch.zeros(1, N, dtype=torch.float64)
 
         # mar_order=0: MAR round-trip is NOT differentiable
-        S = spectral_dcm_forward(A, freqs, a, b, c, mar_order=0)
+        # hemodynamic=False: finite-diff Jacobian is NOT differentiable
+        S = spectral_dcm_forward(
+            A, freqs, a, b, c, mar_order=0, hemodynamic=False,
+        )
         loss = S.abs().sum()
         grads = torch.autograd.grad(loss, A)
         assert grads[0] is not None
@@ -306,3 +315,113 @@ class TestSpectralDCMForward:
             A, freqs, a, b, c, mar_order=0,
         )
         assert torch.all(torch.isfinite(csd.real))
+
+
+class TestHemodynamicModel:
+    """Tests for hemodynamic Jacobian and transfer function."""
+
+    def test_hemodynamic_jacobian_shapes(self) -> None:
+        """compute_hemodynamic_jacobian produces (5N,5N), (5N,N), (N,5N)."""
+        N = 3
+        A = torch.diag(torch.tensor([-0.5, -0.5, -0.5], dtype=torch.float64))
+        P_decay = torch.zeros(1, dtype=torch.float64)
+        P_transit = torch.zeros(N, dtype=torch.float64)
+        P_epsilon = torch.zeros(1, dtype=torch.float64)
+
+        dfdx, dfdu, dgdx = compute_hemodynamic_jacobian(
+            A, P_decay, P_transit, P_epsilon,
+        )
+        assert dfdx.shape == (5 * N, 5 * N)
+        assert dfdu.shape == (5 * N, N)
+        assert dgdx.shape == (N, 5 * N)
+
+    def test_hemodynamic_jacobian_neural_block(self) -> None:
+        """Neural block of Jacobian matches A matrix."""
+        N = 2
+        A = torch.tensor(
+            [[-0.5, 0.1], [0.2, -0.3]], dtype=torch.float64,
+        )
+        dfdx, _, _ = compute_hemodynamic_jacobian(
+            A, torch.zeros(1, dtype=torch.float64),
+            torch.zeros(N, dtype=torch.float64),
+            torch.zeros(1, dtype=torch.float64),
+        )
+        assert torch.allclose(dfdx[:N, :N], A, atol=1e-6)
+
+    def test_hemodynamic_dfdu_has_c_over_16(self) -> None:
+        """dfdu neural block should be I/16 (P.C/16 scaling)."""
+        N = 3
+        A = torch.diag(torch.tensor([-0.5, -0.5, -0.5], dtype=torch.float64))
+        _, dfdu, _ = compute_hemodynamic_jacobian(
+            A, torch.zeros(1, dtype=torch.float64),
+            torch.zeros(N, dtype=torch.float64),
+            torch.zeros(1, dtype=torch.float64),
+        )
+        expected = torch.eye(N, dtype=torch.float64) / 16.0
+        assert torch.allclose(dfdu[:N], expected, atol=1e-10)
+
+    def test_hemodynamic_transfer_lowpass(self) -> None:
+        """Hemodynamic transfer attenuates high frequencies more than neural."""
+        N = 2
+        A = torch.diag(torch.tensor([-0.5, -0.5], dtype=torch.float64))
+        freqs = default_frequency_grid(TR=2.0, n_freqs=32)
+
+        # Neural-only CSD
+        csd_neural = spectral_dcm_forward(
+            A, freqs,
+            torch.zeros(2, 1, dtype=torch.float64),
+            torch.zeros(2, 1, dtype=torch.float64),
+            torch.zeros(1, N, dtype=torch.float64),
+            hemodynamic=False, mar_order=0,
+        )
+
+        # Hemodynamic CSD
+        csd_hemo = spectral_dcm_forward(
+            A, freqs,
+            torch.zeros(2, 1, dtype=torch.float64),
+            torch.zeros(2, 1, dtype=torch.float64),
+            torch.zeros(1, N, dtype=torch.float64),
+            hemodynamic=True, mar_order=0,
+        )
+
+        ratio_neural = abs(csd_neural[-1, 0, 0]) / abs(csd_neural[0, 0, 0])
+        ratio_hemo = abs(csd_hemo[-1, 0, 0]) / abs(csd_hemo[0, 0, 0])
+        assert ratio_hemo < ratio_neural
+
+    def test_hemodynamic_transfer_finite(self) -> None:
+        """Full pipeline with hemodynamics produces finite CSD."""
+        N = 3
+        A = torch.tensor(
+            [[-0.5, 0.1, 0.0], [0.2, -0.5, 0.1], [0.0, 0.3, -0.5]],
+            dtype=torch.float64,
+        )
+        freqs = default_frequency_grid(TR=2.0, n_freqs=32)
+        csd = spectral_dcm_forward(
+            A, freqs,
+            torch.zeros(2, 1, dtype=torch.float64),
+            torch.zeros(2, 1, dtype=torch.float64),
+            torch.zeros(1, N, dtype=torch.float64),
+            hemodynamic=True, mar_order=0,
+        )
+        assert csd.shape == (32, N, N)
+        assert torch.all(torch.isfinite(csd.real))
+        assert torch.all(torch.isfinite(csd.imag))
+
+    def test_hemodynamic_with_custom_params(self) -> None:
+        """Non-zero hemodynamic params produce valid CSD."""
+        N = 2
+        A = torch.diag(torch.tensor([-0.5, -0.5], dtype=torch.float64))
+        freqs = default_frequency_grid(TR=2.0, n_freqs=16)
+
+        csd = spectral_dcm_forward(
+            A, freqs,
+            torch.zeros(2, 1, dtype=torch.float64),
+            torch.zeros(2, 1, dtype=torch.float64),
+            torch.zeros(1, N, dtype=torch.float64),
+            hemodynamic=True, mar_order=0,
+            P_transit=torch.tensor([0.1, -0.1], dtype=torch.float64),
+            P_decay=torch.tensor([0.05], dtype=torch.float64),
+            P_epsilon=torch.tensor([-0.1], dtype=torch.float64),
+        )
+        assert torch.all(torch.isfinite(csd.real))
+        assert torch.all(torch.isfinite(csd.imag))
