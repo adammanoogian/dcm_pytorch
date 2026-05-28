@@ -90,7 +90,7 @@ def _predicted_residual(
 ) -> torch.Tensor:
     """Compute residual vector (observed - predicted) as real vector."""
     A_free, noise_a, noise_b, noise_c = _unpack_params(theta, N)
-    A = parameterize_A(A_free * a_mask)
+    A = parameterize_A(A_free * a_mask.to(A_free.device))
     pred_csd = spectral_dcm_forward(
         A, freqs, noise_a, noise_b, noise_c, eig_clamp=eig_clamp
     )
@@ -327,7 +327,7 @@ def run_variational_laplace(
 
     with torch.no_grad():
         A_free_post, na_post, nb_post, nc_post = _unpack_params(theta, N)
-        A_post = parameterize_A(A_free_post * a_mask)
+        A_post = parameterize_A(A_free_post * a_mask.to(A_free_post.device))
         pred_final = spectral_dcm_forward(
             A_post, freqs, na_post, nb_post, nc_post, eig_clamp=eig_clamp
         )

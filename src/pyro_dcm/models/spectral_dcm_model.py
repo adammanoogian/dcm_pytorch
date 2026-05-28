@@ -150,7 +150,7 @@ def spectral_dcm_model(
     )
 
     # Apply structural mask: zero absent connections
-    A_free = A_free * a_mask
+    A_free = A_free * a_mask.to(A_free.device)
 
     # Deterministic transform: parameterize_A ensures negative diagonal
     A = pyro.deterministic("A", parameterize_A(A_free))
