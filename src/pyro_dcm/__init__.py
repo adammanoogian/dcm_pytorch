@@ -14,6 +14,10 @@ from pyro_dcm.guides import (
     SpectralDCMPacker,
     TaskDCMPacker,
 )
+from pyro_dcm.model_selection import (
+    bayesian_model_reduction,
+    bmr_circuit_selection,
+)
 from pyro_dcm.models import (
     amortized_spectral_dcm_model,
     amortized_task_dcm_model,
@@ -61,6 +65,8 @@ __all__ = [
     "__version__",
     "amortized_spectral_dcm_model",
     "amortized_task_dcm_model",
+    "bayesian_model_reduction",
+    "bmr_circuit_selection",
     "compute_effective_A",
     "create_guide",
     "extract_posterior_params",

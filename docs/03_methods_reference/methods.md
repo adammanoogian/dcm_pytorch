@@ -450,3 +450,53 @@ visualizations.
   Pradhan, N., Karaletsos, T., Singh, R., Szerlip, P., Horsfall, P., &
   Goodman, N. D. (2019). Pyro: Deep universal probabilistic programming.
   *Journal of Machine Learning Research*, 20(28), 1-6.
+
+---
+
+## 6. Bilinear Extension and Direct Observation Model
+
+### 6.1 Bilinear Neural State Equation
+
+The linear state equation extends to the full bilinear form ([REF-001] Eq. 1):
+
+$$\frac{dx}{dt} = Ax + \sum_{j=1}^{J} u_j(t) B^{(j)} x + Cu(t)$$
+
+where $B^{(j)} \in \mathbb{R}^{N \times N}$ is the modulatory connectivity matrix for condition $j$, and $A_{\text{eff}}(t) = A + \sum_j u_j(t) B^{(j)}$. Priors: $B^{(j)}_{\text{free}} \sim \mathcal{N}(0, 1.0)$.
+
+### 6.2 Direct Observation Model
+
+For neural-state trajectories without hemodynamic convolution:
+
+$$y(t) = C_{\text{obs}} x(t) + \varepsilon, \quad \varepsilon \sim \mathcal{N}(0, \sigma^2 I)$$
+
+where $C_{\text{obs}} = I_N$. Uses LC_A_PRIOR_VARIANCE = 1/16.
+
+### 6.3 Variational Laplace
+
+Default inference implements SPM12's Gauss-Newton optimization with Laplace approximation ([REF-040]).
+
+## 7. DCM Interpretability for Neural Data Models
+
+### 7.1 CT-RNN Training
+
+Continuous-time RNNs ([REF-080]): $\tau \frac{dh}{dt} = -h + f(W_{\text{rec}} h + W_{\text{in}} u + b)$ with Euler discretization $h_{t+1} = (1-\alpha) h_t + \alpha f(W_{\text{rec}} h_t + W_{\text{in}} u_t + b)$.
+
+### 7.2 Neural Data Model Pipeline
+
+Train temporal model on M/EEG ROI timeseries, extract latent trajectories (overcomplete $n_{\text{latent}} = 2 \times n_{\text{ROI}}$), compute CSD, fit spectral DCM via Variational Laplace.
+
+## 8. Bayesian Model Reduction
+
+Analytic scoring of reduced architectures from a single full-model fit ([REF-070]). Reduced posterior:
+
+$$\Sigma_{r,\text{post}}^{-1} = \Sigma_f^{-1} + \Sigma_r^{-1} - \Sigma_0^{-1}$$
+
+Circuit-size selection enumerates all $2^k - 1$ subsets of prunable connections ([REF-071]).
+
+## 9. Simulation-Based Inference for Spectral DCM
+
+Neural density estimation on simulated CSD ([REF-090], [REF-091]). Amortized posterior inference via SNPE ($<1$ s/subject). SBC calibration validates coverage ([REF-043]).
+
+## 10. Hybrid VAE-DCM
+
+Sequential VAE with DCM ODE decoder ([REF-110]). Encoder $q_\phi(\theta|y)$ maps observations to DCM parameter posterior. ELBO with KL annealing: $\mathcal{L} = \mathbb{E}_{q_\phi}[\ln p(y|\theta)] - \beta D_{\text{KL}}(q_\phi \| p)$.

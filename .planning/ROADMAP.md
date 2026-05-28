@@ -367,6 +367,15 @@ matrices, serving as copy-pasteable starting points for real neuroimaging workfl
 **Branch:** `gsd/phase-19-pipeline-demos`
 **Depends on:** Phase 18 (confirmed IO contracts via passing tests).
 **Requirements:** PIPE-01, PIPE-02
+**Plans:** 2 plans (1 wave)
+Plans:
+- [x] 19-01-PLAN.md — Spectral DCM pipeline demo: synthetic MNE Epochs -> epochs_to_csd -> spectral_dcm_model -> SVI -> posterior A (PIPE-01)
+- [x] 19-02-PLAN.md — Task DCM pipeline demo: synthetic MNE Epochs -> epochs_to_timeseries -> task_dcm_model (bilinear B) -> SVI -> posterior A + B (PIPE-02)
+
+**Success Criteria** (what must be TRUE):
+
+  1. `pytest tests/test_mne_loader.py` and `pytest tests/test_bids_loader.py` still pass (no regressions).
+  2. Both pipeline scripts execute end-to-end on synthetic data and produce fitted posterior A matrices.
 
 ### Progress
 
@@ -375,41 +384,46 @@ matrices, serving as copy-pasteable starting points for real neuroimaging workfl
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 18. MNE/BIDS IO Test Suite | 2/2 | Complete (verified 17/17 must-haves) | 2026-05-21 |
-| 19. End-to-End Pipeline Demos | 0/TBD | Not started | -- |
+| 19. End-to-End Pipeline Demos | 2/2 | Complete (verified 10/10 must-haves) | 2026-05-24 |
 
 ---
 
 ## Upcoming Milestone: v0.6.0 Latent Circuit DCM
 
-**Status:** Defined 2026-05-24
-**Phases:** 20-25 (6 phases)
-**Requirements covered:** 38/38 v0.6.0 requirements
+**Status:** Defined 2026-05-24; restructured 2026-05-26
+**Phases:** 20-27 (8 phases)
+**Requirements covered:** 38+ v0.6.0 requirements (new phases TBD during planning)
 
 ### Overview
 
-v0.6.0 adds Latent Circuit DCM to the Pyro-DCM framework: train a continuous-time RNN
-on a cognitive task, extract hidden state trajectories, reduce dimensionality with PCA,
-then fit bilinear DCM (`dx/dt = Ax + sum_j u_j B_j x + Cu`) to those trajectories using
-a direct observation model (`y = C_obs @ x + noise`) in place of the balloon-Windkessel
-hemodynamic chain. The scientific contribution is threefold: (1) posterior uncertainty on
-circuit parameters (Langdon & Engel 2025 provides point estimates only), (2) explicit
-bilinear B_j matrices capturing context-dependent connectivity changes, and (3)
-ELBO-based circuit architecture selection. The build order is inside-out: validate the
-DCM model on synthetic bilinear ground truth first (Phase 20), build the RNN data
-pipeline in parallel (Phase 21), then wire them together (Phase 22), add Bayesian Model
-Reduction (Phase 23), demonstrate on a foundation model (Phase 24), and compile
-publication artifacts (Phase 25).
+v0.6.0 extends Pyro-DCM into a framework for **DCM-based interpretability of deep
+learning models trained on neural data**. The milestone has four pillars:
 
-**Critical path:** Phase 20 (forward model + synthetic validation) -> Phase 22
-(end-to-end pipeline) -> Phase 25 (publication). Phase 21 (RNN) can run in parallel
-with Phase 20. Phase 23 (BMR) depends on Phase 20. Phase 24 (TRIBE) depends on Phase 20.
+1. **Synthetic validation** (Phase 20): Prove DCM recovers known bilinear parameters
+   from a direct observation model, establishing the methodological foundation.
+2. **DCM interpretability for neural data models** (Phase 22, core contribution):
+   Train a temporal deep learning model on real M/EEG data (e.g., Cam-CAN MEG),
+   extract latent dynamics, and fit spectral or bilinear DCM to characterize
+   effective connectivity inside the model's learned representations.
+3. **Foundation model use cases** (Phase 24): Apply DCM interpretability to
+   pretrained brain foundation models (TRIBE for fMRI; LaBraM/MEG-GPT for M/EEG).
+4. **Advanced inference** (Phases 25-26): Hybrid VAE-DCM (physics-informed
+   generative model) and SBI for spectral DCM (amortized inference).
 
-**Milestone acceptance gate:** (1) Parameter recovery on synthetic bilinear ground truth
-passes RECOV-equivalent criteria (A RMSE, B RMSE, sign recovery, 95% CI coverage);
-(2) End-to-end pipeline produces trajectory R-squared >= 0.80 on RNN latents;
-(3) ELBO correctly selects true N from candidates on synthetic data;
-(4) BMR analytic evidence agrees with brute-force ELBO comparison;
-(5) Publication figures 1-8 and methods section complete.
+Phase 21 (CT-RNN training on neurogym) is complete and provides a methods-validation
+baseline. The scientific focus has shifted from RNN circuit extraction to DCM as an
+interpretability tool for models trained on real neuroimaging data.
+
+**Critical path:** Phase 20 (synthetic validation) -> Phase 22 (main contribution)
+-> Phase 27 (publication). Phase 21 (RNN) complete. Phase 23 (BMR) depends on
+Phase 20. Phase 24 (foundation models) depends on Phase 20 + 22. Phases 25-26
+(hybrid VAE-DCM, SBI) can run in parallel after Phase 20.
+
+**Milestone acceptance gate:** (1) Parameter recovery on synthetic ground truth
+passes RECOV-equivalent criteria; (2) DCM fit to neural-data-model latent dynamics
+produces interpretable effective connectivity on real M/EEG; (3) ELBO or BMR
+correctly selects circuit architecture; (4) Foundation model comparison across
+modalities; (5) Publication figures and methods section complete.
 
 ### Phases
 
@@ -468,6 +482,13 @@ producing the observed data that bilinear DCM fits to.
 **Depends on:** Nothing in v0.6.0 (independent of Phase 20; requires only PyTorch +
 neurogym + scikit-learn). Can run in parallel with Phase 20.
 **Requirements:** RNN-01, RNN-02, RNN-03, RNN-04, DIM-01, DIM-02, DIM-03
+**Plans:** 4 plans (4 waves)
+Plans:
+- [ ] 21-01-PLAN.md — CT-RNN module + rnn package + pyproject.toml deps + unit tests (RNN-01)
+- [ ] 21-02-PLAN.md — RNN trainer + CDDM task integration + training tests (RNN-02)
+- [ ] 21-03-PLAN.md — Fixed-point analysis + latent extraction (PCA, R2 gate, variance diagnostic) + tests (RNN-04, DIM-01, DIM-02, DIM-03)
+- [ ] 21-04-PLAN.md — Cluster training script + sbatch for 20-seed ensemble + trajectory extraction (RNN-03)
+
 **Success Criteria** (what must be TRUE):
 
   1. `ContinuousTimeRNN(nn.Module)` implements `tau * dh/dt = -h + f(W_rec @ h +
@@ -485,37 +506,40 @@ neurogym + scikit-learn). Can run in parallel with Phase 20.
      RNN behavioral readout with R-squared >= 0.90 before fitting DCM
      (DIM-01, DIM-02, DIM-03).
 
-#### Phase 22: End-to-End Pipeline & Comparison
+#### Phase 22: DCM Interpretability for Neural Data Models
 
-**Goal:** The full pipeline -- trained RNN to extracted latents to PCA to bilinear
-DCM fit to posterior A/B matrices -- runs end-to-end, with systematic comparison
-to Langdon & Engel 2025 and ELBO-based model selection across architectures.
+**Goal:** Train a temporal deep learning model on real M/EEG data, extract its
+learned latent dynamics, and fit DCM (spectral or bilinear) to characterize
+effective connectivity inside the model's representations -- demonstrating DCM
+as an interpretability tool for neural data models.
 
-**Branch:** `gsd/phase-22-pipeline-comparison`
-**Depends on:** Phase 20 (validated DCM model) + Phase 21 (trained RNNs + latent
-extraction).
-**Requirements:** PIPE-01, PIPE-02, PIPE-03, COMP-01, COMP-02, COMP-03, COMP-04,
-COMP-05
+**Branch:** `gsd/phase-22-dcm-neural-interpretability`
+**Depends on:** Phase 20 (validated DCM model) + Phase 18 (MNE IO).
+**Requirements:** INTERP-01 through INTERP-06
+**Plans:** 6 plans (4 waves)
+Plans:
+- [ ] 22-01-PLAN.md — MEG spectral DCM adaptations: frequency grid, parameterized eigenvalue clamp, MEG-scale prior variance (INTERP-01)
+- [ ] 22-02-PLAN.md — LSTM autoencoder module (MEGAutoencoder nn.Module) + AutoencoderTrainer + unit tests (INTERP-02)
+- [ ] 22-03-PLAN.md — Cam-CAN MEG data loader + source reconstruction pipeline + DUA registration checkpoint (INTERP-03)
+- [ ] 22-04-PLAN.md — Latent extraction + CSD computation + synthetic end-to-end integration test (INTERP-04)
+- [ ] 22-05-PLAN.md — Pipeline scripts (preprocess, train, extract, fit, compare) + cluster sbatch files (INTERP-05)
+- [ ] 22-06-PLAN.md — Full pipeline execution on real Cam-CAN data + scientific verification checkpoint (INTERP-06)
+
 **Success Criteria** (what must be TRUE):
 
-  1. Single-script demonstration runs the full pipeline: trained RNN -> extract h(t)
-     -> PCA -> fit bilinear DCM -> posterior A, B_j matrices; trajectory R-squared
-     of bilinear DCM fit to nonlinear RNN latents >= 0.80 reported per condition
-     (PIPE-01, PIPE-02).
-  2. Linearization quality diagnostic `||J(h*) - A_eff||_F / ||J(h*)||_F` computed
-     at fixed points, documenting where bilinear approximation is valid
-     (PIPE-03).
-  3. Quantitative comparison to Langdon & Engel 2025: bilinear DCM trajectory
-     R-squared vs L&E nonlinear circuit R-squared on same RNN ensemble; bilinear DCM
-     adds posterior uncertainty (D-1) and explicit B_j (D-2) that L&E lacks
-     (COMP-01).
-  4. ELBO model comparison across: linear vs bilinear DCM, different N values,
-     different B_j mask topologies; guide type comparison across AutoNormal,
-     AutoLowRankMVN, AutoIAFNormal with coverage calibration on synthetic data
-     (COMP-02, COMP-03).
-  5. Misspecification analysis: systematic comparison of bilinear fit quality across
-     RNN nonlinearity regimes; qualitative comparison to TVB/Jirsa whole-brain
-     approach as positioning section (COMP-04, COMP-05).
+  1. A temporal model (VAE, transformer, or similar) trained on real M/EEG data
+     (e.g., Cam-CAN MEG, sensory/motor task) achieves reconstruction quality
+     sufficient for downstream analysis.
+  2. Latent trajectories extracted from the trained model and mapped to
+     source-localized ROI space (or ROI-aligned latent dimensions).
+  3. Spectral or bilinear DCM fit to the model's latent dynamics produces
+     posterior A matrices (and B_j if task-modulated) with credible intervals.
+  4. Effective connectivity structure recovered by DCM relates to known
+     neuroscience (e.g., sensory-to-motor pathways during a motor task),
+     providing interpretability beyond what the upstream model offers alone.
+  5. Comparison to DCM fit directly on the raw M/EEG ROI timeseries,
+     demonstrating what the learned representation adds (denoising, compression,
+     or structure that DCM alone misses).
 
 #### Phase 23: Bayesian Model Reduction
 
@@ -526,6 +550,11 @@ refitting.
 **Branch:** `gsd/phase-23-bayesian-model-reduction`
 **Depends on:** Phase 20 (latent circuit DCM posteriors).
 **Requirements:** BMR-01, BMR-02, BMR-03
+**Plans:** 3 plans
+Plans:
+- [ ] 23-01-PLAN.md -- Core BMR function + model_selection subpackage + unit tests (BMR-01)
+- [ ] 23-02-PLAN.md -- Circuit-size selection: enumerate reduced architectures + score via BMR (BMR-02)
+- [ ] 23-03-PLAN.md -- BMR vs brute-force ELBO validation on synthetic data + package finalization (BMR-03)
 **Success Criteria** (what must be TRUE):
 
   1. `bayesian_model_reduction(posterior_mean, posterior_cov, prior_mean, prior_cov,
@@ -538,59 +567,133 @@ refitting.
      architecture) on synthetic data; agreement validates the analytic approximation
      (BMR-03).
 
-#### Phase 24: TRIBE Foundation Model Use Case
+#### Phase 24: Foundation Model Use Cases (TRIBE + M/EEG)
 
-**Goal:** Bilinear DCM distills interpretable circuit dynamics from a pre-trained brain
-foundation model (Meta TRIBE v2 or comparable), demonstrating that the method
-generalizes beyond task-trained RNNs.
+**Goal:** DCM distills interpretable circuit dynamics from pre-trained brain
+foundation models, demonstrating generalization across modalities: fMRI (Meta
+TRIBE v2) and M/EEG (LaBraM, MEG-GPT, or comparable).
 
-**Branch:** `gsd/phase-24-tribe-foundation-model`
-**Depends on:** Phase 20 (latent circuit DCM model + fitting pipeline).
-**Requirements:** TRIBE-01, TRIBE-02, TRIBE-03
+**Branch:** `gsd/phase-24-foundation-model-use-cases`
+**Depends on:** Phase 20 (validated DCM model) + Phase 22 (M/EEG pipeline).
+**Requirements:** TRIBE-01, TRIBE-02, TRIBE-03, FMEEG-01, FMEEG-02, FMEEG-03
+**Plans:** 4 plans (3 waves)
+Plans:
+- [ ] 24-01-PLAN.md -- Foundation extractor infrastructure: BaseExtractor ABC, parcellation utility, pyproject.toml [foundation] extras, unit tests
+- [ ] 24-02-PLAN.md -- TRIBE v2 fMRI pipeline: TRIBEExtractor, extraction + DCM fitting scripts, A100 cluster sbatch
+- [ ] 24-03-PLAN.md -- M/EEG foundation model pipeline: LaBraMExtractor + BrainOmniExtractor, extraction + DCM fitting scripts, GPU cluster sbatch
+- [ ] 24-04-PLAN.md -- Cross-modal comparison: A-matrix agreement metrics (Pearson r, sign kappa, CI overlap), comparison script + figures, unit tests
+
 **Success Criteria** (what must be TRUE):
 
   1. Latent representations extracted from Meta TRIBE v2 (or comparable open-source
-     brain encoding model) for a stimulus set (TRIBE-01).
-  2. Bilinear DCM fit to TRIBE's latent dynamics produces trajectory R-squared and
-     posterior A/B matrices with credible intervals (TRIBE-02).
-  3. Demonstration that interpretable circuit connections identified by DCM relate
-     to known neuroscience (e.g., sensory-to-decision pathways), presented as a
-     proof-of-concept section (TRIBE-03).
+     brain encoding model) for a stimulus set; DCM fit produces posterior A/B
+     matrices with credible intervals (TRIBE-01, TRIBE-02).
+  2. Latent representations extracted from a pretrained M/EEG foundation model
+     (LaBraM, MEG-GPT, or comparable) on source-localized ROI timeseries; DCM
+     fit produces posterior connectivity with credible intervals (FMEEG-01,
+     FMEEG-02).
+  3. Comparison of DCM-derived effective connectivity across fMRI and M/EEG
+     foundation models on overlapping tasks/regions, demonstrating modality-
+     invariant circuit structure where expected (TRIBE-03, FMEEG-03).
 
-#### Phase 25: Publication Artifacts
+#### Phase 25: Hybrid VAE-DCM
+
+**Goal:** A sequential VAE where the decoder IS the DCM forward model (neural state
+ODE + observation equation), providing a physics-informed generative model that
+jointly learns latent initial conditions and connectivity parameters via amortized
+inference. Synthetic validation first; real M/EEG application after Phase 22.
+
+**Branch:** `gsd/phase-25-hybrid-vae-dcm`
+**Depends on:** Phase 20 (DCM forward model: CoupledDCMSystem, simulate_latent_circuit,
+parameterize_A, latent_circuit_dcm_model pattern).
+**Requirements:** HVAE-01 through HVAE-04
+**Plans:** 4 plans (4 waves)
+Plans:
+- [ ] 25-01-PLAN.md -- LatentCircuitDCMPacker (A_free + C + x0 + noise_prec) + DCMEncoderNet (1D-CNN encoder with dual z_loc/z_scale heads) + unit tests (HVAE-01 infrastructure)
+- [ ] 25-02-PLAN.md -- hybrid_vae_dcm_model (DCM ODE decoder as Pyro model) + HybridVAEDCMGuide (encoder as Pyro guide) + model/guide integration tests (HVAE-01, HVAE-02)
+- [ ] 25-03-PLAN.md -- Synthetic training data generator + training loop with KL annealing + training script + smoke recovery test (HVAE-02, HVAE-03)
+- [ ] 25-04-PLAN.md -- Full-scale cluster training (1000 examples, 200 epochs) + amortized recovery validation + inference timing verification (HVAE-02, HVAE-04)
+
+**Success Criteria** (what must be TRUE):
+
+  1. VAE encoder maps observed trajectories to approximate posterior over DCM
+     parameters (A, C) and initial conditions (x0); DCM forward model serves
+     as the decoder generating predicted timeseries via ODE integration (HVAE-01).
+  2. Training via ELBO maximization with KL annealing recovers known connectivity
+     on synthetic data: A_free RMSE < 0.3 and sign recovery > 0.6 on held-out
+     test set (HVAE-02).
+  3. KL divergence is non-trivial after training (> 0.1), confirming no posterior
+     collapse (HVAE-03).
+  4. Amortized inference: once trained, parameter estimation for a new subject
+     is a single encoder forward pass (< 1 second, no per-subject SVI) (HVAE-04).
+
+#### Phase 26: SBI for Spectral DCM
+
+**Goal:** Simulation-based inference (SBI) as an alternative to SVI for spectral
+DCM, following VBI (eLife 2025) and spectral graph model (Comms Physics 2024)
+approaches. Amortized Bayesian inference via neural density estimation on
+simulated cross-spectral densities.
+
+**Branch:** `gsd/phase-26-sbi-spectral-dcm`
+**Depends on:** Phase 20 (spectral DCM forward model as simulator).
+**Requirements:** SBI-01 through SBI-04
+**Plans:** 2 plans (2 waves)
+Plans:
+- [ ] 26-01-PLAN.md — SBI core infrastructure: simulator wrapper, prior, embedding network, diagnostics utilities, unit/integration tests, pyproject.toml sbi dependency (SBI-01, SBI-02, SBI-03)
+- [ ] 26-02-PLAN.md — NPE training pipeline + SBC calibration validation + SBI-vs-SVI comparison script + cluster sbatch (SBI-01, SBI-02, SBI-03, SBI-04)
+
+**Success Criteria** (what must be TRUE):
+
+  1. Neural density estimator (SNPE or SNLE) trained on simulated CSD from the
+     spectral DCM forward model recovers posterior parameter distributions that
+     agree with SVI posteriors on synthetic data.
+  2. Amortized inference: trained estimator performs posterior inference on new
+     observations in a single forward pass (<1 second per subject).
+  3. Coverage calibration: simulation-based calibration (SBC) confirms posterior
+     credible intervals have nominal coverage.
+  4. Demonstration on real M/EEG data (e.g., Cam-CAN) showing scalability to
+     large N that would be intractable with per-subject SVI.
+
+#### Phase 27: Publication Artifacts
 
 **Goal:** All publication-quality figures, methods section, and reference updates are
 complete, making the v0.6.0 results paper-ready.
 
-**Branch:** `gsd/phase-25-publication-artifacts`
-**Depends on:** Phase 22 (pipeline results) + Phase 23 (BMR results) + Phase 24
-(TRIBE results).
+**Branch:** `gsd/phase-27-publication-artifacts`
+**Depends on:** Phase 22 (main results) + Phase 23 (BMR results) + Phase 24
+(foundation model results).
 **Requirements:** PUB-01, PUB-02, PUB-03
+**Plans:** 3 plans (2 waves)
+Plans:
+- [ ] 27-01-PLAN.md -- REFERENCES.md update + methods section extension (Markdown + LaTeX) for all v0.6.0 methodology (PUB-02, PUB-03)
+- [ ] 27-02-PLAN.md -- Publication figure generation script + pipeline schematic figure (PUB-01)
+- [ ] 27-03-PLAN.md -- Equations quick-reference update + cross-consistency check + user verification checkpoint (PUB-01, PUB-02, PUB-03)
+
 **Success Criteria** (what must be TRUE):
 
-  1. Eight publication-quality figures produced: (1) pipeline schematic,
-     (2) parameter recovery on synthetic, (3) trajectory fits per condition,
-     (4) A + B_j heatmaps with credible intervals, (5) ELBO vs N curve,
-     (6) BMR circuit selection, (7) L&E comparison, (8) misspecification regime
-     analysis (PUB-01).
-  2. Methods section (Markdown + LaTeX) covers: bilinear DCM equations, direct
-     observation model (citing David et al. 2006 EEG/MEG DCM precedent), SVI
-     inference, BMR (citing Friston & Penny 2011), validation strategy (PUB-02).
-  3. REFERENCES.md updated with REF-070 through REF-076 (BMR, BMS, EEG DCM,
-     Thomas 2023, DCM-RNN, Pinotsis 2013, Langdon & Engel 2025) (PUB-03).
+  1. Publication-quality figures covering: pipeline schematic, parameter recovery
+     on synthetic, DCM-derived connectivity from M/EEG model latents, BMR circuit
+     selection, foundation model comparison, hybrid VAE-DCM results (PUB-01).
+  2. Methods section (Markdown + LaTeX) covers: DCM equations (bilinear + spectral),
+     direct observation model, SVI and SBI inference, BMR, neural data model
+     training, DCM interpretability framework (PUB-02).
+  3. REFERENCES.md updated with all new references (BMR, SBI, VBI, foundation
+     models, ODEBrain, Freeman et al. 2025, etc.) (PUB-03).
 
 ### Progress
 
-**Execution Order:** 20 (+ 21 in parallel) -> 22 -> 23 (can overlap with 22) -> 24 (can overlap with 23) -> 25
+**Execution Order:** 20 (+ 21 in parallel) -> 22 -> 23 (can overlap with 22) -> 24 (can overlap with 23) -> 25/26 (can overlap) -> 27
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 20. Direct Observation Forward Model, Simulator & Synthetic Validation | 0/5 | Planned | -- |
-| 21. CT-RNN Training & Latent Extraction | 0/TBD | Not started | -- |
-| 22. End-to-End Pipeline & Comparison | 0/TBD | Not started | -- |
-| 23. Bayesian Model Reduction | 0/TBD | Not started | -- |
-| 24. TRIBE Foundation Model Use Case | 0/TBD | Not started | -- |
-| 25. Publication Artifacts | 0/TBD | Not started | -- |
+| 20. Direct Observation Forward Model, Simulator & Synthetic Validation | 4/5 | Plans 01-04 complete; Plan 05 acceptance needs rework | -- |
+| 21. CT-RNN Training & Latent Extraction | 4/4 | Complete (20 seeds trained, trajectories extracted) | 2026-05-26 |
+| 22. DCM Interpretability for Neural Data Models | 0/6 | Planned | -- |
+| 23. Bayesian Model Reduction | 0/3 | Planned | -- |
+| 24. Foundation Model Use Cases (TRIBE + M/EEG) | 0/4 | Planned | -- |
+| 25. Hybrid VAE-DCM | 0/4 | Planned | -- |
+| 26. SBI for Spectral DCM | 0/2 | Planned | -- |
+| 27. Publication Artifacts | 0/3 | Planned | -- |
 
 ---
 
@@ -610,14 +713,16 @@ complete, making the v0.6.0 results paper-ready.
 | 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | v0.3.0 | 0/2 | Planned | -- |
 | 17. Circuit Visualization Module | v0.4.0 | 1/1 | Complete | 2026-04-24 |
 | 18. MNE/BIDS IO Test Suite | v0.5.0 | 2/2 | Complete (verified 17/17 must-haves) | 2026-05-21 |
-| 19. End-to-End Pipeline Demos | v0.5.0 | 0/TBD | Not started | -- |
-| 20. Direct Observation Forward Model, Simulator & Synthetic Validation | v0.6.0 | 0/5 | Planned | -- |
-| 21. CT-RNN Training & Latent Extraction | v0.6.0 | 0/TBD | Not started | -- |
-| 22. End-to-End Pipeline & Comparison | v0.6.0 | 0/TBD | Not started | -- |
-| 23. Bayesian Model Reduction | v0.6.0 | 0/TBD | Not started | -- |
-| 24. TRIBE Foundation Model Use Case | v0.6.0 | 0/TBD | Not started | -- |
-| 25. Publication Artifacts | v0.6.0 | 0/TBD | Not started | -- |
+| 19. End-to-End Pipeline Demos | v0.5.0 | 2/2 | Complete (verified 10/10 must-haves) | 2026-05-24 |
+| 20. Direct Observation Forward Model, Simulator & Synthetic Validation | v0.6.0 | 4/5 | Plans 01-04 complete; 05 needs rework | -- |
+| 21. CT-RNN Training & Latent Extraction | v0.6.0 | 4/4 | Complete | 2026-05-26 |
+| 22. DCM Interpretability for Neural Data Models | v0.6.0 | 0/6 | Planned | -- |
+| 23. Bayesian Model Reduction | v0.6.0 | 0/3 | Planned | -- |
+| 24. Foundation Model Use Cases (TRIBE + M/EEG) | v0.6.0 | 0/4 | Planned | -- |
+| 25. Hybrid VAE-DCM | v0.6.0 | 0/4 | Planned | -- |
+| 26. SBI for Spectral DCM | v0.6.0 | 0/2 | Planned | -- |
+| 27. Publication Artifacts | v0.6.0 | 0/3 | Planned | -- |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-05-24 -- Phase 20 planned (5 plans, 4 waves). CoupledDCMSystem hemodynamic toggle (per CONTEXT decision), latent circuit simulator, multi-start SVI, Pyro model with LC-specific priors, recovery benchmark with cluster calibration sweep + ELBO model selection. OBS-04 tension resolved: coupled_system.py edited for toggle; neural_state.py/balloon_model.py/bold_signal.py untouched.*
+*Last updated: 2026-05-26 -- Phase 24 planned (4 plans, 3 waves): foundation model extractor infrastructure, TRIBE v2 fMRI pipeline, M/EEG foundation model pipeline (LaBraM + BrainOmni), cross-modal comparison. Phase 26 planned (2 plans, 2 waves). Phase 25 planned (4 plans, 4 waves). Phase 27 planned (3 plans, 2 waves). v0.6.0 restructured: new core is DCM as interpretability tool for neural data models (Phase 22). Phase 21 complete. Phase 20-05 needs rework.*

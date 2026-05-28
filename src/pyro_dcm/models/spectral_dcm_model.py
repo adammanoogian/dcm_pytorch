@@ -22,9 +22,9 @@ References
 
 from __future__ import annotations
 
-import torch
 import pyro
 import pyro.distributions as dist
+import torch
 
 from pyro_dcm.forward_models.neural_state import parameterize_A
 from pyro_dcm.forward_models.spectral_transfer import spectral_dcm_forward
@@ -71,6 +71,9 @@ def spectral_dcm_model(
     freqs: torch.Tensor,
     a_mask: torch.Tensor,
     N: int | None = None,
+    *,
+    prior_a_var: float = 1.0 / 64.0,
+    eig_clamp: float | None = -1.0 / 32.0,
 ) -> None:
     """Pyro generative model for spectral DCM.
 
@@ -95,12 +98,21 @@ def spectral_dcm_model(
     N : int or None, optional
         Number of brain regions. If None, inferred from
         ``a_mask.shape[0]``.
+    prior_a_var : float
+        Prior variance for A_free elements. Default ``1/64`` matches
+        SPM12 spm_dcm_fmri_priors.m for fMRI. For MEG, use ``1/16``
+        (wider priors for neural-timescale connectivity).
+    eig_clamp : float or None
+        Maximum value for real parts of eigenvalues of A. Default
+        ``-1/32`` matches the SPM12 fMRI convention. Set to ``-1.0``
+        for MEG, or ``None`` to disable clamping. Passed through to
+        ``spectral_dcm_forward``.
 
     Notes
     -----
-    - A_free is sampled from N(0, 1/64) matching SPM12
-      spm_dcm_fmri_priors.m. Structural masking zeros out absent
-      connections before the parameterize_A transform.
+    - A_free is sampled from N(0, prior_a_var) with default 1/64
+      matching SPM12 spm_dcm_fmri_priors.m. Structural masking zeros
+      out absent connections before the parameterize_A transform.
     - Noise parameters (a, b, c) follow SPM12 conventions:
       a (2, N) neuronal, b (2, 1) global observation, c (2, N)
       regional observation.
@@ -124,10 +136,9 @@ def spectral_dcm_model(
     # --- Infer dimensions ---
     if N is None:
         N = a_mask.shape[0]
-    F = freqs.shape[0]  # noqa: N806
 
-    # Prior standard deviation: SPM12 convention
-    prior_std = (1.0 / 64.0) ** 0.5
+    # Prior standard deviation from prior variance
+    prior_std = prior_a_var**0.5
 
     # --- Sample A_free ---
     A_free = pyro.sample(
@@ -175,7 +186,7 @@ def spectral_dcm_model(
     # --- Forward model ---
     # Compute predicted CSD via spectral DCM pipeline
     predicted_csd_complex = spectral_dcm_forward(
-        A, freqs, noise_a, noise_b, noise_c
+        A, freqs, noise_a, noise_b, noise_c, eig_clamp=eig_clamp
     )
 
     # Store complex predicted CSD as deterministic for analysis

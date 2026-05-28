@@ -236,6 +236,82 @@ If you cannot cite a reference for a computation, STOP and find one before codin
 
 ---
 
+## Bayesian Model Selection
+
+### REF-070: Friston & Penny (2011)
+**Title:** Post hoc Bayesian model selection
+**Journal:** NeuroImage, 56(4), 2089-2099
+**DOI:** 10.1016/j.neuroimage.2011.03.062
+**Used for:**
+- Bayesian Model Reduction (BMR): analytic re-evaluation of reduced models
+  from a single full-model inversion
+- Reduced posterior via Bayes rule (Eq. 4-5)
+- Change in log model evidence (delta F) for model comparison (Eq. 6-8)
+- Greedy search over reduced model space
+**Equations needed:** 4-8 (BMR core), greedy search algorithm
+
+### REF-071: Rosa et al. (2012)
+**Title:** Post-hoc selection of dynamic causal models
+**Journal:** J Neurosci Methods, 208(1), 66-78
+**DOI:** 10.1016/j.jneumeth.2012.04.013
+**Used for:** BMR application to DCM, practical implementation details
+
+---
+
+## CT-RNN and Latent Circuit Analysis
+
+### REF-080: Langdon & Engel (2025)
+**Title:** Latent circuit inference from heterogeneous neural responses during cognitive tasks
+**Note:** Formal citation key pending Zotero entry.
+**Used for:** CT-RNN training methodology, latent circuit extraction, baseline comparison
+
+### REF-081: Sussillo & Barak (2013)
+**Title:** Opening the black box: low-dimensional dynamics in high-dimensional recurrent neural networks
+**Journal:** Neural Computation, 25(3), 626-649
+**DOI:** 10.1162/NECO_a_00409
+**Used for:** Fixed-point analysis of RNN dynamics, Jacobian linearization
+
+---
+
+## Simulation-Based Inference
+
+### REF-090: Goncalves et al. (2020)
+**Title:** Training deep neural density estimators to identify mechanistic models of neural dynamics
+**Journal:** eLife, 9, e56261
+**DOI:** 10.7554/eLife.56261
+**Used for:** SBI methodology, neural density estimation (SNPE), SBC validation
+
+### REF-091: Hashemi et al. (2024)
+**Title:** Amortized Bayesian inference on generative dynamical network models of epilepsy
+**Journal:** Neural Networks, 163, 178-194
+**DOI:** 10.1016/j.neunet.2023.03.040
+**Used for:** SBI applied to spectral graph models / brain dynamics
+
+---
+
+## Foundation Models for Neuroimaging
+
+### REF-100: Thomas et al. (2025)
+**Title:** TRIBE: Pretrained brain foundation model
+**Note:** Formal citation key pending Zotero entry.
+**Used for:** fMRI foundation model latent representations for DCM interpretability
+
+### REF-101: Jiang et al. (2024)
+**Title:** Large Brain Model for Learning Generic Representations with Tremendous BioPoint EEG Data
+**Conference:** ICLR 2024
+**Used for:** LaBraM M/EEG foundation model
+
+---
+
+## Hybrid Generative Models
+
+### REF-110: Kingma & Welling (2014)
+**Title:** Auto-Encoding Variational Bayes
+**Conference:** ICLR 2014
+**Used for:** VAE framework, amortized inference, ELBO with reparameterization trick
+
+---
+
 ## Software References
 
 ### REF-060: Pyro
@@ -290,3 +366,10 @@ If you cannot cite a reference for a computation, STOP and find one before codin
 | `pyro_rdcm.py` | REF-020, REF-040 | rDCM generative model + ELBO |
 | `guide_meanfield.py` | REF-041 | Mean-field Gaussian (Laplace baseline) |
 | `guide_amortized.py` | REF-042, REF-043 | Normalizing flow amortized guide |
+| `latent_circuit_dcm_model.py` | REF-001, REF-070 | Bilinear state eq. (direct obs) |
+| `bmr.py` | REF-070, REF-071 | BMR analytic free energy (Eq. 4-8) |
+| `continuous_time_rnn.py` | REF-080 | CT-RNN dynamics (Euler) |
+| `fixed_point_analysis.py` | REF-081 | Fixed-point Jacobian analysis |
+| `sbi_spectral.py` | REF-090, REF-091 | NPE for spectral DCM |
+| `dcm_encoder_net.py` | REF-110 | VAE encoder for hybrid DCM |
+| `variational_laplace.py` | REF-040 | SPM12 Gauss-Newton VL |

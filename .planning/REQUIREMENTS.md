@@ -204,8 +204,8 @@ symmetry, channel picks inconsistency) are encoded as explicit test cases.
 
 ### Pipeline Scripts
 
-- [ ] **PIPE-01**: Spectral DCM demo script -- end-to-end: synthetic MNE Epochs -> `epochs_to_csd` -> SpectralDCMModel -> SVI -> posterior A matrix
-- [ ] **PIPE-02**: Task DCM demo script -- end-to-end: synthetic MNE Epochs -> `epochs_to_timeseries` -> TaskDCMModel -> SVI -> posterior A + B matrices
+- [x] **PIPE-01**: Spectral DCM demo script -- end-to-end: synthetic MNE Epochs -> `epochs_to_csd` -> SpectralDCMModel -> SVI -> posterior A matrix
+- [x] **PIPE-02**: Task DCM demo script -- end-to-end: synthetic MNE Epochs -> `epochs_to_timeseries` -> TaskDCMModel -> SVI -> posterior A + B matrices
 
 ## v0.5.0 Traceability
 
@@ -227,8 +227,8 @@ symmetry, channel picks inconsistency) are encoded as explicit test cases.
 | BIDS-01 | Phase 18 | Complete |
 | BIDS-02 | Phase 18 | Complete |
 | BIDS-03 | Phase 18 | Complete |
-| PIPE-01 | Phase 19 | Pending |
-| PIPE-02 | Phase 19 | Pending |
+| PIPE-01 | Phase 19 | Complete |
+| PIPE-02 | Phase 19 | Complete |
 
 ---
 *Requirements defined: 2026-04-17*

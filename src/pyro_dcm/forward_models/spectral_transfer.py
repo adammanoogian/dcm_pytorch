@@ -8,7 +8,9 @@ spm_csd_fmri_mtf.m conventions.
 The transfer function maps neural dynamics to observed cross-spectral
 density via modal decomposition of the effective connectivity matrix A.
 Eigenvalue stabilization follows the SPM convention of clamping real
-parts to max(-1/32) for fMRI frequency ranges.
+parts to max(-1/32) for fMRI frequency ranges. For MEG/EEG
+electrophysiology (1-45 Hz), the clamp threshold can be relaxed via
+the ``eig_clamp`` parameter.
 """
 
 from __future__ import annotations
@@ -59,11 +61,61 @@ def default_frequency_grid(
     )
 
 
+def default_frequency_grid_meg(
+    sfreq: float = 250.0,
+    n_freqs: int = 64,
+) -> torch.Tensor:
+    """Generate default frequency grid for MEG electrophysiology.
+
+    Returns linearly spaced frequencies from 1 Hz to 45 Hz, matching
+    the 1-45 Hz bandpass recommended for source-reconstructed MEG
+    data in parcellation-based connectivity analyses.
+
+    Parameters
+    ----------
+    sfreq : float
+        Sampling frequency in Hz. Used only for Nyquist validation;
+        the upper frequency bound (45 Hz) must be below ``sfreq / 2``.
+        Default 250.0.
+    n_freqs : int
+        Number of frequency bins. Default 64.
+
+    Returns
+    -------
+    torch.Tensor
+        Frequency vector in Hz, shape ``(n_freqs,)``, dtype float64.
+
+    Raises
+    ------
+    ValueError
+        If the maximum frequency (45 Hz) exceeds the Nyquist frequency
+        ``sfreq / 2``.
+
+    Examples
+    --------
+    >>> freqs = default_frequency_grid_meg(sfreq=250.0, n_freqs=64)
+    >>> freqs.shape  # (64,)
+    >>> freqs[0]     # ~1.0 Hz
+    >>> freqs[-1]    # ~45.0 Hz
+    """
+    fmax = 45.0
+    nyquist = sfreq / 2.0
+    if fmax > nyquist:
+        msg = (
+            f"Maximum frequency {fmax} Hz exceeds Nyquist frequency "
+            f"{nyquist} Hz (sfreq={sfreq} Hz). Use sfreq >= {2 * fmax} Hz."
+        )
+        raise ValueError(msg)
+    return torch.linspace(1.0, fmax, n_freqs, dtype=torch.float64)
+
+
 def compute_transfer_function(
     A: torch.Tensor,
     C_in: torch.Tensor,
     C_out: torch.Tensor,
     freqs: torch.Tensor,
+    *,
+    eig_clamp: float | None = -1.0 / 32.0,
 ) -> torch.Tensor:
     """Compute spectral transfer function via eigendecomposition.
 
@@ -73,8 +125,11 @@ def compute_transfer_function(
     using modal decomposition for numerical stability:
         H(w) = sum_k dgdv_k * dvdu_k / (i*2*pi*w - lambda_k)
 
-    Eigenvalue stabilization clamps real parts to max(-1/32) following
-    the SPM12 convention for fMRI frequencies.
+    Eigenvalue stabilization clamps real parts to ``max(eig_clamp)``
+    following the SPM12 convention. The default ``-1/32`` is appropriate
+    for fMRI frequencies (0.008-0.25 Hz). For MEG electrophysiology
+    (1-45 Hz), use ``eig_clamp=-1.0`` or ``eig_clamp=None`` (disables
+    clamping entirely); see 22-RESEARCH.md Pitfall 4.
 
     Cite: [REF-010] Eq. 3 and SPM12 spm_dcm_mtf.m.
 
@@ -88,6 +143,11 @@ def compute_transfer_function(
         Output projection matrix, shape ``(nn, N)``, float64.
     freqs : torch.Tensor
         Frequencies in Hz, shape ``(F,)``, float64.
+    eig_clamp : float or None
+        Maximum value for real parts of eigenvalues of A. Default
+        ``-1/32`` matches the SPM12 fMRI convention. Set to ``-1.0``
+        for MEG, or ``None`` to disable clamping entirely (relies on
+        ``parameterize_A`` upstream for stability).
 
     Returns
     -------
@@ -106,12 +166,14 @@ def compute_transfer_function(
     # Step 1: Eigendecompose A
     eigvals, eigvecs = torch.linalg.eig(A.to(torch.complex128))
 
-    # Step 2: Stabilize eigenvalues (SPM convention for fMRI)
-    # Clamp real parts to max(-1/32) to prevent blow-up
-    eigvals = torch.complex(
-        torch.clamp(eigvals.real, max=-1.0 / 32.0),
-        eigvals.imag,
-    )
+    # Step 2: Stabilize eigenvalues
+    # Default clamps real parts to max(-1/32) for fMRI (SPM convention).
+    # For MEG, use eig_clamp=-1.0 or None to disable.
+    if eig_clamp is not None:
+        eigvals = torch.complex(
+            torch.clamp(eigvals.real, max=eig_clamp),
+            eigvals.imag,
+        )
 
     # Step 3: Project through eigenvectors
     # dgdv: output projection through eigenvectors, shape (nn, N)
@@ -183,6 +245,8 @@ def spectral_dcm_forward(
     a: torch.Tensor,
     b: torch.Tensor,
     c: torch.Tensor,
+    *,
+    eig_clamp: float | None = -1.0 / 32.0,
 ) -> torch.Tensor:
     """Complete spectral DCM predicted CSD pipeline.
 
@@ -209,6 +273,11 @@ def spectral_dcm_forward(
     c : torch.Tensor
         Regional observation noise parameters, shape ``(2, N)``, float64.
         ``c[0, :]`` = log amplitude, ``c[1, :]`` = log exponent.
+    eig_clamp : float or None
+        Maximum value for real parts of eigenvalues of A. Default
+        ``-1/32`` matches the SPM12 fMRI convention. Set to ``-1.0``
+        for MEG, or ``None`` to disable clamping. Passed through to
+        ``compute_transfer_function``.
 
     Returns
     -------
@@ -233,7 +302,7 @@ def spectral_dcm_forward(
     C_out = torch.eye(N, dtype=torch.float64, device=A.device)
 
     # Compute transfer function via eigendecomposition
-    H = compute_transfer_function(A, C_in, C_out, freqs)
+    H = compute_transfer_function(A, C_in, C_out, freqs, eig_clamp=eig_clamp)
 
     # Compute noise spectra
     Gu = neuronal_noise_csd(freqs, a)

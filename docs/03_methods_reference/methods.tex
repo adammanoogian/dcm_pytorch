@@ -220,3 +220,62 @@ Pearson correlation, ELBO/free energy, and wall time per subject.
 Amortization-specific metrics include the RMSE ratio, amortization gap
 ($\text{ELBO}_\text{SVI} - \text{ELBO}_\text{amortized}$), and speed
 ratio. See the benchmark report for detailed results.
+
+% v0.6.0 Methods Extensions
+% Citation keys are placeholders pending Zotero export.
+
+\section{Bilinear Extension and Direct Observation Model}
+
+\subsection{Bilinear Neural State Equation}
+The linear state equation extends to the full bilinear form \citep{friston2003}:
+\begin{equation}
+  \frac{dx}{dt} = Ax + \sum_{j=1}^{J} u_j(t)\, B^{(j)} x + Cu(t)
+  \label{eq:bilinear-state}
+\end{equation}
+Priors: $B^{(j)}_\text{free} \sim \mathcal{N}(0, 1.0)$.
+
+\subsection{Direct Observation Model}
+\begin{equation}
+  y(t) = C_\text{obs}\, x(t) + \varepsilon, \quad
+  \varepsilon \sim \mathcal{N}(0, \sigma^2 I)
+  \label{eq:direct-obs}
+\end{equation}
+where $C_\text{obs} = I_N$. Uses $\text{LC\_A\_PRIOR\_VARIANCE} = 1/16$.
+
+\section{DCM Interpretability for Neural Data Models}
+
+CT-RNN dynamics \citep{langdon2025}:
+\begin{equation}
+  \tau \frac{dh}{dt} = -h + f(W_\text{rec}\, h + W_\text{in}\, u + b)
+  \label{eq:ctrnn}
+\end{equation}
+
+\section{Bayesian Model Reduction}
+
+Reduced posterior under new priors \citep{friston2011bmr}:
+\begin{align}
+  \Sigma_{r,\text{post}}^{-1}
+    &= \Sigma_f^{-1} + \Sigma_r^{-1} - \Sigma_0^{-1}
+    \label{eq:bmr-cov} \\
+  \mu_{r,\text{post}}
+    &= \Sigma_{r,\text{post}}
+       (\Sigma_f^{-1}\mu_f + \Sigma_r^{-1}\mu_r - \Sigma_0^{-1}\mu_0)
+    \label{eq:bmr-mean}
+\end{align}
+
+\section{Simulation-Based Inference for Spectral DCM}
+
+Neural density estimation on simulated CSD \citep{goncalves2020}:
+\begin{equation}
+  \theta \mapsto S(\omega) = H(\omega)\,G_u\,H(\omega)^* + G_n
+  \label{eq:sbi-simulator}
+\end{equation}
+
+\section{Hybrid VAE-DCM}
+
+VAE with DCM ODE decoder \citep{kingma2014}:
+\begin{equation}
+  \mathcal{L} = \mathbb{E}_{q_\phi}[\ln p(y|\theta)]
+    - \beta\, D_\text{KL}(q_\phi(\theta|y)\,\|\,p(\theta))
+  \label{eq:vae-elbo}
+\end{equation}

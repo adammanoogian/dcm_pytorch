@@ -20,6 +20,14 @@ links the mathematical formula to its reference paper and source file.
 | BOLD constants | k1 = 7*E0, k2 = 2, k3 = 2*E0 - 0.2, V0 = 0.02 | [REF-002] Eq. 6 | `bold_signal.py` |
 | Coupled ODE system | 5N-dim state: [x, s, ln f, ln v, ln q] per region | [REF-001]+[REF-002] | `coupled_system.py` |
 
+### Bilinear Extension
+
+| Name | Formula | Reference | Implementation |
+|------|---------|-----------|----------------|
+| Bilinear state equation | dx/dt = Ax + Sum_j u_j B^(j) x + Cu | [REF-001] Eq. 1 | `neural_state.py` |
+| Effective connectivity | A_eff(t) = A + Sum_j u_j(t) B^(j) | [REF-001] | `neural_state.py` |
+| B parameterization | B_j = mask_j * B_free_j, diag=0 | SPM12 convention | `task_dcm_model.py` |
+
 ### Hemodynamic Parameter Defaults (SPM12 Code)
 
 | Parameter | Symbol | Default | Unit | Source |
@@ -96,6 +104,39 @@ Total noise parameters: 4N + 2.
 
 ---
 
+## Direct Observation Model
+
+| Name | Formula | Reference | Implementation |
+|------|---------|-----------|----------------|
+| Direct observation | y(t) = C_obs x(t) + epsilon | Phase 20 | `latent_circuit_dcm_model.py` |
+| LC A prior | A_free ~ N(0, 1/16) | Phase 20-03 decision | `latent_circuit_dcm_model.py` |
+| LC noise model | epsilon ~ N(0, 1/noise_prec) | -- | `latent_circuit_dcm_model.py` |
+| LC self-inhibition | a_ii = -exp(A_free_ii) * self_inhibition | Default self_inhibition=1.0 Hz | `latent_circuit_dcm_model.py` |
+
+---
+
+## CT-RNN
+
+| Name | Formula | Reference | Implementation |
+|------|---------|-----------|----------------|
+| CT-RNN dynamics | tau dh/dt = -h + f(W_rec h + W_in u + b) | [REF-080] | `continuous_time_rnn.py` |
+| Euler discretization | h_{t+1} = h_t + (dt/tau)(-h_t + f(...)) | [REF-080] | `continuous_time_rnn.py` |
+| Output readout | y = W_out h + b_out | [REF-080] | `continuous_time_rnn.py` |
+| Output R-squared gate | R2 >= 0.90 on PCA-projected readout | Phase 21 | `latent_extraction.py` |
+
+---
+
+## Bayesian Model Reduction
+
+| Name | Formula | Reference | Implementation |
+|------|---------|-----------|----------------|
+| Reduced posterior precision | Sigma_r_post^-1 = Sigma_f^-1 + Sigma_r^-1 - Sigma_0^-1 | [REF-070] Eq. 4-5 | `bmr.py` |
+| Reduced posterior mean | mu_r_post = Sigma_r_post (Sigma_f^-1 mu_f + Sigma_r^-1 mu_r - Sigma_0^-1 mu_0) | [REF-070] Eq. 4-5 | `bmr.py` |
+| Change in log evidence | delta_F = log p(mu_f|m_r) - log p(mu_f|m_f) + 0.5*(log|Sigma_r| - log|Sigma_f|) | [REF-070] Eq. 6-8 | `bmr.py` |
+| Circuit selection | Enumerate 2^k - 1 reduced models, rank by delta_F | [REF-071] | `bmr.py` |
+
+---
+
 ## Inference
 
 | Name | Formula | Reference | Implementation |
@@ -133,12 +174,20 @@ Total noise parameters: 4N + 2.
 | [REF-041] | Blei, Kucukelbir & McAuliffe (2017). Variational inference: A review for statisticians. JASA 112(518), 859-877. |
 | [REF-042] | Papamakarios et al. (2021). Normalizing flows for probabilistic modeling and inference. JMLR 22(57), 1-64. |
 | [REF-043] | Cranmer, Brehmer & Louppe (2020). The frontier of simulation-based inference. PNAS 117(48), 30055-30062. |
+| [REF-060] | Bingham et al. (2019). Pyro: Deep universal probabilistic programming. JMLR 20(28), 1-6. |
+| [REF-070] | Friston & Penny (2011). Post hoc Bayesian model selection. NeuroImage 56(4), 2089-2099. |
+| [REF-071] | Rosa et al. (2012). Post-hoc selection of dynamic causal models. J Neurosci Methods 208(1), 66-78. |
+| [REF-080] | Langdon & Engel (2025). Latent circuit inference from heterogeneous neural responses during cognitive tasks. |
+| [REF-081] | Sussillo & Barak (2013). Opening the black box. Neural Computation 25(3), 626-649. |
+| [REF-090] | Goncalves et al. (2020). Training deep neural density estimators. eLife 9, e56261. |
+| [REF-091] | Hashemi et al. (2024). Amortized Bayesian inference on generative dynamical network models. Neural Networks 163, 178-194. |
+| [REF-110] | Kingma & Welling (2014). Auto-Encoding Variational Bayes. ICLR 2014. |
 
 ## Source File Index
 
 | Source File | DCM Variant | Key Equations |
 |-------------|-------------|---------------|
-| `forward_models/neural_state.py` | Task | [REF-001] Eq. 1 |
+| `forward_models/neural_state.py` | Task | [REF-001] Eq. 1 (bilinear) |
 | `forward_models/balloon_model.py` | Task | [REF-002] Eq. 2-5 |
 | `forward_models/bold_signal.py` | Task | [REF-002] Eq. 6 |
 | `forward_models/coupled_system.py` | Task | [REF-001] Eq. 1 + [REF-002] Eq. 2-5 |
@@ -146,9 +195,13 @@ Total noise parameters: 4N + 2.
 | `forward_models/spectral_noise.py` | Spectral | [REF-010] Eq. 5-7 |
 | `forward_models/rdcm_forward.py` | rDCM | [REF-020] Eq. 4-8 |
 | `forward_models/rdcm_posterior.py` | rDCM | [REF-020] Eq. 9-15 |
-| `models/task_dcm_model.py` | Task | [REF-001] Eq. 1, [REF-002] Eq. 2-6 |
+| `models/task_dcm_model.py` | Task | [REF-001] Eq. 1 (bilinear B), [REF-002] Eq. 2-6 |
 | `models/spectral_dcm_model.py` | Spectral | [REF-010] Eq. 3-10 |
 | `models/rdcm_model.py` | rDCM | [REF-020] Eq. 4-8 |
+| `models/latent_circuit_dcm_model.py` | Direct obs. | [REF-001] (bilinear), LC priors |
 | `models/guides.py` | All | [REF-041] (SVI), [REF-060] (Pyro) |
 | `guides/amortized_flow.py` | Task, Spectral | [REF-042], [REF-043] |
 | `guides/summary_networks.py` | Task, Spectral | [REF-043] |
+| `rnn/continuous_time_rnn.py` | CT-RNN | [REF-080] (Euler discretization) |
+| `rnn/latent_extraction.py` | CT-RNN | [REF-080] (trajectory + R2 gate) |
+| `model_selection/bmr.py` | BMR | [REF-070] Eq. 4-8, [REF-071] |
