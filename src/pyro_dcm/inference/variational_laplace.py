@@ -5,10 +5,17 @@ Laplace approximation. Uses the Gauss-Newton Hessian approximation
 (J^H @ iS @ J + prior_precision) with data-driven Wishart observation
 precision Q from ``spm_dcm_csd_Q``, and ReML M-step for hyperparameter
 estimation, matching SPM12's approach.
+
+The parameter space is projected onto the SVD subspace of the prior
+covariance (``spm_svd(pC, 0)``), which removes zero-variance dimensions
+(absent connections from ``a_mask``) and improves numerical stability.
+All E-step/M-step operations run in the reduced space; the posterior
+is mapped back to full space for output.
 """
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass, field
 
@@ -17,6 +24,8 @@ import torch
 from pyro_dcm.forward_models.neural_state import parameterize_A
 from pyro_dcm.forward_models.spectral_transfer import spectral_dcm_forward
 from pyro_dcm.inference.csd_precision import compute_csd_precision
+
+log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +167,64 @@ def _spm_dx(
     return dx.real if dx.is_complex() else dx
 
 
+def _spm_svd(
+    pC: torch.Tensor,
+    threshold: float = 0.0,
+) -> torch.Tensor:
+    """SVD-based dimension reduction matching ``spm_svd.m``.
+
+    Computes the SVD of the prior covariance matrix and returns the
+    left singular vectors corresponding to non-negligible singular
+    values. With threshold=0, uses 64*eps as the effective threshold,
+    which keeps all dimensions with non-zero prior variance and removes
+    those with exactly zero variance (absent connections).
+
+    Parameters
+    ----------
+    pC : torch.Tensor
+        Prior covariance matrix, shape ``(np_full, np_full)``.
+        Typically diagonal with per-parameter variances.
+    threshold : float
+        Threshold for normalized singular values. Values <= 0
+        are replaced by 64*eps (matching SPM12 convention).
+
+    Returns
+    -------
+    torch.Tensor
+        Projection matrix V, shape ``(np_full, np_reduced)``,
+        where np_reduced <= np_full.
+    """
+    # Match spm_svd.m threshold logic
+    if threshold >= 1.0:
+        threshold = threshold - 1e-6
+    if threshold <= 0.0:
+        threshold = 64.0 * torch.finfo(torch.float64).eps
+
+    pC = pC.double()
+
+    # For symmetric pC, eigendecomposition is equivalent to SVD
+    # spm_svd does: [u, S, v] = svd(X, 0); s = diag(S).^2;
+    # j = find(s*n/sum(s) > threshold); V = v(:, j)
+    U, S, Vh = torch.linalg.svd(pC, full_matrices=False)
+    s = S ** 2  # squared singular values (eigenvalues of pC^2)
+    n = s.shape[0]
+    s_sum = s.sum()
+
+    if s_sum < 1e-32:
+        # All zeros -- return identity (no reduction possible)
+        return torch.eye(pC.shape[0], dtype=torch.float64, device=pC.device)
+
+    # Keep dimensions where s_i * n / sum(s) > threshold
+    keep = (s * n / s_sum) > threshold
+    V = Vh.T[:, keep]
+
+    if V.shape[1] == 0:
+        # Fallback: keep at least one dimension
+        V = Vh.T[:, :1]
+
+    return V
+
+
 @dataclass
 class VariationalLaplaceResult:
     """Result container for Variational Laplace inference.
@@ -167,7 +234,8 @@ class VariationalLaplaceResult:
     theta_post : dict[str, torch.Tensor]
         Posterior means for each parameter group.
     sigma_post : torch.Tensor
-        Posterior covariance matrix (Laplace approximation).
+        Posterior covariance matrix (Laplace approximation),
+        shape ``(np_full, np_full)`` in full parameter space.
     free_energy : list[float]
         Free energy at each iteration.
     converged : bool
@@ -337,6 +405,7 @@ def run_variational_laplace(
     """Run Variational Laplace (Gauss-Newton) inference for spectral DCM.
 
     Implements SPM12's ``spm_nlsi_GN`` optimization with:
+    - SVD dimension reduction of parameter space (``spm_svd(pC, 0)``)
     - ReML M-step (8 inner Fisher-scoring iterations) for hyperparameters
     - 3-term free energy: L(1) data fit + L(2) parameter KL + L(3) hyperprior
     - Accept/reject with adaptive regularization (v parameter)
@@ -376,12 +445,12 @@ def run_variational_laplace(
     if N is None:
         N = a_mask.shape[0]
 
-    n_params = _param_count(N)
+    np_full = _param_count(N)
     device = observed_csd.device
 
-    prior_mean = torch.zeros(n_params, dtype=torch.float64, device=device)
+    prior_mean = torch.zeros(np_full, dtype=torch.float64, device=device)
 
-    # Build block-diagonal prior precision (ipC):
+    # Build block-diagonal prior covariance (pC_full):
     # - A_free + noise params: prior_variance (default 1/64)
     # - Hemodynamic params (P_transit, P_decay, P_epsilon): 1/256
     #   (SPM12 spm_dcm_fmri_priors.m convention)
@@ -392,7 +461,29 @@ def run_variational_laplace(
         torch.full((n_connectivity_noise,), prior_variance, dtype=torch.float64),
         torch.full((n_hemo,), hemo_var, dtype=torch.float64),
     ]).to(device)
-    ipC = torch.diag(1.0 / prior_var_vec)
+
+    # Zero out prior variance for A_free entries where a_mask is zero.
+    # SPM12 spm_dcm_fmri_priors.m: absent connections get pC=0, so SVD
+    # of pC removes those dimensions from the optimization.
+    a_mask_flat = a_mask.reshape(-1).to(device)
+    prior_var_vec[:N * N] = prior_var_vec[:N * N] * (a_mask_flat > 0).double()
+
+    pC_full = torch.diag(prior_var_vec)
+
+    # SVD dimension reduction (SPM12 spm_nlsi_GN.m lines 278-294)
+    # V: (np_full, np_reduced) -- projects full space to reduced space
+    # With threshold=0 -> 64*eps, this removes zero-variance dimensions
+    # (e.g., A parameters where a_mask is zero)
+    V = _spm_svd(pC_full, threshold=0.0)
+    np_reduced = V.shape[1]
+    log.info(
+        "SVD dimension reduction: np_full=%d -> np_reduced=%d",
+        np_full, np_reduced,
+    )
+
+    # Prior in reduced space (SPM12: pC = V'*pC*V; ipC = inv(pC))
+    pC_reduced = V.T @ pC_full @ V
+    ipC = torch.linalg.inv(pC_reduced)
 
     # Compute data-driven observation precision Q (spm_dcm_csd_Q)
     Q_list, nq = compute_csd_precision(observed_csd)
@@ -414,27 +505,31 @@ def run_variational_laplace(
     # Initialize hyperparameters at prior
     h = hE.clone()
 
-    # Initialize parameter deviation
-    theta = prior_mean.clone()
+    # Initialize reduced-space parameter deviation
+    # p = V' @ (theta - prior_mean) = V' @ zeros = zeros
+    p = torch.zeros(np_reduced, dtype=torch.float64, device=device)
+    theta = prior_mean.clone()  # full-space parameters for forward model
 
     # SPM12 initialization (lines 299-304)
     criterion = [False, False, False, False]
     C_F = float("-inf")  # best free energy
-    C_p = torch.zeros(n_params, dtype=torch.float64, device=device)
+    C_p = torch.zeros(np_reduced, dtype=torch.float64, device=device)
     C_h = h.clone()
-    C_Cp = torch.eye(n_params, dtype=torch.float64, device=device) * prior_variance
+    C_Cp = V.T @ pC_full @ V  # initial Cp = pC in reduced space
     v = -4.0  # log ascent rate (start heavily regularized)
 
-    # Gradients (initialized, updated on accept)
-    dFdp = torch.zeros(n_params, dtype=torch.float64, device=device)
-    dFdpp = torch.zeros(n_params, n_params, dtype=torch.float64, device=device)
+    # Gradients (initialized, updated on accept) -- in reduced space
+    dFdp = torch.zeros(np_reduced, dtype=torch.float64, device=device)
+    dFdpp = torch.zeros(
+        np_reduced, np_reduced, dtype=torch.float64, device=device,
+    )
 
     result = VariationalLaplaceResult()
-    ny_total = observed_csd.numel()  # F * N * N (complex entries)
 
     for iteration in range(max_iter):
         if not torch.isfinite(theta).all():
             theta = prior_mean.clone()
+            p = torch.zeros(np_reduced, dtype=torch.float64, device=device)
 
         # E-Step prediction: residual and Jacobian
         # ================================================================
@@ -442,13 +537,13 @@ def run_variational_laplace(
             theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp,
             mar_order=mar_order,
         )
-        J = _compute_jacobian(
+        J_full = _compute_jacobian(
             theta, observed_csd, freqs, a_mask, N, eig_clamp=eig_clamp,
             mar_order=mar_order,
         )
-
-        # Parameter deviation from prior
-        p = theta - prior_mean
+        # Project Jacobian to reduced space: J = J_full @ V
+        # SPM12: spm_diff(IS, Ep, M, U, 1, {V}) produces (ny, np_reduced)
+        J = J_full @ V.to(dtype=torch.complex128)
 
         # M-step: Fisher scoring to find h = argmax F(p, h)
         # (SPM12 spm_nlsi_GN.m lines 378-430)
@@ -469,7 +564,7 @@ def run_variational_laplace(
 
             # For nq=1, kron(eye(nq), iS) = iS, so skip Kronecker
 
-            # Posterior covariance (given current precision)
+            # Posterior covariance in reduced space
             # Pp = real(J' * iS * J); Cp = inv(Pp + ipC)
             Pp = (J.conj().T @ iS @ J).real
             Cp_m = torch.linalg.inv(Pp + ipC)
@@ -482,6 +577,7 @@ def run_variational_laplace(
                 P_i = Q_list[i_h] * torch.exp(h[i_h]).item()
                 PS_i = P_i @ S
                 # For nq=1, kron is identity
+                # JPJ is (np_reduced, np_reduced)
                 JPJ_i = (J.conj().T @ P_i @ J).real
                 P_ops.append(P_i)
                 PS_ops.append(PS_i)
@@ -534,13 +630,14 @@ def run_variational_laplace(
 
         # Free energy: F = L(1) + L(2) + L(3)
         # (SPM12 spm_nlsi_GN.m lines 438-441)
+        # All in reduced space except L(1) which uses data-space e
         # ================================================================
         ny = e.shape[0]
         # L(1): data fit
         L_1 = (_spm_logdet(iS) * nq / 2.0
                - (e.conj() @ iS @ e).real.item() / 2.0
                - ny * math.log(2.0 * math.pi) / 2.0)
-        # L(2): parameter KL
+        # L(2): parameter KL (reduced space)
         L_2 = (_spm_logdet(ipC @ Cp) / 2.0
                - (p @ ipC @ p).item() / 2.0)
         # L(3): hyperparameter uncertainty
@@ -554,20 +651,20 @@ def run_variational_laplace(
         # Accept/reject (SPM12 lines 456-489)
         # ================================================================
         if F_val > C_F or iteration < 3:
-            # Accept current estimates
+            # Accept current estimates (all in reduced space)
             C_p = p.clone()
             C_h = h.clone()
             C_F = F_val
             C_Cp = Cp.clone()
 
-            # E-step gradients (for parameter update)
+            # E-step gradients (reduced space)
             dFdp = -(J.conj().T @ iS @ e).real - ipC @ p
             dFdpp = -(J.conj().T @ iS @ J).real - ipC
 
             # Decrease regularization
             v = min(v + 0.5, 4.0)
         else:
-            # Reject: revert to best cached state
+            # Reject: revert to best cached state (reduced space)
             p = C_p.clone()
             h = C_h.clone()
             Cp = C_Cp.clone()
@@ -575,11 +672,12 @@ def run_variational_laplace(
             # Increase regularization
             v = min(v - 2.0, -4.0)
 
-        # E-step update (SPM12 line 493)
+        # E-step update (SPM12 line 493) -- in reduced space
         # ================================================================
         dp = _spm_dx(dFdpp, dFdp, v)
         p = p + dp
-        theta = prior_mean + p
+        # Map back to full space: Ep = pE + V * p(ip)
+        theta = prior_mean + V @ p
 
         # Convergence (SPM12 lines 570-580)
         # ================================================================
@@ -592,9 +690,12 @@ def run_variational_laplace(
     result.n_iterations = iteration + 1
 
     # Final outputs use cached best state (SPM12 lines 590-594)
+    # Map from reduced to full space:
+    #   Ep = pE + V * C.p(ip)
+    #   Cp = V * C.Cp(ip,ip) * V'
     # ================================================================
-    theta_final = prior_mean + C_p
-    Cp_final = C_Cp
+    theta_final = prior_mean + V @ C_p
+    Cp_full = V @ C_Cp @ V.T  # (np_full, np_full)
 
     with torch.no_grad():
         (A_free_post, na_post, nb_post, nc_post,
@@ -617,7 +718,7 @@ def run_variational_laplace(
         "P_decay": pd_post,
         "P_epsilon": pe_post,
     }
-    result.sigma_post = Cp_final
+    result.sigma_post = Cp_full
     result.predicted_csd = pred_final
 
     return result
