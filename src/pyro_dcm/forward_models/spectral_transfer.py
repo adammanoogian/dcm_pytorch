@@ -265,14 +265,16 @@ def spectral_dcm_forward(
     freqs : torch.Tensor
         Frequency vector in Hz, shape ``(F,)``, float64.
     a : torch.Tensor
-        Neuronal noise parameters, shape ``(2, N)``, float64.
-        ``a[0, :]`` = log amplitude, ``a[1, :]`` = log exponent.
+        Neuronal noise parameters, float64.
+        ``spm_fmri`` mode (default): shape ``(2, 1)`` -- shared.
+        ``extended`` mode: shape ``(2, N)`` -- per-region.
     b : torch.Tensor
         Global observation noise parameters, shape ``(2, 1)``, float64.
         ``b[0, 0]`` = log amplitude, ``b[1, 0]`` = log exponent.
     c : torch.Tensor
-        Regional observation noise parameters, shape ``(2, N)``, float64.
-        ``c[0, :]`` = log amplitude, ``c[1, :]`` = log exponent.
+        Regional observation noise parameters, float64.
+        ``spm_fmri`` mode (default): shape ``(1, N)`` -- amplitude only.
+        ``extended`` mode: shape ``(2, N)`` -- amplitude + exponent.
     eig_clamp : float or None
         Maximum value for real parts of eigenvalues of A. Default
         ``-1/32`` matches the SPM12 fMRI convention. Set to ``-1.0``
@@ -289,9 +291,9 @@ def spectral_dcm_forward(
     >>> import torch
     >>> A = torch.diag(torch.tensor([-0.5, -0.5], dtype=torch.float64))
     >>> freqs = default_frequency_grid(TR=2.0, n_freqs=16)
-    >>> a = torch.zeros(2, 2, dtype=torch.float64)
+    >>> a = torch.zeros(2, 1, dtype=torch.float64)
     >>> b = torch.zeros(2, 1, dtype=torch.float64)
-    >>> c = torch.zeros(2, 2, dtype=torch.float64)
+    >>> c = torch.zeros(1, 2, dtype=torch.float64)
     >>> csd = spectral_dcm_forward(A, freqs, a, b, c)
     >>> csd.shape  # (16, 2, 2)
     """
@@ -305,8 +307,9 @@ def spectral_dcm_forward(
     H = compute_transfer_function(A, C_in, C_out, freqs, eig_clamp=eig_clamp)
 
     # Compute noise spectra
-    Gu = neuronal_noise_csd(freqs, a)
+    Gu = neuronal_noise_csd(freqs, a, n_regions=N)
     Gn = observation_noise_csd(freqs, b, c, N)
+
 
     # Assemble predicted CSD
     return predicted_csd(H, Gu, Gn)
