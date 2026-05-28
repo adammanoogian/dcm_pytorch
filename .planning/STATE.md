@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 ## Current Position
 
 **Milestone:** v0.6.0 (restructured 2026-05-27; simulation-first pivot)
-**Phase:** Phase 25 Plan 04 CHECKPOINT (cluster training + recovery validation)
-**Plan:** Phase 25-04: Cluster training pipeline + amortized recovery validation
-**Status:** Phase 25-04 Task 1 COMPLETE. Awaiting human-verify checkpoint: cluster job submission and recovery metric verification.
-**Last activity:** 2026-05-28 -- Phase 25-04 Task 1 complete (commit 1a78af6). Training pipeline, sbatch, recovery tests ready. Awaiting cluster run.
+**Phase:** v0.6.0 code-complete — all phases 23-27 merged
+**Plan:** Consolidation — branches merged, cluster jobs pending
+**Status:** All 14 plans across phases 23-27 executed. Awaiting cluster validation (BMR slow test, VAE-DCM full training, SBI full training).
+**Last activity:** 2026-05-28 -- Branch consolidation merge (phases 23-27).
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
 - v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE (raw=1/9, latent=2/9) | Phase 23-01 COMPLETE (BMR core) | Phase 23-02 COMPLETE (circuit selection) | Phase 24-01 COMPLETE (foundation extractor) | Phase 24-02 COMPLETE (TRIBE v2 pipeline) | Phase 25-01 COMPLETE (VAE-DCM primitives) | Phase 25-02 COMPLETE (VAE-DCM model/guide) | Phase 25-04 at checkpoint (training pipeline ready, awaiting cluster run)
+- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE | Phase 23 COMPLETE (BMR core + circuit selection + validation test) | Phase 24 COMPLETE (all 4 plans) | Phase 25 COMPLETE (all 4 plans, cluster training pending) | Phase 26 COMPLETE (SBI spectral, cluster training pending) | Phase 27 COMPLETE (references + methods + figures + equations)
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [=============-----] Ph20 partial; Ph21 dropped; Ph22 DONE; Ph23-01/02 DONE; Ph24-01/02 DONE; Ph25-01/02 DONE; Ph25-04 at checkpoint
+Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [==================] Ph20 partial; Ph21 dropped; Ph22-27 CODE-COMPLETE; cluster validation pending
 
 ## Decisions
 
@@ -68,6 +68,7 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 - **[25-04-D1] KL annealing uses poutine.scale with mutable beta container.** SVI created once with scaled_model closure; beta_container[0] updated per epoch. Avoids SVI recreation overhead.
 - **[25-04-D2] Beta floor is 1e-3 (not 0.0) at epoch 0.** When scale=0.0, poutine.scale zeros all log-probs, causing degenerate ELBO (all NaN). 1e-3 floor ensures valid gradients from first epoch.
 - **[25-04-D3] KL estimated analytically from encoder z_loc/z_scale vs N(0,I).** Avoids Trace_ELBO decomposition; 0.5*(scale^2 + loc^2 - 1 - 2*log(scale)).sum() is exact for diagonal Gaussian vs standard normal.
+- **[27-02-D1] Generated figures are gitignored; script is source of truth.** figures/*.png and figures/*.pdf excluded by .gitignore. Regenerate via `python scripts/generate_publication_figures.py`.
 - Prior v0.3.0/v0.4.0/v0.5.0 decisions: see earlier STATE.md history in git log.
 
 ## Blockers
@@ -96,7 +97,7 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-28 (Phase 25-04 Task 1 complete, at checkpoint)
-Stopped at: Phase 25-04 Task 1 complete (commit 1a78af6). Training pipeline, sbatch, recovery tests ready. At human-verify checkpoint awaiting cluster run results.
-Next: Submit `sbatch cluster/sbatch_hybrid_vae_dcm.sh` on M3, verify recovery metrics, then run `pytest tests/test_hybrid_vae_dcm_recovery.py -v`.
+Last session: 2026-05-28 (v0.6.0 code-complete, branch consolidation)
+Stopped at: All phase branches (23-27) merged. All 14 plans executed.
+Next: Submit cluster validation jobs (BMR slow test, VAE-DCM training, SBI training). Update ROADMAP.md progress.
 Resume file: None
