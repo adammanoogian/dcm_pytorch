@@ -1,16 +1,20 @@
-"""Variational Laplace inference for spectral DCM.
+"""Variational Laplace inference for DCM.
 
 Implements SPM12's ``spm_nlsi_GN`` Gauss-Newton optimization under the
 Laplace approximation. Uses the Gauss-Newton Hessian approximation
-(J^H @ iS @ J + prior_precision) with data-driven Wishart observation
-precision Q from ``spm_dcm_csd_Q``, and ReML M-step for hyperparameter
-estimation, matching SPM12's approach.
+(J^H @ iS @ J + prior_precision) with data-driven observation
+precision Q and ReML M-step for hyperparameter estimation.
 
 The parameter space is projected onto the SVD subspace of the prior
 covariance (``spm_svd(pC, 0)``), which removes zero-variance dimensions
 (absent connections from ``a_mask``) and improves numerical stability.
 All E-step/M-step operations run in the reduced space; the posterior
 is mapped back to full space for output.
+
+The engine is model-agnostic via the ``ForwardModel`` protocol
+(see ``forward_models.py``). Spectral DCM (CSD) and task DCM (BOLD
+ODE) are supported through ``SpectralDCMForward`` and
+``TaskDCMForward`` respectively.
 """
 
 from __future__ import annotations
@@ -256,6 +260,7 @@ class VariationalLaplaceResult:
     converged: bool = False
     n_iterations: int = 0
     predicted_csd: torch.Tensor | None = None
+    predicted_output: torch.Tensor | None = None
     n_reduced_params: int = 0
 
 
@@ -453,6 +458,38 @@ def run_variational_laplace(
         Posterior parameters, covariance, free energy trace, and
         convergence flag.
     """
+    from pyro_dcm.inference.forward_models import SpectralDCMForward
+
+    forward_model = SpectralDCMForward(
+        eig_clamp=eig_clamp, mar_order=mar_order,
+    )
+    context = {"freqs": freqs}
+    return _run_vl_generic(
+        forward_model=forward_model,
+        observed=observed_csd,
+        a_mask=a_mask,
+        n_regions=N,
+        max_iter=max_iter,
+        prior_variance=prior_variance,
+        initial_p=initial_p,
+        context=context,
+    )
+
+
+def _run_variational_laplace_legacy(
+    observed_csd: torch.Tensor,
+    freqs: torch.Tensor,
+    a_mask: torch.Tensor,
+    N: int | None = None,
+    max_iter: int = 128,
+    tolerance: float = 1e-2,
+    prior_variance: float = 1.0 / 64.0,
+    regularization: float = 1.0 / 128.0,
+    eig_clamp: float | None = -1.0 / 32.0,
+    mar_order: int = 7,
+    initial_p: torch.Tensor | None = None,
+) -> VariationalLaplaceResult:
+    """Legacy spectral DCM VL (preserved for reference, not called)."""
     if N is None:
         N = a_mask.shape[0]
 
@@ -856,5 +893,424 @@ def extract_vl_posterior(
         for k, v in posterior.items()
         if k not in ("median", "A")
     }
+
+    return posterior
+
+
+# ---------------------------------------------------------------------------
+# Generic (model-agnostic) VL engine
+# ---------------------------------------------------------------------------
+
+
+def _compute_jacobian_generic(
+    forward_model: object,
+    theta: torch.Tensor,
+    observed_vec: torch.Tensor,
+    n_regions: int,
+    context: dict,
+    dx: float = 1e-6,
+) -> torch.Tensor:
+    """Model-agnostic finite-difference Jacobian of residual w.r.t. theta.
+
+    Parameters
+    ----------
+    forward_model : ForwardModel
+        Forward model protocol instance.
+    theta : torch.Tensor
+        Current parameter vector, shape ``(n_params,)``.
+    observed_vec : torch.Tensor
+        Observed data as flat vector.
+    n_regions : int
+        Number of brain regions.
+    context : dict
+        Model-specific context (freqs, a_mask, etc.).
+    dx : float
+        Finite difference step size.
+
+    Returns
+    -------
+    torch.Tensor
+        Jacobian d(residual)/d(theta), shape ``(n_data, n_params)``.
+    """
+    pred0 = forward_model.predict(theta, observed_vec, n_regions, **context)
+    res0 = observed_vec - pred0
+    n_data = res0.shape[0]
+    is_complex = forward_model.residual_is_complex
+    dtype = torch.complex128 if is_complex else torch.float64
+    J = torch.zeros(
+        n_data, theta.shape[0], dtype=dtype, device=theta.device,
+    )
+    for j in range(theta.shape[0]):
+        theta_plus = theta.clone()
+        theta_plus[j] += dx
+        pred_plus = forward_model.predict(
+            theta_plus, observed_vec, n_regions, **context,
+        )
+        res_plus = observed_vec - pred_plus
+        J[:, j] = (res_plus - res0) / dx
+    return J
+
+
+def _run_vl_generic(
+    forward_model: object,
+    observed: torch.Tensor,
+    a_mask: torch.Tensor,
+    n_regions: int | None = None,
+    max_iter: int = 128,
+    prior_variance: float = 1.0 / 64.0,
+    initial_p: torch.Tensor | None = None,
+    context: dict | None = None,
+) -> VariationalLaplaceResult:
+    """Model-agnostic Variational Laplace core.
+
+    Implements SPM12's ``spm_nlsi_GN`` with SVD dimension reduction,
+    ReML M-step, and adaptive regularization. Delegates all model-
+    specific operations to ``forward_model``.
+
+    Parameters
+    ----------
+    forward_model : ForwardModel
+        Protocol instance providing predict, pack/unpack, priors, etc.
+    observed : torch.Tensor
+        Observed data (CSD for spectral, BOLD for task).
+    a_mask : torch.Tensor
+        Binary connectivity mask, shape ``(N, N)``.
+    n_regions : int or None
+        Number of regions. Inferred from ``a_mask`` if None.
+    max_iter : int
+        Maximum Gauss-Newton iterations.
+    prior_variance : float
+        Prior variance for connectivity parameters.
+    initial_p : torch.Tensor or None
+        Initial parameters in SVD-reduced space.
+    context : dict or None
+        Model-specific context passed to forward_model methods.
+
+    Returns
+    -------
+    VariationalLaplaceResult
+    """
+    if context is None:
+        context = {}
+    if n_regions is None:
+        n_regions = a_mask.shape[0]
+    N = n_regions
+
+    context["a_mask"] = a_mask
+
+    np_full = forward_model.param_count(N)
+    device = observed.device
+    is_complex = forward_model.residual_is_complex
+    data_dtype = torch.complex128 if is_complex else torch.float64
+
+    prior_mean = torch.zeros(np_full, dtype=torch.float64, device=device)
+
+    prior_var_vec = forward_model.build_prior_cov(
+        N, prior_variance, a_mask,
+    ).to(device)
+    pC_full = torch.diag(prior_var_vec)
+
+    V = _spm_svd(pC_full, threshold=0.0)
+    np_reduced = V.shape[1]
+    log.info(
+        "SVD dimension reduction: np_full=%d -> np_reduced=%d",
+        np_full, np_reduced,
+    )
+
+    pC_reduced = V.T @ pC_full @ V
+    ipC = torch.linalg.inv(pC_reduced)
+
+    Q_list, nq = forward_model.build_precision(observed)
+    nh = len(Q_list)
+
+    observed_vec = observed.reshape(-1).to(data_dtype)
+
+    y_var = torch.var(observed_vec.real if is_complex else observed_vec)
+    if y_var < 1e-32:
+        y_var = torch.tensor(1e-32, dtype=torch.float64)
+    hE = (
+        torch.zeros(nh, dtype=torch.float64, device=device)
+        - torch.log(y_var)
+        + 4.0
+    )
+    ihC = torch.eye(nh, dtype=torch.float64, device=device) * math.exp(4)
+    h = hE.clone()
+
+    if initial_p is not None:
+        if initial_p.shape[0] != np_reduced:
+            msg = (
+                f"initial_p has {initial_p.shape[0]} elements but "
+                f"reduced space has {np_reduced} dimensions"
+            )
+            raise ValueError(msg)
+        p = initial_p.to(dtype=torch.float64, device=device).clone()
+        theta = prior_mean + V @ p
+    else:
+        p = torch.zeros(np_reduced, dtype=torch.float64, device=device)
+        theta = prior_mean.clone()
+
+    criterion = [False, False, False, False]
+    C_F = float("-inf")
+    C_p = torch.zeros(np_reduced, dtype=torch.float64, device=device)
+    C_h = h.clone()
+    C_Cp = V.T @ pC_full @ V
+    v = -4.0
+
+    dFdp = torch.zeros(np_reduced, dtype=torch.float64, device=device)
+    dFdpp = torch.zeros(
+        np_reduced, np_reduced, dtype=torch.float64, device=device,
+    )
+
+    result = VariationalLaplaceResult()
+    result.n_reduced_params = np_reduced
+
+    for iteration in range(max_iter):
+        if not torch.isfinite(theta).all():
+            theta = prior_mean.clone()
+            p = torch.zeros(
+                np_reduced, dtype=torch.float64, device=device,
+            )
+
+        pred = forward_model.predict(theta, observed, N, **context)
+        e = observed_vec - pred.to(data_dtype)
+
+        J_full = _compute_jacobian_generic(
+            forward_model, theta, observed_vec, N, context,
+        )
+        J = J_full @ V.to(dtype=data_dtype)
+
+        for m_iter in range(8):
+            iS = torch.zeros_like(Q_list[0])
+            for i_h in range(nh):
+                iS = iS + Q_list[i_h] * (
+                    math.exp(-32) + torch.exp(h[i_h]).item()
+                )
+            try:
+                S = torch.linalg.inv(iS)
+            except torch.linalg.LinAlgError:
+                S = torch.linalg.pinv(iS)
+
+            Pp = (J.conj().T @ iS @ J).real
+            Cp_m = torch.linalg.inv(Pp + ipC)
+
+            P_ops = []
+            PS_ops = []
+            JPJ_ops = []
+            for i_h in range(nh):
+                P_i = Q_list[i_h] * torch.exp(h[i_h]).item()
+                PS_i = P_i @ S
+                JPJ_i = (J.conj().T @ P_i @ J).real
+                P_ops.append(P_i)
+                PS_ops.append(PS_i)
+                JPJ_ops.append(JPJ_i)
+
+            dFdh_m = torch.zeros(nh, dtype=torch.float64, device=device)
+            dFdhh_m = torch.zeros(
+                nh, nh, dtype=torch.float64, device=device,
+            )
+            for i_h in range(nh):
+                trace_PS = (
+                    PS_ops[i_h].trace().real.item()
+                    if PS_ops[i_h].is_complex()
+                    else PS_ops[i_h].trace().item()
+                )
+                ePe = (e.conj() @ P_ops[i_h] @ e).real.item()
+                tr_CpJPJ = _spm_trace(Cp_m, JPJ_ops[i_h])
+                dFdh_m[i_h] = (
+                    trace_PS * nq / 2.0 - ePe / 2.0 - tr_CpJPJ / 2.0
+                )
+                for j_h in range(i_h, nh):
+                    val = (
+                        -_spm_trace(PS_ops[i_h], PS_ops[j_h]) * nq / 2.0
+                    )
+                    dFdhh_m[i_h, j_h] = val
+                    dFdhh_m[j_h, i_h] = val
+
+            d_h = h - hE
+            dFdh_m = dFdh_m - ihC @ d_h
+            dFdhh_m = dFdhh_m - ihC
+            Ch = torch.linalg.inv(-dFdhh_m)
+
+            dh = _spm_dx(dFdhh_m, dFdh_m, 4.0)
+            dh = torch.clamp(dh, -1.0, 1.0)
+            h = h + dh
+
+            dF_m = (dFdh_m @ dh).item()
+            if dF_m < 1e-2:
+                break
+
+        iS = torch.zeros_like(Q_list[0])
+        for i_h in range(nh):
+            iS = iS + Q_list[i_h] * (
+                math.exp(-32) + torch.exp(h[i_h]).item()
+            )
+        Pp = (J.conj().T @ iS @ J).real
+        Cp = torch.linalg.inv(Pp + ipC)
+
+        ny = e.shape[0]
+        L_1 = (
+            _spm_logdet(iS) * nq / 2.0
+            - (e.conj() @ iS @ e).real.item() / 2.0
+            - ny * math.log(2.0 * math.pi) / 2.0
+        )
+        L_2 = (
+            _spm_logdet(ipC @ Cp) / 2.0
+            - (p @ ipC @ p).item() / 2.0
+        )
+        d_hyper = h - hE
+        L_3 = (
+            _spm_logdet(ihC @ Ch) / 2.0
+            - (d_hyper @ ihC @ d_hyper).item() / 2.0
+        )
+        F_val = L_1 + L_2 + L_3
+        result.free_energy.append(F_val)
+
+        if F_val > C_F or iteration < 3:
+            C_p = p.clone()
+            C_h = h.clone()
+            C_F = F_val
+            C_Cp = Cp.clone()
+            dFdp = -(J.conj().T @ iS @ e).real - ipC @ p
+            dFdpp = -(J.conj().T @ iS @ J).real - ipC
+            v = min(v + 0.5, 4.0)
+        else:
+            p = C_p.clone()
+            h = C_h.clone()
+            Cp = C_Cp.clone()
+            v = min(v - 2.0, -4.0)
+
+        dp = _spm_dx(dFdpp, dFdp, v)
+        p = p + dp
+        theta = prior_mean + V @ p
+
+        dF_pred = (dFdp @ dp).item()
+        criterion = [dF_pred < 1e-1] + criterion[:3]
+        if all(criterion):
+            result.converged = True
+            break
+
+    result.n_iterations = iteration + 1
+
+    theta_final = prior_mean + V @ C_p
+    Cp_full = V @ C_Cp @ V.T
+
+    with torch.no_grad():
+        result_data = forward_model.build_result(
+            theta_final, a_mask, N, **context,
+        )
+
+    result.theta_post = result_data["theta_post"]
+    result.predicted_output = result_data["predicted_output"]
+    if is_complex:
+        result.predicted_csd = result_data["predicted_output"]
+    result.sigma_post = Cp_full
+
+    return result
+
+
+def run_variational_laplace_generic(
+    forward_model: object,
+    observed: torch.Tensor,
+    a_mask: torch.Tensor,
+    n_regions: int | None = None,
+    max_iter: int = 128,
+    prior_variance: float = 1.0 / 64.0,
+    initial_p: torch.Tensor | None = None,
+    context: dict | None = None,
+) -> VariationalLaplaceResult:
+    """Run Variational Laplace with an arbitrary forward model.
+
+    Parameters
+    ----------
+    forward_model : ForwardModel
+        Protocol instance (e.g., ``SpectralDCMForward`` or
+        ``TaskDCMForward``).
+    observed : torch.Tensor
+        Observed data.
+    a_mask : torch.Tensor
+        Binary connectivity mask, shape ``(N, N)``.
+    n_regions : int or None
+        Number of regions. Inferred from ``a_mask`` if None.
+    max_iter : int
+        Maximum Gauss-Newton iterations.
+    prior_variance : float
+        Prior variance for connectivity parameters.
+    initial_p : torch.Tensor or None
+        Initial parameters in SVD-reduced space.
+    context : dict or None
+        Model-specific context passed to forward_model methods.
+
+    Returns
+    -------
+    VariationalLaplaceResult
+    """
+    return _run_vl_generic(
+        forward_model=forward_model,
+        observed=observed,
+        a_mask=a_mask,
+        n_regions=n_regions,
+        max_iter=max_iter,
+        prior_variance=prior_variance,
+        initial_p=initial_p,
+        context=context,
+    )
+
+
+def extract_vl_posterior_generic(
+    result: VariationalLaplaceResult,
+    forward_model: object,
+    n_regions: int,
+    num_samples: int = 1000,
+) -> dict[str, dict[str, torch.Tensor]]:
+    """Generic posterior extraction using forward model's pack/unpack.
+
+    Parameters
+    ----------
+    result : VariationalLaplaceResult
+        Output from VL inference.
+    forward_model : ForwardModel
+        The forward model used during inference.
+    n_regions : int
+        Number of brain regions.
+    num_samples : int
+        Number of posterior samples from Laplace approximation.
+
+    Returns
+    -------
+    dict
+        ``{param_name: {'mean': Tensor, 'std': Tensor, 'samples': Tensor}}``.
+    """
+    theta_mean = forward_model.pack_params(**result.theta_post)
+    np_full = theta_mean.shape[0]
+
+    try:
+        L = torch.linalg.cholesky(result.sigma_post)
+        z = torch.randn(
+            num_samples, np_full, dtype=torch.float64,
+        )
+        samples_flat = theta_mean.unsqueeze(0) + (z @ L.T)
+    except torch.linalg.LinAlgError:
+        diag_var = torch.clamp(
+            result.sigma_post.diagonal(), min=1e-16,
+        )
+        samples_flat = theta_mean.unsqueeze(0) + torch.randn(
+            num_samples, np_full, dtype=torch.float64,
+        ) * diag_var.sqrt().unsqueeze(0)
+
+    std_vec = result.sigma_post.diagonal().clamp(min=0).sqrt()
+    params_template = forward_model.unpack_params(theta_mean, n_regions)
+
+    posterior: dict[str, dict[str, torch.Tensor]] = {}
+    idx = 0
+    for name, val in params_template.items():
+        n_elem = val.numel()
+        posterior[name] = {
+            "mean": result.theta_post.get(name, val),
+            "std": std_vec[idx : idx + n_elem].reshape(val.shape),
+            "samples": samples_flat[
+                :, idx : idx + n_elem
+            ].reshape(num_samples, *val.shape),
+        }
+        idx += n_elem
 
     return posterior
