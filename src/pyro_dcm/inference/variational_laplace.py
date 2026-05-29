@@ -244,6 +244,10 @@ class VariationalLaplaceResult:
         Number of iterations performed.
     predicted_csd : torch.Tensor
         Predicted CSD at the posterior mode, shape ``(F, N, N)``.
+    n_reduced_params : int
+        Number of parameters in the SVD-reduced space. Useful for
+        callers that need to construct ``initial_p`` vectors for
+        multi-restart optimization.
     """
 
     theta_post: dict[str, torch.Tensor] = field(default_factory=dict)
@@ -252,6 +256,7 @@ class VariationalLaplaceResult:
     converged: bool = False
     n_iterations: int = 0
     predicted_csd: torch.Tensor | None = None
+    n_reduced_params: int = 0
 
 
 def _pack_params(
@@ -401,6 +406,7 @@ def run_variational_laplace(
     regularization: float = 1.0 / 128.0,
     eig_clamp: float | None = -1.0 / 32.0,
     mar_order: int = 7,
+    initial_p: torch.Tensor | None = None,
 ) -> VariationalLaplaceResult:
     """Run Variational Laplace (Gauss-Newton) inference for spectral DCM.
 
@@ -435,6 +441,11 @@ def run_variational_laplace(
         Maximum real part of eigenvalues for A matrix clamping.
     mar_order : int
         MAR model order for CSD round-trip (default 7 = SPM12 M.p-1).
+    initial_p : torch.Tensor or None, optional
+        Initial parameter vector in SVD-reduced space, shape
+        ``(n_reduced_params,)``. If None, starts from zeros (SPM12
+        default). Used for multi-restart optimization where each
+        restart begins from a different starting point.
 
     Returns
     -------
@@ -506,9 +517,20 @@ def run_variational_laplace(
     h = hE.clone()
 
     # Initialize reduced-space parameter deviation
-    # p = V' @ (theta - prior_mean) = V' @ zeros = zeros
-    p = torch.zeros(np_reduced, dtype=torch.float64, device=device)
-    theta = prior_mean.clone()  # full-space parameters for forward model
+    if initial_p is not None:
+        if initial_p.shape[0] != np_reduced:
+            msg = (
+                f"initial_p has {initial_p.shape[0]} elements but "
+                f"reduced space has {np_reduced} dimensions"
+            )
+            raise ValueError(msg)
+        p = initial_p.to(dtype=torch.float64, device=device).clone()
+        theta = prior_mean + V @ p
+        log.info("Using provided initial_p (norm=%.4f)", p.norm().item())
+    else:
+        # p = V' @ (theta - prior_mean) = V' @ zeros = zeros
+        p = torch.zeros(np_reduced, dtype=torch.float64, device=device)
+        theta = prior_mean.clone()  # full-space parameters for forward model
 
     # SPM12 initialization (lines 299-304)
     criterion = [False, False, False, False]
@@ -525,6 +547,7 @@ def run_variational_laplace(
     )
 
     result = VariationalLaplaceResult()
+    result.n_reduced_params = np_reduced
 
     for iteration in range(max_iter):
         if not torch.isfinite(theta).all():
