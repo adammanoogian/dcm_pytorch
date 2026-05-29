@@ -14,6 +14,10 @@ from pyro_dcm.guides import (
     SpectralDCMPacker,
     TaskDCMPacker,
 )
+from pyro_dcm.inference import (
+    VariationalLaplaceResult,
+    run_variational_laplace,
+)
 from pyro_dcm.model_selection import (
     bayesian_model_reduction,
     bmr_circuit_selection,
@@ -62,6 +66,7 @@ __all__ = [
     "PiecewiseConstantInput",
     "SpectralDCMPacker",
     "TaskDCMPacker",
+    "VariationalLaplaceResult",
     "__version__",
     "amortized_spectral_dcm_model",
     "amortized_task_dcm_model",
@@ -82,6 +87,7 @@ __all__ = [
     "parameterize_B",
     "rdcm_model",
     "run_svi",
+    "run_variational_laplace",
     "simulate_rdcm",
     "simulate_spectral_dcm",
     "simulate_task_dcm",

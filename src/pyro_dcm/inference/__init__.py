@@ -1,7 +1,8 @@
 """Inference backends for spectral DCM.
 
-Provides Variational Laplace (VL) as an alternative to the existing
-Pyro SVI backend in ``pyro_dcm.models.guides``.
+Variational Laplace (VL) is the default inference method for spectral
+DCM, matching SPM12's ``spm_nlsi_GN``. SVI remains available via
+``pyro_dcm.models.guides`` for task DCM and amortized inference.
 """
 
 from __future__ import annotations

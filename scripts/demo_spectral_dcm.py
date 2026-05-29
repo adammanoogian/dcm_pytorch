@@ -3,12 +3,12 @@
 Demonstrates the complete spectral DCM workflow for projects that use
 MNE-Python data as input:
 
-    MNE Epochs -> epochs_to_csd -> spectral_dcm_model -> SVI -> posterior A
+    MNE Epochs -> epochs_to_csd -> Variational Laplace -> posterior A
 
-Runs in ~1-2 min on CPU with num_steps=300. Produces:
+Runs in ~30s on CPU. Produces:
   - Printed ground-truth and estimated A matrix (3 x 3)
   - A-RMSE recovery metric comparing posterior A to known ground truth
-  - Final ELBO loss (mean of last 10 steps)
+  - Final free energy from Variational Laplace
 
 MNE-Python is required: ``pip install pyro-dcm[mne]``
 """
@@ -23,17 +23,12 @@ except ImportError:
     print("MNE-Python required. Install with: pip install pyro-dcm[mne]")
     sys.exit(1)
 
-import numpy as np
 import torch
 
 from pyro_dcm import (
-    create_guide,
-    extract_posterior_params,
     make_stable_A_spectral,
-    parameterize_A,
-    run_svi,
+    run_variational_laplace,
     simulate_spectral_dcm,
-    spectral_dcm_model,
 )
 from pyro_dcm.io import epochs_to_csd
 
@@ -47,8 +42,8 @@ def main() -> None:
     2. Simulate CSD from ground truth
     3. Create synthetic MNE Epochs
     4. MNE Epochs -> CSD tensor (the IO bridge)
-    5. Set up model and fit via SVI
-    6. Extract posterior and compute recovery metrics
+    5. Fit via Variational Laplace
+    6. Compute recovery metrics
     """
     torch.manual_seed(42)
 
@@ -116,34 +111,24 @@ def main() -> None:
     # demonstrates the IO bridge: in a real workflow, replace observed_csd
     # below with mne_csd and update freqs accordingly.
 
-    # --- 5. Set up model and fit via SVI ------------------------------------
-    # Full A-mask: allow all N x N connections (including self-connections --
-    # parameterize_A clamps the diagonal to be negative).
+    # --- 5. Fit via Variational Laplace ------------------------------------
     a_mask = torch.ones(N, N, dtype=torch.float64)
-    model_args = (observed_csd, freqs, a_mask)
 
-    guide = create_guide(spectral_dcm_model, init_scale=0.01)
-
-    print("\nRunning SVI (300 steps, lr=0.01) ...")
-    svi_result = run_svi(
-        spectral_dcm_model,
-        guide,
-        model_args,
-        num_steps=300,
-        lr=0.01,
+    print("\nRunning Variational Laplace ...")
+    vl_result = run_variational_laplace(
+        observed_csd,
+        freqs,
+        a_mask,
+        max_iter=128,
+        tolerance=1e-2,
     )
 
-    final_loss_mean = float(np.mean(svi_result["losses"][-10:]))
-    print(f"Final ELBO loss (last 10 mean): {final_loss_mean:.2f}")
+    fe = vl_result.free_energy[-1] if vl_result.free_energy else float("nan")
+    print(f"Final free energy: {fe:.2f}")
+    print(f"Converged: {vl_result.converged} ({len(vl_result.free_energy)} iterations)")
 
-    # --- 6. Extract posterior and compute recovery metrics -----------------
-    # extract_posterior_params samples from the trained guide and returns a
-    # dict where each Pyro site has keys 'mean', 'std', 'samples'.
-    # The A_free site holds the raw free parameters; parameterize_A applies
-    # the same transform used inside spectral_dcm_model to get A.
-    posterior = extract_posterior_params(guide, model_args)
-    A_free_mean: torch.Tensor = posterior["A_free"]["mean"]  # (N, N)
-    A_est: torch.Tensor = parameterize_A(A_free_mean)        # (N, N)
+    # --- 6. Compute recovery metrics --------------------------------------
+    A_est = vl_result.theta_post["A"]
 
     a_rmse = torch.sqrt(((A_est - A_true) ** 2).mean()).item()
 

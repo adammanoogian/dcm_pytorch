@@ -2,16 +2,14 @@ r"""Pipeline: ROI timeseries -> spectral DCM -> posterior A matrix.
 
 Loads TRIBE v2 ROI timeseries from extraction script output, computes
 empirical cross-spectral density, and fits a spectral DCM model using
-multi-start SVI to recover the posterior effective connectivity matrix.
+Variational Laplace to recover the posterior effective connectivity matrix.
 
 Usage
 -----
     python scripts/24_fit_dcm_tribe.py \
         --input-npz results/phase24_tribe/tribe_roi_timeseries.npz \
         --output-dir results/phase24_tribe/ \
-        --n-regions 6 \
-        --num-steps 2000 \
-        --n-restarts 10
+        --n-regions 6
 """
 
 from __future__ import annotations
@@ -61,22 +59,10 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--num-steps",
+        "--max-iter",
         type=int,
-        default=2000,
-        help="Number of SVI optimization steps.",
-    )
-    parser.add_argument(
-        "--n-restarts",
-        type=int,
-        default=10,
-        help="Number of multi-start SVI restarts.",
-    )
-    parser.add_argument(
-        "--lr",
-        type=float,
-        default=0.01,
-        help="Learning rate for SVI optimizer.",
+        default=128,
+        help="Maximum Gauss-Newton iterations for VL.",
     )
     parser.add_argument(
         "--n-freqs",
@@ -93,17 +79,13 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # --- Import after argparse (heavy dependencies) ---
     try:
-        from pyro_dcm import (
-            create_guide,
-            extract_posterior_params,
-            parameterize_A,
-            run_svi,
-            spectral_dcm_model,
-        )
+        from pyro_dcm import run_variational_laplace
         from pyro_dcm.forward_models.csd_computation import (
             compute_empirical_csd,
+        )
+        from pyro_dcm.inference.variational_laplace import (
+            extract_vl_posterior,
         )
     except ImportError:
         print(
@@ -114,7 +96,6 @@ def main() -> None:
 
     torch.manual_seed(args.seed)
 
-    # --- Setup ---
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -122,10 +103,9 @@ def main() -> None:
     print("Spectral DCM Fitting on TRIBE v2 ROI Timeseries")
     print("=" * 60)
 
-    # --- Load data ---
     print(f"Loading: {args.input_npz}")
     data = np.load(args.input_npz, allow_pickle=True)
-    roi_timeseries = data["roi_timeseries"]  # (T, n_rois)
+    roi_timeseries = data["roi_timeseries"]
     roi_names = list(data["roi_names"])
 
     print(
@@ -133,7 +113,6 @@ def main() -> None:
         f"({len(roi_names)} ROIs)"
     )
 
-    # --- Select ROI subset ---
     if args.roi_indices is not None:
         indices = [
             int(i.strip())
@@ -149,13 +128,9 @@ def main() -> None:
     print(f"  Selected {n_regions} ROIs: {roi_names_selected}")
     print(f"  Subset shape: {roi_subset.shape}")
 
-    # --- Compute empirical CSD ---
-    # TRIBE v2 outputs at 1 Hz (TR = 1s), so fs = 1.0
     fs = 1.0
-    fmax = fs / 2.0  # Nyquist
-    freqs = np.linspace(
-        0.01, fmax * 0.9, args.n_freqs
-    )
+    fmax = fs / 2.0
+    freqs = np.linspace(0.01, fmax * 0.9, args.n_freqs)
 
     print(
         f"\nComputing empirical CSD "
@@ -165,86 +140,64 @@ def main() -> None:
         roi_subset, fs=fs, freqs=freqs
     )
     observed_csd = torch.from_numpy(csd_empirical)
-    freqs_tensor = torch.from_numpy(freqs)
+    freqs_tensor = torch.from_numpy(freqs).to(torch.float64)
 
     print(f"  CSD shape: {observed_csd.shape}")
 
-    # --- Set up spectral DCM ---
-    # Full A mask: all connections allowed
     a_mask = torch.ones(
         n_regions, n_regions, dtype=torch.float64
     )
-    model_args = (observed_csd, freqs_tensor, a_mask)
 
-    # --- Run multi-start SVI ---
     print(
-        f"\nRunning SVI "
-        f"({args.num_steps} steps, "
-        f"{args.n_restarts} restarts, "
-        f"lr={args.lr})..."
+        f"\nRunning Variational Laplace "
+        f"(max_iter={args.max_iter})..."
     )
 
-    def guide_factory() -> object:
-        """Create fresh guide for each restart."""
-        return create_guide(
-            spectral_dcm_model,
-            init_scale=0.01,
-        )
-
-    guide = guide_factory()
-    svi_result = run_svi(
-        spectral_dcm_model,
-        guide,
-        model_args,
-        num_steps=args.num_steps,
-        lr=args.lr,
-        n_restarts=args.n_restarts,
-        guide_factory=guide_factory,
+    vl_result = run_variational_laplace(
+        observed_csd,
+        freqs_tensor,
+        a_mask,
+        max_iter=args.max_iter,
+        tolerance=1e-2,
     )
 
-    final_loss = float(np.mean(svi_result["losses"][-10:]))
-    print(f"  Final ELBO loss (last 10 mean): {final_loss:.2f}")
+    fe = vl_result.free_energy[-1] if vl_result.free_energy else float("nan")
+    print(f"  Free energy: {fe:.2f}")
+    print(f"  Converged: {vl_result.converged}")
+    print(f"  Iterations: {len(vl_result.free_energy)}")
 
-    # --- Extract posterior ---
     print("\nExtracting posterior A matrix...")
-    posterior = extract_posterior_params(guide, model_args)
-    a_free_mean = posterior["A_free"]["mean"]
-    a_free_std = posterior["A_free"]["std"]
+    posterior = extract_vl_posterior(vl_result, n_regions)
 
-    a_mean = parameterize_A(a_free_mean)
-    # Approximate std via parameterize_A on mean +/- std
-    a_plus = parameterize_A(a_free_mean + a_free_std)
-    a_minus = parameterize_A(a_free_mean - a_free_std)
-    a_std = (a_plus - a_minus).abs() / 2.0
+    a_mean = posterior["A"]["mean"]
+    a_std = posterior["A"]["std"]
 
     print("\nPosterior A matrix (mean):")
     print(a_mean.detach().numpy().round(4))
     print("\nPosterior A matrix (std):")
     print(a_std.detach().numpy().round(4))
 
-    # --- Save results ---
     output_path = output_dir / "tribe_dcm_results.npz"
     np.savez(
         output_path,
         A_mean=a_mean.detach().numpy(),
         A_std=a_std.detach().numpy(),
-        A_free_mean=a_free_mean.detach().numpy(),
-        A_free_std=a_free_std.detach().numpy(),
-        final_loss=final_loss,
+        free_energy=fe,
+        converged=vl_result.converged,
         roi_names_selected=np.array(roi_names_selected),
         roi_indices=np.array(indices),
         n_regions=n_regions,
-        num_steps=args.num_steps,
-        n_restarts=args.n_restarts,
+        max_iter=args.max_iter,
         freqs=freqs,
     )
 
     print()
     print("=" * 60)
     print("DCM FITTING COMPLETE")
-    print(f"  Regions:    {n_regions}")
-    print(f"  Loss:       {final_loss:.2f}")
-    print(f"  Output:     {output_path}")
+    print(f"  Regions:      {n_regions}")
+    print(f"  Free energy:  {fe:.2f}")
+    print(f"  Converged:    {vl_result.converged}")
+    print(f"  Output:       {output_path}")
     print("=" * 60)
 
 
