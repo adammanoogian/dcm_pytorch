@@ -131,11 +131,9 @@ def compute_hemodynamic_jacobian(
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Compute full 5N x 5N hemodynamic Jacobian at steady state.
 
-    Matches SPM12's ``spm_fx_fmri`` + ``spm_gx_fmri`` Jacobian
-    computation at the steady state x=0 (log-space). Uses finite
-    differences for the state Jacobian (safer than hand-transcribing
-    SPM12's analytical form) and the analytical BOLD observation
-    function from Stephan et al. (2007).
+    Uses **analytical Jacobian** matching SPM12's ``spm_fx_fmri``
+    (lines 247-256) and ``spm_gx_fmri`` (lines 69-70). Evaluated
+    at the steady state x=0 (log-space), where f=v=q=1 and s=0.
 
     Parameters
     ----------
@@ -164,52 +162,95 @@ def compute_hemodynamic_jacobian(
     dtype = A.dtype
     device = A.device
 
-    # Input matrix: C = I/16 (SPM12 spm_fx_fmri.m line 49)
-    C = torch.eye(N, dtype=dtype, device=device) / 16.0
+    # Hemodynamic parameters at steady state
+    sd = H_KAPPA * torch.exp(P_decay)       # signal decay (scalar)
+    tt = H_TAU * torch.exp(P_transit)        # transit time (N,)
 
-    # Steady state: all zeros in log space
-    x0 = torch.zeros(5 * N, dtype=dtype, device=device)
+    # Steady-state values (x=0 in log-space → f=v=q=1, s=0)
+    f = torch.ones(N, dtype=dtype, device=device)
+    v = torch.ones(N, dtype=dtype, device=device)
+    q = torch.ones(N, dtype=dtype, device=device)
+    s = torch.zeros(N, dtype=dtype, device=device)
 
-    # --- dfdx via finite differences ---
-    dx = 1e-8
-    f0 = _hemodynamic_fx(x0, A, C, P_decay, P_transit)
+    # Derived steady-state quantities
+    fv = v ** (1.0 / H_ALPHA)               # outflow = 1
+
+    # --- Analytical dfdx (SPM12 spm_fx_fmri.m lines 218, 247-256) ---
     dfdx = torch.zeros(5 * N, 5 * N, dtype=dtype, device=device)
-    for j in range(5 * N):
-        x_pert = x0.clone()
-        x_pert[j] += dx
-        f_pert = _hemodynamic_fx(x_pert, A, C, P_decay, P_transit)
-        dfdx[:, j] = (f_pert - f0) / dx
+
+    # Block (1,1): neural Jacobian = A (EE matrix)
+    dfdx[:N, :N] = A
+
+    # Block (2,1): d(ds/dt)/d(x_neural) = I
+    idx_n = torch.arange(N, device=device)
+    dfdx[N + idx_n, idx_n] = 1.0
+
+    # Block (2,2): d(ds/dt)/d(s) = -sd * I
+    dfdx[N + idx_n, N + idx_n] = -sd.item()
+
+    # Block (2,3): d(ds/dt)/d(lnf) = -H(2)*f  (SPM12: -H(2)*x(:,3))
+    dfdx[N + idx_n, 2 * N + idx_n] = -H_GAMMA * f
+
+    # Block (3,2): d(dlnf/dt)/d(s) = 1/f  (SPM12: 1./x(:,3))
+    dfdx[2 * N + idx_n, N + idx_n] = 1.0 / f
+
+    # Block (3,3): d(dlnf/dt)/d(lnf) = -s/f  (SPM12: -x(:,2)./x(:,3))
+    dfdx[2 * N + idx_n, 2 * N + idx_n] = -s / f
+
+    # Block (4,3): d(dlnv/dt)/d(lnf) = f/(tt*v)
+    dfdx[3 * N + idx_n, 2 * N + idx_n] = f / (tt * v)
+
+    # Block (4,4): SPM12 line 253
+    # -v^(1/α-1)/(tt*α) - (1/v*(f - v^(1/α)))/tt
+    dfdx[3 * N + idx_n, 3 * N + idx_n] = (
+        -v ** (1.0 / H_ALPHA - 1.0) / (tt * H_ALPHA)
+        - (1.0 / v * (f - fv)) / tt
+    )
+
+    # Block (5,3): SPM12 line 254
+    # (f + log(1-E0)*(1-E0)^(1/f) - f*(1-E0)^(1/f)) / (tt*q*E0)
+    one_minus_e0 = 1.0 - H_E0
+    dfdx[4 * N + idx_n, 2 * N + idx_n] = (
+        f + torch.log(torch.tensor(one_minus_e0, dtype=dtype)) * one_minus_e0 ** (1.0 / f)
+        - f * one_minus_e0 ** (1.0 / f)
+    ) / (tt * q * H_E0)
+
+    # Block (5,4): SPM12 line 255
+    # v^(1/α-1)*(α-1)/(tt*α)
+    dfdx[4 * N + idx_n, 3 * N + idx_n] = (
+        v ** (1.0 / H_ALPHA - 1.0) * (H_ALPHA - 1.0) / (tt * H_ALPHA)
+    )
+
+    # Block (5,5): SPM12 line 256
+    # (f/q)*((1-E0)^(1/f) - 1)/(tt*E0)
+    dfdx[4 * N + idx_n, 4 * N + idx_n] = (
+        (f / q) * (one_minus_e0 ** (1.0 / f) - 1.0) / (tt * H_E0)
+    )
 
     # --- dfdu: input projection (5N, N) ---
-    # Neural input only: dfdu = [C; 0; 0; 0; 0]
+    # C = I/16 (SPM12 spm_fx_fmri.m line 49)
     dfdu = torch.zeros(5 * N, N, dtype=dtype, device=device)
-    dfdu[:N, :] = C
+    dfdu[:N, :] = torch.eye(N, dtype=dtype, device=device) / 16.0
 
-    # --- dgdx: BOLD observation function (SPM12 spm_gx_fmri.m) ---
-    # Stephan 2007 parameterization
+    # --- dgdx: BOLD observation (SPM12 spm_gx_fmri.m lines 69-70) ---
     TE = 0.04
-    V0 = 4.0  # percentage
+    V0 = 4.0
     nu0 = 40.3
     r0 = 25.0
 
     ep = torch.exp(P_epsilon)
-    k1 = 4.3 * nu0 * H_E0 * TE  # = 2.7716
-    k2_val = ep * r0 * H_E0 * TE
-    k3_val = 1.0 - ep
+    k1 = 4.3 * nu0 * H_E0 * TE
+    k2 = ep * r0 * H_E0 * TE
+    k3 = 1.0 - ep
 
-    # At steady state (v=1, q=1):
-    # g = V0*(k1*(1-q) + k2*(1-q/v) + k3*(1-v))
-    # dg/d(lnv) = dg/dv * v = V0*(k2*q/v^2 - k3)*v  at v=1,q=1: V0*(k2-k3)
-    # dg/d(lnq) = dg/dq * q = V0*(-k1 - k2/v)*q      at v=1,q=1: V0*(-k1-k2)
+    # SPM12: dgdx{1,4} = diag(-V0*(k3.*v - k2.*q./v))
+    # SPM12: dgdx{1,5} = diag(-V0*(k1.*q + k2.*q./v))
+    k2_s = k2.item() if k2.dim() == 0 else k2[0].item()
+    k3_s = k3.item() if k3.dim() == 0 else k3[0].item()
+
     dgdx = torch.zeros(N, 5 * N, dtype=dtype, device=device)
-    for i in range(N):
-        k2_i = k2_val.item() if k2_val.dim() == 0 else k2_val[0].item()
-        k3_i = k3_val.item() if k3_val.dim() == 0 else k3_val[0].item()
-
-        # d(BOLD_i)/d(lnv_i) -- volume state is block 3 (index 3*N+i)
-        dgdx[i, 3 * N + i] = V0 * (k2_i - k3_i)
-        # d(BOLD_i)/d(lnq_i) -- deoxyHb state is block 4 (index 4*N+i)
-        dgdx[i, 4 * N + i] = V0 * (-k1 - k2_i)
+    dgdx[idx_n, 3 * N + idx_n] = -V0 * (k3_s * v - k2_s * q / v)
+    dgdx[idx_n, 4 * N + idx_n] = -V0 * (k1 * q + k2_s * q / v)
 
     return dfdx, dfdu, dgdx
 

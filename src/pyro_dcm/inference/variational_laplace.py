@@ -367,15 +367,13 @@ def _compute_jacobian(
     freqs: torch.Tensor,
     a_mask: torch.Tensor,
     N: int,
-    dx: float = 1e-6,
+    dx: float = math.exp(-8),
     eig_clamp: float | None = -1.0 / 32.0,
     mar_order: int = 7,
 ) -> torch.Tensor:
     """Compute Jacobian of residual w.r.t. theta via finite differences.
 
-    Matches SPM12's ``spm_diff`` approach. Autograd through
-    eigendecomposition is numerically unstable when eigenvalues are
-    degenerate, so central finite differences are used instead.
+    Step size ``exp(-8)`` matches SPM12's ``spm_diff.m`` default.
 
     Returns complex-valued J where J[i, j] = d(residual_i) / d(theta_j).
     Shape: (n_data, n_params), dtype complex128.
@@ -923,9 +921,11 @@ def _compute_jacobian_generic(
     observed_vec: torch.Tensor,
     n_regions: int,
     context: dict,
-    dx: float = 1e-6,
+    dx: float = math.exp(-8),
 ) -> torch.Tensor:
     """Model-agnostic finite-difference Jacobian of residual w.r.t. theta.
+
+    Step size matches SPM12's ``spm_diff.m`` default: ``exp(-8)``.
 
     Parameters
     ----------
@@ -940,7 +940,8 @@ def _compute_jacobian_generic(
     context : dict
         Model-specific context (freqs, a_mask, etc.).
     dx : float
-        Finite difference step size.
+        Finite difference step size. Default ``exp(-8)`` matches
+        SPM12's ``spm_diff.m``.
 
     Returns
     -------
