@@ -1251,8 +1251,9 @@ def _run_vl_generic(
     Cp_full = V @ C_Cp @ V.T
 
     with torch.no_grad():
+        build_ctx = {k: v for k, v in context.items() if k != "a_mask"}
         result_data = forward_model.build_result(
-            theta_final, a_mask, N, **context,
+            theta_final, a_mask, N, **build_ctx,
         )
 
     result.theta_post = result_data["theta_post"]
