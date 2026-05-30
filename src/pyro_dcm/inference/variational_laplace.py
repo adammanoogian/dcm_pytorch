@@ -412,6 +412,9 @@ def run_variational_laplace(
     eig_clamp: float | None = -1.0 / 32.0,
     mar_order: int = 7,
     initial_p: torch.Tensor | None = None,
+    hyperprior_mean: float | None = None,
+    hyperprior_precision: float | None = None,
+    prior_mean_a_offset: torch.Tensor | None = None,
 ) -> VariationalLaplaceResult:
     """Run Variational Laplace (Gauss-Newton) inference for spectral DCM.
 
@@ -451,6 +454,15 @@ def run_variational_laplace(
         ``(n_reduced_params,)``. If None, starts from zeros (SPM12
         default). Used for multi-restart optimization where each
         restart begins from a different starting point.
+    hyperprior_mean : float or None
+        Fixed hyperprior mean for observation precision. SPM12 uses
+        ``M.hE = 8``. If None, computes from data variance.
+    hyperprior_precision : float or None
+        Hyperprior precision for observation precision. SPM12 uses
+        ``1/M.hC = 128``. If None, uses ``exp(4)``.
+    prior_mean_a_offset : torch.Tensor or None
+        Offset for A-matrix prior mean, shape ``(N, N)``. SPM12
+        uses ``a_mask / 128``. If None, prior mean is zeros.
 
     Returns
     -------
@@ -473,6 +485,9 @@ def run_variational_laplace(
         prior_variance=prior_variance,
         initial_p=initial_p,
         context=context,
+        hyperprior_mean=hyperprior_mean,
+        hyperprior_precision=hyperprior_precision,
+        prior_mean_a_offset=prior_mean_a_offset,
     )
 
 
@@ -960,6 +975,9 @@ def _run_vl_generic(
     prior_variance: float = 1.0 / 64.0,
     initial_p: torch.Tensor | None = None,
     context: dict | None = None,
+    hyperprior_mean: float | None = None,
+    hyperprior_precision: float | None = None,
+    prior_mean_a_offset: torch.Tensor | None = None,
 ) -> VariationalLaplaceResult:
     """Model-agnostic Variational Laplace core.
 
@@ -985,6 +1003,19 @@ def _run_vl_generic(
         Initial parameters in SVD-reduced space.
     context : dict or None
         Model-specific context passed to forward_model methods.
+    hyperprior_mean : float or None
+        Fixed hyperprior mean for observation precision. SPM12 spectral
+        DCM uses ``M.hE = 8``. If None, computes from data as
+        ``-log(var(y)) + 4`` (the ``spm_nlsi_GN`` fallback).
+    hyperprior_precision : float or None
+        Hyperprior precision (inverse variance) for observation
+        precision. SPM12 spectral DCM uses ``1 / M.hC = 128``.
+        If None, uses ``exp(4) ~= 54.6`` (the ``spm_nlsi_GN``
+        fallback).
+    prior_mean_a_offset : torch.Tensor or None
+        Offset to add to the A-matrix block of the prior mean,
+        shape ``(N, N)``. SPM12 uses ``a_mask / 128``. If None,
+        prior mean is zeros (the default for dcm_pytorch).
 
     Returns
     -------
@@ -1004,6 +1035,16 @@ def _run_vl_generic(
     data_dtype = torch.complex128 if is_complex else torch.float64
 
     prior_mean = torch.zeros(np_full, dtype=torch.float64, device=device)
+
+    if prior_mean_a_offset is not None:
+        a_offset_flat = prior_mean_a_offset.reshape(-1).to(
+            dtype=torch.float64, device=device,
+        )
+        prior_mean[:N * N] = a_offset_flat
+        log.info(
+            "Prior mean A offset applied (max=%.6f)",
+            a_offset_flat.abs().max().item(),
+        )
 
     prior_var_vec = forward_model.build_prior_cov(
         N, prior_variance, a_mask,
@@ -1025,15 +1066,30 @@ def _run_vl_generic(
 
     observed_vec = observed.reshape(-1).to(data_dtype)
 
-    y_var = torch.var(observed_vec.real if is_complex else observed_vec)
-    if y_var < 1e-32:
-        y_var = torch.tensor(1e-32, dtype=torch.float64)
-    hE = (
-        torch.zeros(nh, dtype=torch.float64, device=device)
-        - torch.log(y_var)
-        + 4.0
-    )
-    ihC = torch.eye(nh, dtype=torch.float64, device=device) * math.exp(4)
+    if hyperprior_mean is not None:
+        hE = torch.full(
+            (nh,), hyperprior_mean, dtype=torch.float64, device=device,
+        )
+        log.info("Using fixed hyperprior mean hE=%.1f", hyperprior_mean)
+    else:
+        y_var = torch.var(observed_vec.real if is_complex else observed_vec)
+        if y_var < 1e-32:
+            y_var = torch.tensor(1e-32, dtype=torch.float64)
+        hE = (
+            torch.zeros(nh, dtype=torch.float64, device=device)
+            - torch.log(y_var)
+            + 4.0
+        )
+        log.info("Computed hyperprior mean hE=%.4f from data variance", hE[0].item())
+
+    if hyperprior_precision is not None:
+        ihC = torch.eye(
+            nh, dtype=torch.float64, device=device,
+        ) * hyperprior_precision
+        log.info("Using fixed hyperprior precision ihC=%.1f", hyperprior_precision)
+    else:
+        ihC = torch.eye(nh, dtype=torch.float64, device=device) * math.exp(4)
+
     h = hE.clone()
 
     if initial_p is not None:
