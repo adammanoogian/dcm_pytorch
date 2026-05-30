@@ -39,14 +39,13 @@ def compute_csd_precision(
     Qn = F * N * N
     device = observed_csd.device
 
-    # Build index arrays matching MATLAB's ind2sub([F, N, N], 1:Qn)
-    # MATLAB orders: w varies fastest, then i, then j (column-major)
-    # ind2sub([F, N, N], k) for k=1..Qn gives (w, i, j) in MATLAB
-    # column-major order: w cycles 1..F, i cycles 1..N, j cycles 1..N
+    # Build index arrays matching PyTorch's .reshape(-1) for (F, N, N).
+    # C order: j varies fastest, then i, then w.
+    # Linear index = w * N * N + i * N + j.
     idx = torch.arange(Qn, device=device)
-    w = idx % F           # frequency index (fastest)
-    i = (idx // F) % N    # row index
-    j = idx // (F * N)    # column index (slowest)
+    j = idx % N              # column index (fastest in C order)
+    i = (idx // N) % N       # row index
+    w = idx // (N * N)       # frequency index (slowest)
 
     # Build Q block-by-block per frequency (Q is block-diagonal in freq)
     # For each frequency w_f, the block is of size (N^2, N^2)
@@ -56,9 +55,10 @@ def compute_csd_precision(
 
     for w_f in range(F):
         # Indices in the global Q that belong to this frequency
-        # In column-major layout: positions w_f, w_f + F, w_f + 2F, ...
-        block_idx = torch.arange(N * N, device=device)
-        global_idx = w_f + block_idx * F  # map local -> global
+        # In C-order layout: contiguous block w_f*N^2 .. (w_f+1)*N^2-1
+        global_idx = torch.arange(
+            w_f * N * N, (w_f + 1) * N * N, device=device,
+        )
 
         # Extract the (i, j) indices for each position in this freq block
         i_block = i[global_idx]  # shape (N^2,)
