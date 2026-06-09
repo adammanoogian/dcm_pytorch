@@ -26,8 +26,9 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 > protocol, spectral DCM default switched SVI→VL, ReML M-step (8 Fisher-scoring iters),
 > Q-based CSD observation precision (`spm_dcm_csd_Q`), SVD parameter-space reduction,
 > SPM12-compatible hyperpriors, analytical hemodynamic Jacobian. Commit prefixes `21.2-*`,
-> `21.3-02` reference phases not in the current roadmap. **A roadmap reconciliation (likely a
-> v0.7.0 milestone definition for the VL/SPM12-alignment effort) is owed before milestone audit.**
+> `21.3-02` reference phases not in the current roadmap. **Reconciliation drafted 2026-06-09:**
+> see `.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md` (full commit inventory + proposed phase
+> structure A–E + open decisions) — feed it to `/gsd:new-milestone` to formalize v0.7.0.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
