@@ -10,10 +10,24 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 ## Current Position
 
 **Milestone:** v0.6.0 (restructured 2026-05-27; simulation-first pivot)
-**Phase:** v0.6.0 code-complete — all phases 23-27 merged
-**Plan:** Consolidation — branches merged, cluster jobs pending
-**Status:** All 14 plans across phases 23-27 executed. Awaiting cluster validation (BMR slow test, VAE-DCM full training, SBI full training).
-**Last activity:** 2026-05-28 -- Branch consolidation merge (phases 23-27).
+**Phase:** v0.6.0 code-complete — all phases 23-27 merged; cluster validation returned
+**Plan:** Consolidation + post-consolidation Variational Laplace work (see note below)
+**Status:** All 14 plans across phases 23-27 executed. Cluster validation jobs returned (2026-05-31):
+  - **BMR vs ELBO (Phase 23):** ✅ PASSED — BMR 93x faster than ELBO; `pytest` 1 passed in 151.7s (job 55772525).
+  - **SBI Spectral (Phase 26):** ✅ completed exit-0 — estimator + SBC ranks saved (job 55772094).
+  - **Hybrid VAE-DCM (Phase 25):** ⚠️ 3/4 acceptance criteria met (job 55774467, 200 epochs / ~8.7h):
+    A_free RMSE 0.076 (<0.3 ✅), KL 18.8 (>0.1 ✅ no collapse), inference 0.76ms (<1s ✅),
+    **A sign recovery 0.4425 — FAILS HVAE-02 threshold of >0.6.** Mirrors the Phase 20-05 B/sign
+    recovery shortfall; needs investigation alongside 20-05.
+**Last activity:** 2026-06-09 -- Doc-debt cleanup: validation artifacts committed, STATE/SUMMARYs backfilled.
+
+> **⚠️ Planning-doc drift (discovered 2026-06-09):** A body of **Variational Laplace** work
+> postdates the 2026-05-28 consolidation and is NOT captured in ROADMAP/STATE: ForwardModel
+> protocol, spectral DCM default switched SVI→VL, ReML M-step (8 Fisher-scoring iters),
+> Q-based CSD observation precision (`spm_dcm_csd_Q`), SVD parameter-space reduction,
+> SPM12-compatible hyperpriors, analytical hemodynamic Jacobian. Commit prefixes `21.2-*`,
+> `21.3-02` reference phases not in the current roadmap. **A roadmap reconciliation (likely a
+> v0.7.0 milestone definition for the VL/SPM12-alignment effort) is owed before milestone audit.**
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
@@ -98,7 +112,10 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-05-28 (v0.6.0 code-complete, branch consolidation)
-Stopped at: All phase branches (23-27) merged. All 14 plans executed.
-Next: Submit cluster validation jobs (BMR slow test, VAE-DCM training, SBI training). Update ROADMAP.md progress.
+Last session: 2026-06-09 (doc-debt cleanup; cluster validation triaged)
+Stopped at: Validation artifacts committed; SUMMARYs backfilled (23-01/03, 24-01, 25-01, 26-01/02, 27-01/03);
+  STATE updated. Two open recovery gaps under investigation: Phase 20-05 (B/R2/ELBO) and Phase 25 HVAE-02
+  (sign recovery 0.44 < 0.6).
+Next: (1) Root-cause Phase 20-05 acceptance failures; (2) reconcile undocumented Variational Laplace work
+  into the roadmap (v0.7.0?); (3) milestone audit once 20-05 + HVAE sign-recovery resolved.
 Resume file: None

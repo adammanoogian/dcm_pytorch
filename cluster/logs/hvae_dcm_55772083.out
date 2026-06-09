@@ -1,0 +1,31 @@
+Activated: actinf-py-scripts (by name)
+Thread config: OMP=4 MKL=4 TORCH=4
+
+PyTorch stack verification:
+  torch 2.10.0+cu128 | pyro 1.9.1 | torchdiffeq 0.2.5
+  zuko 1.6.0 | scipy 1.14.1
+  CUDA available: False
+════════════════════════════════════════════════════════
+  Hybrid VAE-DCM Training
+════════════════════════════════════════════════════════
+  Job ID:     55772083
+  Job name:   hvae_dcm_train
+  Node:       m3s115
+  Partition:  comp
+  CPUs:       4
+  Commit:     a064e69
+  Start:      Sun May 31 06:40:00 AM AEST 2026
+════════════════════════════════════════════════════════
+
+Configuration:
+  N_SAMPLES:     1000
+  N_EPOCHS:      200
+  WARMUP_EPOCHS: 40
+  N_REGIONS:     4
+  N_INPUTS:      1
+  DURATION:      5.0
+  DT:            0.01
+  LR:            1e-3
+  SEED:          42
+  N_TEST:        50
+
