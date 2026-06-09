@@ -224,6 +224,9 @@ def train_npe(
     embedding_net: Any = None,
     n_rounds: int = 1,
     device: str = "cpu",
+    num_transforms: int = 5,
+    hidden_features: int = 50,
+    max_epochs: int | None = None,
 ) -> Any:
     """Train Neural Posterior Estimation (NPE) on spectral DCM simulator.
 
@@ -278,8 +281,16 @@ def train_npe(
         )
         raise ImportError(msg) from e
 
-    # Build density estimator builder with optional embedding net
-    nn_kwargs: dict[str, Any] = {"model": "nsf"}
+    # Build density estimator builder with optional embedding net.
+    # num_transforms / hidden_features control the neural-spline-flow capacity
+    # (the spectral DCM diagonal parameterization a_ii = -exp(A_free_ii)/2 makes
+    # the diagonal-parameter posteriors skewed, so the flow needs enough
+    # transforms to stay SBC-calibrated -- see 20-05/SBI-03 diagnosis).
+    nn_kwargs: dict[str, Any] = {
+        "model": "nsf",
+        "num_transforms": num_transforms,
+        "hidden_features": hidden_features,
+    }
     if embedding_net is not None:
         nn_kwargs["embedding_net"] = embedding_net
 
@@ -304,7 +315,10 @@ def train_npe(
         x = torch.stack(x_list).to(torch.float32)
 
         inference.append_simulations(theta, x)
-        _ = inference.train()
+        train_kwargs: dict[str, Any] = {}
+        if max_epochs is not None:
+            train_kwargs["max_num_epochs"] = max_epochs
+        _ = inference.train(**train_kwargs)
 
     posterior = inference.build_posterior()
     return posterior

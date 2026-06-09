@@ -56,6 +56,12 @@ _PROJECT="${PROJECT:-fc37}"
 ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
 N_SIMS="${N_SIMS:-50000}"
 N_SBC="${N_SBC:-200}"
+# Flow capacity (plumbed through to posterior_nn; previously dead args).
+# Larger num-transforms helps the nsf stay SBC-calibrated against the skewed
+# a_ii = -exp(A_free_ii)/2 diagonal posteriors (SBI-03 diagnosis).
+NUM_TRANSFORMS="${NUM_TRANSFORMS:-8}"
+HIDDEN_FEATURES="${HIDDEN_FEATURES:-128}"
+MAX_EPOCHS="${MAX_EPOCHS:-500}"
 
 # =============================================================================
 # Conda Activation
@@ -95,6 +101,9 @@ OUTPUT_DIR="results/sbi_spectral_${SLURM_JOB_ID:-local}"
 python scripts/train_sbi_spectral.py \
     --n-sims "$N_SIMS" \
     --n-sbc "$N_SBC" \
+    --num-transforms "$NUM_TRANSFORMS" \
+    --hidden-features "$HIDDEN_FEATURES" \
+    --max-epochs "$MAX_EPOCHS" \
     --output-dir "$OUTPUT_DIR"
 
 EXIT_CODE=$?

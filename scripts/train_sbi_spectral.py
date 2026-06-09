@@ -164,6 +164,9 @@ def main() -> None:
         prior,
         n_simulations=args.n_sims,
         embedding_net=embedding_net,
+        num_transforms=args.num_transforms,
+        hidden_features=args.hidden_features,
+        max_epochs=args.max_epochs,
     )
     train_time = time.time() - t0
     print(f"  Training complete in {train_time:.1f}s")
