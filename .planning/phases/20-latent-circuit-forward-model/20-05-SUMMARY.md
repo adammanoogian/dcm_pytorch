@@ -142,11 +142,18 @@ guide).** VL already returns a **full posterior covariance** (`sigma_post`), so 
 structured posterior — `AutoLowRankMVN`/`AutoIAFNormal` are not needed. VL also yields the
 SPM 3-term **free energy**, which feeds BMR directly and resolves the model-comparison
 question. VL is validated for spectral (CSD) and task (BOLD) DCM.
-3. **Remaining build: a `LatentCircuitForward` ForwardModel** (direct observation,
-   `hemodynamic=False`, `y0=zeros(N)`; **bilinear B in the packed parameter vector**; real
-   time-domain trajectory residual) plugging into the existing `_run_vl_generic`. Neither
-   `SpectralDCMForward` (CSD+hemo) nor `TaskDCMForward` (BOLD ODE, A_free+C_free only, no B)
-   covers this. This single adapter is what unblocks a VL-based 20-05 re-run.
+3. ✅ **`LatentCircuitForward` adapter BUILT 2026-06-09** (`src/pyro_dcm/inference/forward_models.py`).
+   Direct observation (`hemodynamic=False`, `y0=zeros(N)`), **bilinear B in the packed
+   parameter vector** (`A_free + C_free + B_free`), real time-domain trajectory residual;
+   plugs into the existing `_run_vl_generic`. Observation noise precision is the VL ReML
+   hyperparameter (not a free parameter), per SPM. Validated by
+   `tests/test_latent_circuit_vl.py` (slow, ~80s): N=3 chain, VL recovers A stability + 0→1
+   sign + **B sign**, returns a **full (non-diagonal) posterior covariance** (confirming VL is
+   the structured posterior), and reconstructs the trajectory (R² > 0.7). This unblocks the
+   VL-based 20-05 re-run.
+   **Next:** build the cluster acceptance script that fits `latent_circuit_dcm_model` ground
+   truth via `LatentCircuitForward` + VL across 10 seeds (replacing the SVI runner), use VL
+   free energy + BMR for model comparison, then recalibrate thresholds.
 4. Only after #3, **recalibrate the provisional thresholds** in `latent_circuit_metrics.py`
    against the observed VL recovery distribution (still placeholder bilinear-BOLD values; the
    0.95 R² gate in particular may be unrealistic).

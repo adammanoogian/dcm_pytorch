@@ -102,10 +102,13 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
    APPLIED 2026-06-09:** modulator epochs retimed to fractions of duration (all in training
    split) + `compute_elbo_model_selection` gained a fail-loud cross-dimensional guard; covered
    by `tests/test_latent_circuit_metrics.py` (8 tests pass). **Tier-B decision:** use
-   Variational Laplace (already full-covariance → no structured SVI guide needed); remaining
-   build is a `LatentCircuitForward` adapter (direct-obs + bilinear B, time-domain residual)
-   for `_run_vl_generic`, then a cluster re-run + threshold recalibration. The VL adapter is
-   the single piece blocking a VL-based 20-05 re-run.
+   Variational Laplace (already full-covariance → no structured SVI guide needed).
+   **`LatentCircuitForward` adapter BUILT 2026-06-09** (`pyro_dcm.inference.forward_models`):
+   direct-obs + bilinear B + time-domain residual for `_run_vl_generic`, validated by
+   `tests/test_latent_circuit_vl.py` (VL recovers A/B signs, full covariance, R²>0.7).
+   **Remaining for 20-05 closure:** a cluster acceptance script fitting the N=4 ground truth
+   via `LatentCircuitForward`+VL across 10 seeds (replacing the SVI runner), VL free energy +
+   BMR for model comparison, then threshold recalibration.
 2. **[Phase 25 / HVAE-02] Amortized sign recovery fails.** Full cluster training (job 55774467)
    gives A sign recovery 0.4425 vs >0.6 threshold (other 3 HVAE criteria pass). Likely shares a
    root cause with 20-05 (sign/B identifiability under amortized/ODE inference).

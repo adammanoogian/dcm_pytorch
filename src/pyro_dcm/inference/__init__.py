@@ -11,6 +11,7 @@ from __future__ import annotations
 from pyro_dcm.inference.csd_precision import compute_csd_precision
 from pyro_dcm.inference.forward_models import (
     ForwardModel,
+    LatentCircuitForward,
     SpectralDCMForward,
     TaskDCMForward,
 )
@@ -24,6 +25,7 @@ from pyro_dcm.inference.variational_laplace import (
 
 __all__ = [
     "ForwardModel",
+    "LatentCircuitForward",
     "SpectralDCMForward",
     "TaskDCMForward",
     "VariationalLaplaceResult",
