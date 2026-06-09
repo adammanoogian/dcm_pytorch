@@ -87,7 +87,23 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 
 ## Blockers
 
-None currently.
+**v0.6.0 milestone is NOT cleanly validated — 4 acceptance/quality gaps surfaced during
+2026-06-09 doc-debt cleanup. Milestone audit/completion is blocked until triaged:**
+
+1. **[Phase 20-05] Synthetic recovery acceptance fails.** A-RMSE passes; B-RMSE, trajectory
+   R², and ELBO model-selection fail. Plan 05 "needs rework" (the original open item). UNDER
+   INVESTIGATION.
+2. **[Phase 25 / HVAE-02] Amortized sign recovery fails.** Full cluster training (job 55774467)
+   gives A sign recovery 0.4425 vs >0.6 threshold (other 3 HVAE criteria pass). Likely shares a
+   root cause with 20-05 (sign/B identifiability under amortized/ODE inference).
+3. **[Phase 26 / SBI-03] SBC calibration fails.** Cluster job 55772094: only **2/9 parameters**
+   pass the KS rank-uniformity test (p>0.05). Estimator trains and is fast (<1s), but posteriors
+   are NOT calibrated. See `cluster/logs/sbi_spectral_55772094.out`.
+4. **[Phase 24-01] Parcellation placeholder — violates "No Placeholders" critical rule.**
+   `src/pyro_dcm/foundation/parcellation.py:146` assigns vertices to ROIs by naive equal-size
+   contiguous blocks instead of the real Schaefer atlas vertex-to-parcel mapping. Fetches real
+   atlas labels but averages the wrong vertices → scientifically invalid ROI timeseries for any
+   real Phase 24 foundation-model analysis. Needs the nilearn surface-projection pipeline.
 
 ### Quick Tasks Completed
 
