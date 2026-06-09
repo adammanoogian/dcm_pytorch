@@ -98,9 +98,14 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
    (b) **R² fail is downstream** — held-out window contains a modulator epoch a collapsed-B
    model can't reproduce; (c) **ELBO model selection is methodologically invalid** — candidates
    N∈{2..6} fit datasets of different observed dimensionality so −ELBO scales with N and
-   min-loss always picks N=2 (BMR/Phase 23 is the correct tool). Fix path: Tier-A design fixes
-   (100s duration, ≥2 modulator epochs in train, BMR for selection) + Tier-B inference upgrade
-   (structured guide / Variational Laplace) before recalibrating the still-provisional gates.
+   min-loss always picks N=2 (BMR/Phase 23 is the correct tool). **Tier-A methodology fixes
+   APPLIED 2026-06-09:** modulator epochs retimed to fractions of duration (all in training
+   split) + `compute_elbo_model_selection` gained a fail-loud cross-dimensional guard; covered
+   by `tests/test_latent_circuit_metrics.py` (8 tests pass). **Tier-B decision:** use
+   Variational Laplace (already full-covariance → no structured SVI guide needed); remaining
+   build is a `LatentCircuitForward` adapter (direct-obs + bilinear B, time-domain residual)
+   for `_run_vl_generic`, then a cluster re-run + threshold recalibration. The VL adapter is
+   the single piece blocking a VL-based 20-05 re-run.
 2. **[Phase 25 / HVAE-02] Amortized sign recovery fails.** Full cluster training (job 55774467)
    gives A sign recovery 0.4425 vs >0.6 threshold (other 3 HVAE criteria pass). Likely shares a
    root cause with 20-05 (sign/B identifiability under amortized/ODE inference).

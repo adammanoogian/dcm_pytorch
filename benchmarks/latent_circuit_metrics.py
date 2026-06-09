@@ -209,30 +209,61 @@ def compute_elbo_model_selection(
     elbo_dict: dict[int, float],
     *,
     true_n: int | None = None,
+    observed_element_counts: dict[int, int] | None = None,
 ) -> dict[str, Any]:
-    """ELBO-based model order selection across candidate latent dimensions.
+    """ELBO-based model selection across candidate models (same data only).
 
-    Selects the latent dimensionality N with the lowest ELBO loss (= best
-    model fit, since Pyro run_svi returns the negative ELBO as a positive
-    loss -- lower is better).
+    Selects the candidate with the lowest ELBO loss (= best model fit, since
+    Pyro ``run_svi`` returns the negative ELBO as a positive loss -- lower is
+    better).
+
+    .. warning::
+
+        **Valid only when every candidate ELBO is computed on IDENTICAL
+        observed data.** The ELBO/free-energy bound is *not* comparable across
+        models fit to datasets of different size or dimensionality: the
+        likelihood sums over all observed elements, so a model with fewer
+        observed elements has a systematically smaller loss and would always
+        "win". This invalidates the original Phase 20-05 SYNTH-03 design, which
+        compared candidates ``N in {2..6}`` by fitting each ``N`` to data of a
+        *different* observed dimensionality (``(T, N)``) -- ``min(loss)``
+        trivially selected ``N=2``. See decision 20-05-D2 in
+        ``20-05-SUMMARY.md``.
+
+        For **latent-dimensionality** selection under ``C_obs = I`` (observed
+        dim == latent dim), the comparison is ill-posed by construction and
+        cannot be salvaged by rescaling. Use the SPM-aligned approach instead:
+        compare the **Variational Laplace free energy** of nested models on the
+        same data, and/or **Bayesian Model Reduction** (Phase 23,
+        ``pyro_dcm.model_selection.bmr_circuit_selection``; SPM12
+        ``spm_dcm_bmr``) to score connectivity structure at fixed ``N``.
+
+        Pass ``observed_element_counts`` to make this function REFUSE an
+        invalid cross-data comparison rather than return a silently wrong
+        answer.
 
     Parameters
     ----------
     elbo_dict : dict[int, float]
-        Mapping from candidate region count ``N`` to best final ELBO loss
-        (as returned by ``run_svi``'s ``'final_loss'`` key). Lower is
-        better (loss = -ELBO, so lower loss = higher ELBO = better fit).
+        Mapping from candidate id (e.g. region count ``N``) to best final ELBO
+        loss (``run_svi``'s ``'final_loss'``). Lower is better.
     true_n : int or None, optional
-        Ground-truth latent dimensionality (for accuracy evaluation).
-        When provided, ``correct`` key is set to ``True`` if
-        ``selected_n == true_n``.
+        Ground-truth candidate id (for accuracy evaluation). When provided,
+        ``correct`` is ``True`` iff ``selected_n == true_n``.
+    observed_element_counts : dict[int, int] or None, optional
+        Number of observed scalar elements (``T * N_obs``) each candidate's
+        ELBO was computed on. When provided, this function raises if the counts
+        differ across candidates -- a fail-loud guard against the
+        cross-dimensional comparison bug (20-05-D2). Keys must match
+        ``elbo_dict``. When ``None`` (default), no guard is applied and the
+        caller is trusted to have used identical data.
 
     Returns
     -------
     dict
         Keys:
 
-        - ``selected_n`` (int): N with the lowest ELBO loss.
+        - ``selected_n`` (int): candidate with the lowest ELBO loss.
         - ``elbos`` (dict): copy of input ``elbo_dict``.
         - ``correct`` (bool or None): whether ``selected_n == true_n``;
           ``None`` when ``true_n`` is not provided.
@@ -241,18 +272,40 @@ def compute_elbo_model_selection(
     Raises
     ------
     ValueError
-        If ``elbo_dict`` is empty.
+        If ``elbo_dict`` is empty; if ``observed_element_counts`` is provided
+        and its keys do not match ``elbo_dict``; or if the provided element
+        counts are not all equal (invalid cross-data comparison).
 
     References
     ----------
-    .planning/phases/20-latent-circuit-forward-model/20-RESEARCH.md
-        Section 4 (ELBO model selection for latent dimensionality).
+    .planning/phases/20-latent-circuit-forward-model/20-05-SUMMARY.md
+        Decision 20-05-D2 (why cross-dimensional ELBO selection is invalid).
+    .planning/REFERENCES.md -- REF-070 (Friston & Penny 2011, BMR).
     """
     if not elbo_dict:
         raise ValueError(
             "elbo_dict must be non-empty; got empty dict. "
             "Provide at least one {N: loss} entry."
         )
+
+    if observed_element_counts is not None:
+        if set(observed_element_counts) != set(elbo_dict):
+            raise ValueError(
+                "observed_element_counts keys must match elbo_dict keys; got "
+                f"{sorted(observed_element_counts)} vs {sorted(elbo_dict)}."
+            )
+        unique_counts = set(observed_element_counts.values())
+        if len(unique_counts) > 1:
+            raise ValueError(
+                "ELBO model selection requires identical observed data across "
+                "candidates, but observed_element_counts differ: "
+                f"{dict(sorted(observed_element_counts.items()))}. The ELBO "
+                "scales with the number of observed elements, so comparing "
+                "these losses is invalid (decision 20-05-D2) and would favour "
+                "the lowest-dimensional candidate regardless of fit. Use "
+                "Variational Laplace free energy on identical data and/or "
+                "Bayesian Model Reduction (bmr_circuit_selection) instead."
+            )
 
     selected_n = min(elbo_dict, key=lambda k: elbo_dict[k])
     best_loss = elbo_dict[selected_n]

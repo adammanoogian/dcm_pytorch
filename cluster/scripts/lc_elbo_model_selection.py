@@ -1,5 +1,21 @@
 """ELBO model selection for latent-circuit DCM (Phase 20-05, SYNTH-03).
 
+.. deprecated::
+    **This script's design is methodologically invalid -- do NOT use it as a
+    model-selection gate.** It fits each candidate ``N in {2,3,4,5,6}`` to data
+    of a *different observed dimensionality* (``(T, N)``), so the ELBO/loss
+    scales with N and ``min(loss)`` trivially selects ``N=2`` regardless of
+    fit (decision 20-05-D2 in ``20-05-SUMMARY.md``). Model evidence is only
+    comparable across models fit to IDENTICAL data.
+
+    The SPM-aligned replacement is Variational Laplace free energy on the same
+    data plus Bayesian Model Reduction (Phase 23,
+    ``pyro_dcm.model_selection.bmr_circuit_selection``; SPM12 ``spm_dcm_bmr``),
+    which scores connectivity STRUCTURE at fixed N. This file is retained only
+    as a record of the failed approach; ``compute_elbo_model_selection`` now
+    refuses the cross-dimensional comparison when given
+    ``observed_element_counts``.
+
 Tests whether ELBO correctly identifies the true number of coupled
 dimensions (N=4) from candidates {2, 3, 4, 5, 6}. SLURM array job:
 each task handles one (N_candidate, seed) combination.
@@ -110,7 +126,7 @@ def main() -> None:
         pyro.set_rng_seed(seed)
         pyro.enable_validation(False)
 
-        gt = _build_ground_truth(seed=0)
+        gt = _build_ground_truth(seed=0, duration=DURATION)
         A_true = gt["A_true"]
         B_true = gt["B_true"]
         C_true = gt["C"]

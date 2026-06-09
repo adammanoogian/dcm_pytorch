@@ -123,24 +123,35 @@ recurs across the milestone:
 
 ## Recommended Next Actions (prioritised)
 
-**Tier A — methodological bugs (fix regardless of inference choice):**
-1. **Redesign B-informative experiment.** Keep `duration=100s` (all three modulator epochs)
-   and place the train/test boundary so ≥2 modulator epochs fall in *training*, or use
-   trial-wise (not temporal-tail) held-out splits. This removes the artificial
-   one-window starvation before judging the inference.
-2. **Replace ELBO model selection with BMR** (Phase 23) or fix comparability (fixed observed
-   dimension; per-element evidence). The current min-`−ELBO` scan is invalid.
+**Tier A — methodological bugs (fixed 2026-06-09, commit pending):**
+1. ✅ **B-informative experiment fixed.** Modulator epochs are now placed at FRACTIONS of the
+   effective duration (`_MOD_EVENT_FRACTIONS = [0.10, 0.35, 0.60]`) and `_build_ground_truth`
+   takes a `duration` arg so the modulator grid matches the simulated grid. All three epochs
+   now fall in the first 60% of the trajectory → inside the 80% training split for any
+   duration (was: one window for the 50s run). Regression-tested in
+   `tests/test_latent_circuit_metrics.py::TestModulatorInTrainingSplit`.
+2. ✅ **ELBO selection hardened.** `compute_elbo_model_selection` gained an
+   `observed_element_counts` guard that REFUSES cross-dimensional comparisons (the invalid
+   min-`−ELBO` scan), citing 20-05-D2 and pointing to VL free energy + BMR.
+   `lc_elbo_model_selection.py` marked deprecated. Guard tested in
+   `TestElboSelectionGuard`. **Note:** this only prevents the silently-wrong answer; the
+   actual model-comparison must be done via VL free energy + BMR (Tier B).
 
-**Tier B — inference quality (the real B/sign identifiability):**
-3. Re-run calibration with a **structured guide** (`AutoLowRankMVN` / `AutoIAFNormal`,
-   already auto-discovered per 20-03) to capture A–B posterior correlation that mean-field
-   discards; and/or route through the **Variational Laplace** path now default for spectral
-   DCM. This is the likely lever that moves B-RMSE off the collapse floor.
-4. Only after Tier A+B, **recalibrate the provisional thresholds** in
-   `latent_circuit_metrics.py` against the observed recovery distribution (they are still the
-   placeholder bilinear-BOLD values; 0.95 R² in particular may be unrealistic).
+**Tier B — inference quality (decision 2026-06-09: Variational Laplace, NOT a structured SVI
+guide).** VL already returns a **full posterior covariance** (`sigma_post`), so it IS the
+structured posterior — `AutoLowRankMVN`/`AutoIAFNormal` are not needed. VL also yields the
+SPM 3-term **free energy**, which feeds BMR directly and resolves the model-comparison
+question. VL is validated for spectral (CSD) and task (BOLD) DCM.
+3. **Remaining build: a `LatentCircuitForward` ForwardModel** (direct observation,
+   `hemodynamic=False`, `y0=zeros(N)`; **bilinear B in the packed parameter vector**; real
+   time-domain trajectory residual) plugging into the existing `_run_vl_generic`. Neither
+   `SpectralDCMForward` (CSD+hemo) nor `TaskDCMForward` (BOLD ODE, A_free+C_free only, no B)
+   covers this. This single adapter is what unblocks a VL-based 20-05 re-run.
+4. Only after #3, **recalibrate the provisional thresholds** in `latent_circuit_metrics.py`
+   against the observed VL recovery distribution (still placeholder bilinear-BOLD values; the
+   0.95 R² gate in particular may be unrealistic).
 
-**Compute routing:** any re-run is a multi-seed SVI/VL sweep → **M3 cluster** (per project
+**Compute routing:** any re-run is a multi-seed VL sweep → **M3 cluster** (per project
 policy), not laptop.
 
 ## Deviations from Plan

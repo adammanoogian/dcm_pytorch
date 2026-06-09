@@ -99,7 +99,18 @@ _DRIVING_N_BLOCKS: int = 5
 _DRIVING_BLOCK_DURATION: float = 10.0
 _DRIVING_REST_DURATION: float = 10.0
 
-_MOD_EVENT_TIMES: list[float] = [10.0, 40.0, 70.0]
+# Modulator epochs are placed as FRACTIONS of the simulation duration so that
+# all three windows fall inside the training split for any duration. Phase
+# 20-05 originally hardcoded absolute times [10, 40, 70]s designed for a 100s
+# run; when the acceptance run was reworked to 50s with an 80/20 split, the
+# t=40 epoch fell in the held-out test segment and t=70 was cut entirely,
+# leaving a SINGLE 8s modulator window (t=10-18) in training. With B entering
+# the dynamics only while u_mod is ON, that starved B of identifying signal
+# and collapsed the B posterior toward zero (B-RMSE ~0.31). Fractions
+# [0.10, 0.35, 0.60] keep all three epochs within the first 60% of the
+# trajectory -> always inside the 80% training window, well separated.
+# See .planning/phases/20-latent-circuit-forward-model/20-05-SUMMARY.md (root cause 1).
+_MOD_EVENT_FRACTIONS: list[float] = [0.10, 0.35, 0.60]
 _MOD_EVENT_DURATIONS: list[float] = [8.0, 8.0, 8.0]
 _MOD_EVENT_AMPLITUDES: list[float] = [1.0, 1.0, 1.0]
 
@@ -162,6 +173,7 @@ def _patch_lc_priors(
 
 def _build_ground_truth(
     seed: int | None = None,
+    duration: float = _DURATION,
 ) -> dict[str, Any]:
     """Construct fixed N=4 bilinear latent-circuit ground truth.
 
@@ -175,6 +187,14 @@ def _build_ground_truth(
     ----------
     seed : int or None, optional
         Random seed for ``make_stable_latent_circuit_A``. Default None.
+    duration : float, optional
+        Simulation duration in seconds. Default ``_DURATION`` (100s).
+        The modulator stimulus grid AND its three event times are derived
+        from this value (events at ``_MOD_EVENT_FRACTIONS * duration``) so
+        that all modulator windows land inside the training split regardless
+        of duration. MUST match the ``duration`` passed to
+        ``simulate_latent_circuit`` downstream, otherwise the modulator grid
+        and the simulated trajectory grid disagree (the original 20-05 bug).
 
     Returns
     -------
@@ -244,12 +264,15 @@ def _build_ground_truth(
         n_inputs=1,
     )
 
-    # Modulator: 3 epochs.
+    # Modulator: 3 epochs at fractions of the (effective) duration so they
+    # all fall inside the training split. event_times and the stimulus grid
+    # are both derived from `duration` (must match simulate_latent_circuit).
+    event_times = [frac * duration for frac in _MOD_EVENT_FRACTIONS]
     stim_mod_dict = make_epoch_stimulus(
-        event_times=_MOD_EVENT_TIMES,
+        event_times=event_times,
         event_durations=_MOD_EVENT_DURATIONS,
         event_amplitudes=_MOD_EVENT_AMPLITUDES,
-        duration=_DURATION,
+        duration=duration,
         dt=_DT,
         n_inputs=1,
     )
@@ -448,8 +471,9 @@ def run_latent_circuit_recovery(
     # Effective duration: allow smoke-test override.
     duration = _duration_override if _duration_override is not None else _DURATION
 
-    # Build shared ground truth (same for all seeds).
-    gt = _build_ground_truth(seed=0)
+    # Build shared ground truth (same for all seeds). Pass the effective
+    # duration so the modulator epochs and grid match the simulated grid.
+    gt = _build_ground_truth(seed=0, duration=duration)
     A_true = gt["A_true"]
     B_true = gt["B_true"]  # (1, N, N)
     C_true = gt["C"]
