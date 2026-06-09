@@ -90,9 +90,17 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 **v0.6.0 milestone is NOT cleanly validated — 4 acceptance/quality gaps surfaced during
 2026-06-09 doc-debt cleanup. Milestone audit/completion is blocked until triaged:**
 
-1. **[Phase 20-05] Synthetic recovery acceptance fails.** A-RMSE passes; B-RMSE, trajectory
-   R², and ELBO model-selection fail. Plan 05 "needs rework" (the original open item). UNDER
-   INVESTIGATION.
+1. **[Phase 20-05] Synthetic recovery acceptance fails — ROOT-CAUSED 2026-06-09.** A-RMSE
+   passes; B-RMSE, trajectory R², and ELBO model-selection fail. Full analysis in
+   `20-05-SUMMARY.md`. Three distinct causes: (a) **B under-identified by experiment design** —
+   the 50s CPU-feasibility rework + 80/20 split leaves only ONE 8s modulator window in
+   training, so B collapses to ~0.31 RMSE (same pathology as unresolved Phase 16.1 ~0.34);
+   (b) **R² fail is downstream** — held-out window contains a modulator epoch a collapsed-B
+   model can't reproduce; (c) **ELBO model selection is methodologically invalid** — candidates
+   N∈{2..6} fit datasets of different observed dimensionality so −ELBO scales with N and
+   min-loss always picks N=2 (BMR/Phase 23 is the correct tool). Fix path: Tier-A design fixes
+   (100s duration, ≥2 modulator epochs in train, BMR for selection) + Tier-B inference upgrade
+   (structured guide / Variational Laplace) before recalibrating the still-provisional gates.
 2. **[Phase 25 / HVAE-02] Amortized sign recovery fails.** Full cluster training (job 55774467)
    gives A sign recovery 0.4425 vs >0.6 threshold (other 3 HVAE criteria pass). Likely shares a
    root cause with 20-05 (sign/B identifiability under amortized/ODE inference).
