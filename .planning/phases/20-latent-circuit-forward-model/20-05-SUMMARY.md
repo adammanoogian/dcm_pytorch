@@ -3,8 +3,8 @@ phase: 20-latent-circuit-forward-model
 plan: 05
 subsystem: benchmarks
 type: diagnostic
-status: acceptance-failed-root-caused
-tags: [latent-circuit, svi, recovery, b-identifiability, elbo-model-selection, diagnostic]
+status: svi-failed-root-caused; vl-passes-synth01-02 (synth03/BMR remaining)
+tags: [latent-circuit, svi, variational-laplace, recovery, b-identifiability, elbo-model-selection, diagnostic]
 dependency-graph:
   requires: ["20-04"]
   provides: ["lc_prior_calibration_sweep", "lc_acceptance_run", "lc_elbo_model_selection", "failure-root-cause"]
@@ -23,7 +23,9 @@ key-files:
   modified: []
 decisions:
   - id: "20-05-D1"
-    description: "Acceptance NOT achieved. A-RMSE passes; B-RMSE, trajectory R-squared, and ELBO model selection fail. Root causes identified (below); thresholds in latent_circuit_metrics.py left PROVISIONAL pending an inference-method decision (mean-field SVI vs Variational Laplace)."
+    description: "SVI acceptance NOT achieved (A passes; B-RMSE/R2/ELBO fail). Root causes identified below. RESOLVED via Variational Laplace: the VL acceptance run (job 56268248, 10 seeds, 2026-06-09) PASSES SYNTH-01 + SYNTH-02 -- A-RMSE 0.026, B-RMSE 0.0048, sign 1.00, CI cov 1.00, pooled trajectory-R2 0.961. SYNTH-03 (model selection) remains: run BMR on the VL posterior."
+  - id: "20-05-D4"
+    description: "Trajectory-R2 'failure' (0.71) was a METRIC bug, not a recovery bug: recovered R2 == oracle R2 from TRUE params (0.70), so 0.95 was unachievable. The N=4 chain attenuates signal, so mean-of-per-region R2 lets near-silent tail regions (var ~100x below region 0) dominate. Switched compute_trajectory_r_squared to variance-POOLED R2 (default); recovered hits the noise-floor ceiling pooled-R2 0.957. Gate recalibrated 0.95 -> 0.90."
   - id: "20-05-D2"
     description: "ELBO-based model order selection (compare best -ELBO across N in {2..6}) is methodologically invalid as implemented: candidates fit datasets of DIFFERENT observed dimensionality, so the summed likelihood (final_loss) scales with N and min-loss trivially selects N=2. BMR (Phase 23) is the principled replacement."
   - id: "20-05-D3"
@@ -36,7 +38,33 @@ backfilled: 2026-06-09
 
 # Phase 20 Plan 05: Prior Calibration / Acceptance / ELBO Selection — DIAGNOSTIC SUMMARY
 
-**Status: acceptance FAILED, root-caused.** This plan's scripts were built and reworked
+## ✅ RESOLUTION (2026-06-09): Variational Laplace passes SYNTH-01 + SYNTH-02
+
+The SVI failures below were resolved by switching inference to **Variational Laplace**
+(`LatentCircuitForward` + `_run_vl_generic`). VL acceptance run **job 56268248** (10 seeds,
+N=4, 50s @ dt=0.1, no restarts):
+
+| Gate | Median | Threshold | Result |
+|------|--------|-----------|--------|
+| A-RMSE | 0.026 | ≤ 0.15 | ✅ |
+| **B-RMSE** | **0.0048** | ≤ 0.20 | ✅ (SVI collapsed to ~0.31) |
+| sign recovery | 1.00 | ≥ 0.80 | ✅ |
+| CI coverage (95%) | 1.00 | ≥ 0.85 | ✅ |
+| **trajectory R² (pooled)** | **0.961** | ≥ 0.90 | ✅ |
+
+All 10 seeds converged; pooled-R² ∈ [0.957, 0.964]. The trajectory-R² "failure" was a
+**metric bug** (20-05-D4): recovered R² (0.71) equalled the oracle R² from the *true*
+parameters (0.70), proving the 0.95 mean-of-per-region gate was unachievable. Switching to
+variance-pooled R² (the recovered fit reaches the noise-floor ceiling 0.957) and recalibrating
+the gate to 0.90 resolves it honestly. **Remaining for full 20-05 closure:** SYNTH-03 — run
+BMR (Phase 23) on the VL posterior to demonstrate correct circuit/structure selection
+(the old cross-dimensional ELBO scan was retired as invalid, 20-05-D2).
+
+The original SVI failure analysis is preserved below for the record.
+
+---
+
+**Status (SVI): acceptance FAILED, root-caused.** This plan's scripts were built and reworked
 across 6 commits (26ba2e5 → 75eb308) but the 10-seed acceptance gate did not pass and no
 `20-05-SUMMARY.md` was written at the time. This document backfills the write-up as a
 **failure analysis**: A-RMSE passes, but B-RMSE, trajectory R², and ELBO model selection
