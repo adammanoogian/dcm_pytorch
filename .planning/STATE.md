@@ -125,9 +125,14 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
    7.08/16 → **~0.71 masked** (passes >0.6). Fixed: added `masked_sign_recovery` (|A_true|>0.1,
    unit-tested) used by the train script. Remaining: add an eval-only path to recompute the
    EXACT masked number on the existing checkpoint (job, no retraining) — see todo.
-3. **[Phase 26 / SBI-03] SBC calibration fails.** Cluster job 55772094: only **2/9 parameters**
-   pass the KS rank-uniformity test (p>0.05). Estimator trains and is fast (<1s), but posteriors
-   are NOT calibrated. See `cluster/logs/sbi_spectral_55772094.out`.
+3. **[Phase 26 / SBI-03] SBC calibration fails — DIAGNOSED 2026-06-09, structural.** Job 55772094:
+   2/9 pass. Failure mode = **parameter-specific bias** (not under-training: 50k sims; not
+   overconfidence). Fixed a real plumbing bug (`--num-transforms/--hidden-features/--max-epochs`
+   never reached `train_npe`). Retrain with a larger flow (job 56274446) **still 2/9 — the bias
+   just redistributed**, so capacity is NOT the cause: the miscalibration is **structural**
+   (likely `eig_clamp` non-injectivity near the stability boundary). Next: restrict the prior to
+   the stable region / reparameterize, or accept that **VL/SVI is the calibrated path** and SBI
+   is an optional speed-up, not a v0.6.0 blocker. See `2026-06-09-sbi-sbc-calibration-gap.md`.
 4. **[Phase 24-01] Parcellation placeholder — violates "No Placeholders" critical rule.**
    `src/pyro_dcm/foundation/parcellation.py:146` assigns vertices to ROIs by naive equal-size
    contiguous blocks instead of the real Schaefer atlas vertex-to-parcel mapping. Fetches real
