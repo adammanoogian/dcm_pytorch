@@ -332,6 +332,44 @@ class HybridVAEDCMGuide(nn.Module):
             }
 
 
+def masked_sign_recovery(
+    pred: torch.Tensor,
+    true: torch.Tensor,
+    magnitude_threshold: float = 0.1,
+) -> float:
+    """Sign-recovery fraction over entries where ``|true| > threshold``.
+
+    Connectivity matrices are sparse: most off-diagonal entries are exactly
+    zero (absent connections). An unmasked sign comparison is meaningless on
+    those entries because ``torch.sign(0) == 0`` can never equal the sign of a
+    non-zero prediction -- every structural zero becomes a guaranteed mismatch,
+    deflating the score (this caused the spurious Phase 25 HVAE-02 0.44). This
+    masks to the genuinely non-zero ground-truth entries, matching the
+    convention in ``benchmarks.runners.latent_circuit_recovery`` (B sign
+    recovery on ``|B_true| > 0.1``).
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Predicted parameter tensor.
+    true : torch.Tensor
+        Ground-truth parameter tensor, same shape as ``pred``.
+    magnitude_threshold : float, optional
+        Entries with ``|true| <= threshold`` are excluded. Default 0.1.
+
+    Returns
+    -------
+    float
+        Fraction of eligible entries with matching sign, or ``nan`` if no
+        entry exceeds the threshold.
+    """
+    mask = true.abs() > magnitude_threshold
+    if not bool(mask.any()):
+        return float("nan")
+    match = (torch.sign(pred) == torch.sign(true))[mask]
+    return float(match.float().mean().item())
+
+
 def generate_synthetic_vae_dataset(
     n_samples: int,
     n_regions: int = 4,

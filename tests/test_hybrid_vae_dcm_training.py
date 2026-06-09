@@ -18,8 +18,38 @@ from pyro_dcm.models.hybrid_vae_dcm import (
     HybridVAEDCMGuide,
     generate_synthetic_vae_dataset,
     hybrid_vae_dcm_model,
+    masked_sign_recovery,
     train_hybrid_vae_dcm,
 )
+
+
+class TestMaskedSignRecovery:
+    """masked_sign_recovery ignores structural zeros (HVAE-02 metric fix)."""
+
+    def test_ignores_structural_zeros(self) -> None:
+        """Unmasked deflates on sparse A; masked scores only real connections."""
+        # 4 of 6 entries are exactly zero (absent connections).
+        true = torch.tensor([-0.5, 0.0, 0.3, 0.0, 0.0, 0.0])
+        # All non-zero signs correct; predictions on zeros are non-zero noise.
+        pred = torch.tensor([-0.4, 0.02, 0.25, -0.01, 0.03, -0.02])
+        masked = masked_sign_recovery(pred, true)
+        unmasked = float(
+            (torch.sign(pred) == torch.sign(true)).float().mean().item()
+        )
+        assert masked == 1.0          # both real connections signed correctly
+        assert unmasked < 0.5         # 4 structural zeros are guaranteed misses
+
+    def test_counts_only_wrong_nonzero_signs(self) -> None:
+        """A flipped sign on a real connection is penalised."""
+        true = torch.tensor([-0.5, 0.3, 0.0, 0.0])
+        pred = torch.tensor([-0.4, -0.2, 0.1, 0.1])  # 2nd sign flipped
+        assert masked_sign_recovery(true=true, pred=pred) == 0.5
+
+    def test_all_zero_returns_nan(self) -> None:
+        """No eligible entry -> nan (so it can be dropped from aggregation)."""
+        import math
+        true = torch.zeros(4)
+        assert math.isnan(masked_sign_recovery(torch.randn(4), true))
 
 # -------------------------------------------------------------------
 # Fixtures

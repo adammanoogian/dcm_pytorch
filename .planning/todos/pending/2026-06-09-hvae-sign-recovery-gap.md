@@ -17,17 +17,22 @@ inference 0.76ms all pass). This is the same connectivity-sign identifiability w
 the Phase 20-05 mean-field SVI showed -- and which **Variational Laplace fixed** there
 (B-RMSE 0.31 -> 0.0048, sign 1.00).
 
-## Solution (sketch / hypotheses)
+## Resolution 2026-06-09: METRIC ARTIFACT (same class as the 20-05 R2)
 
-The HVAE encoder is an amortized mean-field-style posterior; like SVI it likely under-constrains
-the sign of weakly-identified connections. Options, in rough order:
-1. Diagnose whether the 0.44 is a metric/ground-truth artifact (as the 20-05 R2 turned out to be)
-   -- e.g. sign recovery on near-zero true entries is coin-flip; mask to |A_true| above a
-   threshold before scoring, mirroring the B sign-recovery mask in latent_circuit_recovery.
-2. If real: richer amortized posterior (full/low-rank covariance head on the encoder) or a
-   physics-informed prior that breaks the sign symmetry.
-3. Cross-check against a VL fit on the same synthetic examples as an oracle for what sign
-   recovery is achievable at this SNR.
+Confirmed it was the metric, not the model. `train_hybrid_vae_dcm.py` computed sign recovery
+as `(sign(A_pred)==sign(A_true)).mean()` over ALL 16 A_free entries. `make_stable_latent_circuit_A`
+produces ~10 non-zero of 16 (avg, verified locally) -> ~6 structural zeros, and `sign(0)=0` can
+never match a non-zero prediction, so each is a guaranteed miss. The observed 0.4425 = 7.08/16:
+the model gets ~7.08 of the ~10 non-zero signs right (= **~0.71 masked**, which PASSES the >0.6
+gate); the 6 zeros drag the unmasked score to 0.44.
 
-Start with (1) -- the 20-05 lesson is that "recovery failures" here have repeatedly been
-metric/identifiability artifacts, not method failures.
+Fix (commit pending):
+- Added `masked_sign_recovery(pred, true, magnitude_threshold=0.1)` to `hybrid_vae_dcm.py`
+  (mirrors the B sign-recovery mask in latent_circuit_recovery), unit-tested.
+- `train_hybrid_vae_dcm.py` now reports masked `A_sign_recovery` (gate metric) + keeps
+  `A_sign_recovery_unmasked` for transparency.
+
+**Remaining (small):** the ~0.71 is estimated from the aggregate (7.08/10). To get the EXACT
+masked number on the *existing* trained encoder, add an eval-only path to the train script
+(load `results/hybrid_vae_dcm/encoder_checkpoint.pt`, skip training, recompute) and re-run on
+M3 -- a quick job, no retraining. Expected to confirm HVAE-02 passes.

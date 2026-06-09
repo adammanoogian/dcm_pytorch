@@ -117,6 +117,7 @@ def main() -> None:
         HybridVAEDCMGuide,
         generate_synthetic_vae_dataset,
         hybrid_vae_dcm_model,
+        masked_sign_recovery,
         train_hybrid_vae_dcm,
     )
 
@@ -285,8 +286,13 @@ def main() -> None:
                 a_rmse = float(
                     (A_pred - A_true).pow(2).mean().sqrt().item()
                 )
-                # Sign recovery: fraction where sign matches
-                a_sign_match = float(
+                # Sign recovery: masked to genuinely non-zero connections.
+                # Unmasked over all entries is meaningless because sign(0)=0 can
+                # never match a non-zero prediction, so every structural-zero
+                # entry is a guaranteed mismatch (this produced the spurious
+                # HVAE-02 0.44). masked_sign_recovery uses |A_true| > 0.1.
+                a_sign_match = masked_sign_recovery(A_pred, A_true)
+                a_sign_unmasked = float(
                     (torch.sign(A_pred) == torch.sign(A_true))
                     .float().mean().item()
                 )
@@ -300,6 +306,7 @@ def main() -> None:
                 per_example.append({
                     "A_free_rmse": a_rmse,
                     "A_sign_recovery": a_sign_match,
+                    "A_sign_recovery_unmasked": a_sign_unmasked,
                     "C_rmse": c_rmse,
                     "x0_rmse": x0_rmse,
                 })
@@ -307,7 +314,14 @@ def main() -> None:
         # Aggregate metrics
         n_test_actual = len(per_example)
         a_rmses = [e["A_free_rmse"] for e in per_example]
-        a_signs = [e["A_sign_recovery"] for e in per_example]
+        # Masked sign recovery (the gate metric); drop NaN (no eligible entry).
+        a_signs = [
+            e["A_sign_recovery"] for e in per_example
+            if not math.isnan(e["A_sign_recovery"])
+        ]
+        a_signs_unmasked = [
+            e["A_sign_recovery_unmasked"] for e in per_example
+        ]
         c_rmses = [e["C_rmse"] for e in per_example]
         x0_rmses = [e["x0_rmse"] for e in per_example]
 
@@ -359,6 +373,7 @@ def main() -> None:
                 "A_free_rmse_std": _std(a_rmses),
                 "A_sign_recovery_mean": _mean(a_signs),
                 "A_sign_recovery_std": _std(a_signs),
+                "A_sign_recovery_unmasked_mean": _mean(a_signs_unmasked),
                 "C_rmse_mean": _mean(c_rmses),
                 "C_rmse_std": _std(c_rmses),
                 "x0_rmse_mean": _mean(x0_rmses),

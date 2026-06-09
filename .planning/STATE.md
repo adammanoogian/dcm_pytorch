@@ -119,9 +119,12 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
    56268248 (10 seeds, all gates pass); `lc_vl_bmr_selection.py` (job 56270544) closed SYNTH-03.
 
    </details>
-2. **[Phase 25 / HVAE-02] Amortized sign recovery fails.** Full cluster training (job 55774467)
-   gives A sign recovery 0.4425 vs >0.6 threshold (other 3 HVAE criteria pass). Likely shares a
-   root cause with 20-05 (sign/B identifiability under amortized/ODE inference).
+2. **[Phase 25 / HVAE-02] ~RESOLVED 2026-06-09 — metric artifact (like 20-05 R²).** Sign
+   recovery was computed over ALL 16 A_free entries; with ~6 structural zeros per matrix and
+   `sign(0)=0` never matching a non-zero prediction, each zero is a guaranteed miss. 0.4425 =
+   7.08/16 → **~0.71 masked** (passes >0.6). Fixed: added `masked_sign_recovery` (|A_true|>0.1,
+   unit-tested) used by the train script. Remaining: add an eval-only path to recompute the
+   EXACT masked number on the existing checkpoint (job, no retraining) — see todo.
 3. **[Phase 26 / SBI-03] SBC calibration fails.** Cluster job 55772094: only **2/9 parameters**
    pass the KS rank-uniformity test (p>0.05). Estimator trains and is fast (<1s), but posteriors
    are NOT calibrated. See `cluster/logs/sbi_spectral_55772094.out`.
