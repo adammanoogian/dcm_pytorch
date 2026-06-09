@@ -15,7 +15,10 @@ from __future__ import annotations
 import pytest
 import torch
 
-from benchmarks.latent_circuit_metrics import compute_elbo_model_selection
+from benchmarks.latent_circuit_metrics import (
+    compute_elbo_model_selection,
+    compute_trajectory_r_squared,
+)
 from benchmarks.runners.latent_circuit_recovery import (
     _TRAIN_FRACTION,
     _build_ground_truth,
@@ -63,6 +66,53 @@ class TestElboSelectionGuard:
         """Empty elbo_dict is an error."""
         with pytest.raises(ValueError, match="non-empty"):
             compute_elbo_model_selection({})
+
+
+class TestTrajectoryRSquaredPooled:
+    """Variance-pooled R2 must not be dragged down by near-silent regions."""
+
+    def test_pooled_equals_mean_when_variances_equal(self) -> None:
+        """With equal-variance regions, pooled and mean R2 coincide."""
+        torch.manual_seed(0)
+        obs = torch.randn(200, 2, dtype=torch.float64)
+        pred = obs + 0.1 * torch.randn(200, 2, dtype=torch.float64)
+        pooled = compute_trajectory_r_squared(pred, obs, pooled=True)
+        mean = compute_trajectory_r_squared(pred, obs, pooled=False)
+        assert abs(pooled - mean) < 0.05
+
+    def test_pooled_ignores_silent_region(self) -> None:
+        """A near-silent, badly-fit region tanks mean R2 but not pooled R2.
+
+        Mirrors the 20-05 finding: region 0 carries ~100x the variance of a
+        near-silent region 1 that is dominated by noise. Pooled R2 stays high
+        (judged on the informative region); mean R2 collapses.
+        """
+        torch.manual_seed(0)
+        t = torch.linspace(0, 10, 300, dtype=torch.float64)
+        big = torch.sin(t) * 1.0                       # var ~ 0.5
+        small = torch.randn(300, dtype=torch.float64) * 0.01  # ~silent
+        obs = torch.stack([big, small], dim=1)
+        # Predict region 0 well, region 1 badly (predict zeros).
+        pred = torch.stack([big + 0.02 * torch.randn(300), torch.zeros(300)], dim=1)
+        pooled = compute_trajectory_r_squared(pred, obs, pooled=True)
+        mean = compute_trajectory_r_squared(pred, obs, pooled=False)
+        assert pooled > 0.95, f"pooled R2 should stay high, got {pooled:.3f}"
+        assert mean < pooled - 0.4, (
+            f"mean R2 should be dragged down by the silent region "
+            f"(mean={mean:.3f}, pooled={pooled:.3f})"
+        )
+
+    def test_default_is_pooled(self) -> None:
+        """The default reduction is variance-pooled."""
+        torch.manual_seed(1)
+        t = torch.linspace(0, 10, 300, dtype=torch.float64)
+        obs = torch.stack(
+            [torch.sin(t), torch.randn(300) * 0.01], dim=1,
+        ).double()
+        pred = torch.stack([torch.sin(t), torch.zeros(300)], dim=1).double()
+        assert compute_trajectory_r_squared(pred, obs) == (
+            compute_trajectory_r_squared(pred, obs, pooled=True)
+        )
 
 
 class TestModulatorInTrainingSplit:

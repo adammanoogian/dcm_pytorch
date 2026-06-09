@@ -35,8 +35,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import torch
 
-from benchmarks.metrics import compute_rmse
 from benchmarks.latent_circuit_metrics import compute_trajectory_r_squared
+from benchmarks.metrics import compute_rmse
 from benchmarks.runners.latent_circuit_recovery import (
     _build_ground_truth,
     _compute_coverage_of_zero_single,
@@ -187,7 +187,13 @@ def main() -> None:
             A_free_mean, C_mean, B_free_mean[0], b_mask_0,
             driving_stim, stim_mod, t_all, DT, T_train,
         )
+        # Pooled (variance-weighted) is the gate metric; mean kept for context.
         traj_r2 = float(compute_trajectory_r_squared(predicted_test, trajs_test))
+        traj_r2_mean = float(
+            compute_trajectory_r_squared(
+                predicted_test, trajs_test, pooled=False,
+            )
+        )
 
         free_energy = [float(f) for f in result.free_energy]
         entry = {
@@ -199,6 +205,7 @@ def main() -> None:
             "sign_recovery": sign_recovery,
             "ci_coverage_95": ci_coverage_95,
             "trajectory_r_squared": traj_r2,
+            "trajectory_r_squared_mean": traj_r2_mean,
             "shrinkage_A": shrinkage_A,
             "shrinkage_B": shrinkage_B,
             "final_free_energy": free_energy[-1] if free_energy else None,
@@ -218,7 +225,8 @@ def main() -> None:
         print(
             f"  A-RMSE={a_rmse:.4f} B-RMSE={b_rmse:.4f} "
             f"sign={sign_recovery:.3f} cov95={ci_coverage_95:.3f} "
-            f"R2={traj_r2:.4f} iters={result.n_iterations} "
+            f"R2pool={traj_r2:.4f} R2mean={traj_r2_mean:.4f} "
+            f"iters={result.n_iterations} "
             f"converged={result.converged}"
         )
 

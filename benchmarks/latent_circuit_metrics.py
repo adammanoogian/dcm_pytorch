@@ -127,18 +127,27 @@ References
 .planning/REQUIREMENTS.md -- RECOV-06 (coverage-of-zero, bilinear BOLD).
 """
 
-LC_TRAJECTORY_R2_THRESHOLD: float = 0.95
-"""Provisional held-out trajectory R-squared gate (SYNTH-02).
+LC_TRAJECTORY_R2_THRESHOLD: float = 0.90
+"""Held-out trajectory R-squared gate (SYNTH-02), variance-pooled.
 
-0.95 for a correctly-specified latent-circuit model. The latent-circuit DCM
-uses the same generative model for simulation and inference (correctly
-specified), so high trajectory reconstruction fidelity on held-out data
-is expected. Under misspecification (real RNN data), this threshold will
-likely need lowering; Plan 20-05 will calibrate against synthetic RNN
-trajectories with nonlinear terms.
+0.90 against the **variance-pooled** R-squared (the default of
+``compute_trajectory_r_squared``; see its docstring for why mean-of-per-region
+is wrong here).
+
+Calibrated 2026-06-09 on the VL acceptance run (job 56267222, 10 seeds). The
+N=4 chain attenuates signal down its length, so the held-out test segment has
+~100x more variance in region 0 than in regions 2-3. At SNR=10 the noise floor
+caps reconstruction: the **clean (noise-free) trajectory vs the noisy test
+segment** scores pooled-R2 = 0.957 -- that is the best any model can achieve.
+The VL fit recovers exactly that ceiling (pooled-R2 = 0.957, identical to the
+oracle), so 0.90 is set ~0.057 below the achievable ceiling as documented
+margin. (The provisional 0.95 was against the mean-of-per-region metric, which
+caps at 0.70 even for the *true* parameters -- it was unachievable by
+construction; see 20-05-SUMMARY.)
 
 References
 ----------
+.planning/phases/20-latent-circuit-forward-model/20-05-SUMMARY.md (R2 diagnosis)
 .planning/phases/20-latent-circuit-forward-model/20-CONTEXT.md (SYNTH-02)
 """
 
@@ -151,12 +160,13 @@ References
 def compute_trajectory_r_squared(
     predicted: torch.Tensor,
     observed: torch.Tensor,
+    *,
+    pooled: bool = True,
 ) -> float:
-    """Per-region R-squared between predicted and observed trajectories.
+    """R-squared between predicted and observed trajectories (SYNTH-02).
 
-    Computes the coefficient of determination (R-squared) for each
-    region independently, then returns the mean across regions. Used
-    for SYNTH-02: held-out trajectory reconstruction gate.
+    Two reductions over the ``N`` regions are available; **variance-pooled is
+    the default and the correct choice** for latent-circuit trajectories.
 
     Parameters
     ----------
@@ -164,29 +174,42 @@ def compute_trajectory_r_squared(
         Predicted latent-state trajectories, shape ``(T, N)``.
     observed : torch.Tensor
         Observed latent-state trajectories, shape ``(T, N)``.
+    pooled : bool, optional
+        If ``True`` (default), return the **variance-pooled** R-squared
+        (sklearn ``multioutput='variance_weighted'``)::
+
+            R2 = 1 - sum_n SS_res_n / sum_n SS_tot_n
+
+        i.e. residual and total sums of squares are pooled across regions
+        *before* the ratio, so each region contributes in proportion to its
+        signal variance. If ``False``, return the mean of per-region R-squared
+        (``multioutput='uniform_average'``).
 
     Returns
     -------
     float
-        Mean R-squared across N regions. Returns ``nan`` if ``observed``
-        has fewer than 2 time points (undefined variance).
+        Pooled (or mean) R-squared across regions. ``nan`` if ``observed`` has
+        fewer than 2 time points (undefined variance).
 
     Notes
     -----
-    R-squared is defined per region as::
+    **Why pooled is the default (calibration finding, 2026-06-09).** The N=4
+    chain attenuates signal down its length, so the held-out test segment can
+    have ~100x more variance in region 0 than in regions 2-3. Mean-of-
+    per-region R-squared gives a near-silent region (variance dominated by
+    measurement noise) the same weight as an informative one, so two noisy
+    tail regions dragged the mean to 0.70 *even for the true parameters* --
+    the metric, not the recovery, was failing the gate. Pooling by variance
+    judges the model on the regions that carry signal: on the VL acceptance
+    run the recovered model reaches the noise-floor ceiling (pooled-R2 0.957)
+    while mean-R2 sat at 0.70. See 20-05-SUMMARY.
 
-        R2_n = 1 - SS_res_n / SS_tot_n
-
-    where ``SS_res_n = sum((obs_n - pred_n)^2)`` and
-    ``SS_tot_n = sum((obs_n - mean(obs_n))^2)``.
-
-    ``SS_tot_n`` is clamped to at least ``1e-12`` to avoid division by
-    zero when a region has constant observed signal. In that case
-    ``SS_res_n`` is also effectively zero for a good prediction, so R2
-    correctly approaches 1.
+    ``SS_tot`` is clamped to at least ``1e-12`` to avoid division by zero.
 
     References
     ----------
+    .planning/phases/20-latent-circuit-forward-model/20-05-SUMMARY.md
+        Trajectory-R2 diagnosis (oracle == recovered; metric correction).
     .planning/phases/20-latent-circuit-forward-model/20-CONTEXT.md
         SYNTH-02 trajectory R-squared acceptance gate.
     """
@@ -199,8 +222,12 @@ def compute_trajectory_r_squared(
     obs_mean = observed.mean(dim=0)  # (N,)
     ss_res = ((observed - predicted) ** 2).sum(dim=0)  # (N,)
     ss_tot = ((observed - obs_mean) ** 2).sum(dim=0)   # (N,)
-    ss_tot = ss_tot.clamp(min=1e-12)
 
+    if pooled:
+        total = ss_tot.sum().clamp(min=1e-12)
+        return (1.0 - ss_res.sum() / total).item()
+
+    ss_tot = ss_tot.clamp(min=1e-12)
     r2_per_region = 1.0 - ss_res / ss_tot  # (N,)
     return r2_per_region.mean().item()
 
