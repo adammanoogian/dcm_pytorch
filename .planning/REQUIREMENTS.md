@@ -230,6 +230,74 @@ symmetry, channel picks inconsistency) are encoded as explicit test cases.
 | PIPE-01 | Phase 19 | Complete |
 | PIPE-02 | Phase 19 | Complete |
 
+## v0.7.0 Requirements
+
+Requirements for **Variational Laplace Validation** (VL-validation-led; no real data; no SBI).
+Prove the VL engine (SPM12 `spm_nlsi_GN` port, shipped v0.6.0) works completely on synthetic /
+known ground truth and agrees with MATLAB SPM12, before any real-data application. Phase
+numbering continues from 28; v0.7.0 phases are 29+. Mapped to phases during roadmap creation.
+
+### Infrastructure & BMR Helpers (VLINFRA)
+
+- [ ] **VLINFRA-01**: `BenchmarkConfig` gains optional VL fields (`max_iter`, `hyperprior_mean`, `hyperprior_precision`, `prior_mean_a_offset`) with `None` defaults; zero behavior change for existing callers.
+- [ ] **VLINFRA-02**: Three VL benchmark runners (`spectral_vl`, `task_vl`, `latent_circuit_vl`) registered via `method="vl"` in `RUNNER_REGISTRY`, reusing the v0.2.0 `.npz` fixture + metrics infrastructure.
+- [ ] **VLINFRA-03**: `rank_connections()` in `model_selection/bmr.py` runs K single-connection BMR calls and returns connections ranked by prune cost, with a separation-gap statistic.
+- [ ] **VLINFRA-04**: `temper_vl_posterior()` in `model_selection/bmr.py` scales the VL posterior covariance by a calibrated temperature, with a positive-definiteness guard.
+- [ ] **VLINFRA-05**: `vl` pytest marker registered in `pyproject.toml`; `MATLAB_PATH` centralized in `config.py`.
+
+### Recovery Matrix (VLREC)
+
+- [ ] **VLREC-01**: Recovery-matrix sweep over N × SNR × {spectral, task, latent-circuit}, ≥10 seeds per cell, executed on the M3 cluster.
+- [ ] **VLREC-02**: Per-cell metrics use **per-region R² (not variance-pooled)**, **masked** sign recovery (`|true| > threshold`), CI coverage, RMSE, and identifiability shrinkage `std_post/std_prior` — hardened against the known metric artifacts (`sign(0)`, pooled R²).
+- [ ] **VLREC-03**: Recovery design excludes near-stability-boundary A matrices (max Re eig ∈ [−0.05, 0]) to avoid the `eig_clamp` non-injectivity confound; task DCM enforces dt ≥ 0.1.
+- [ ] **VLREC-04**: Recovery passes documented per-cell thresholds across the matrix, OR identifiability limits are documented with evidence (no silent failures).
+- [ ] **VLREC-05**: C-order CSD round-trip regression test added to the suite (guards the column-major↔row-major / complex-CSD indexing class of bug) before any SPM cross-validation run.
+
+### BMR Validation (VLBMR)
+
+- [ ] **VLBMR-01**: BMR **relative-evidence ranking** recovers the true circuit structure (top-K essential edges = true edges) on synthetic ground truth, with separation gap reported — the primary, defensible model-comparison result.
+- [ ] **VLBMR-02**: BMR-on-VL agreement with brute-force ELBO model comparison on a small model set, validating the analytic approximation.
+- [ ] **VLBMR-03**: *(exploratory)* Posterior tempering restores a usable absolute-ΔF regime, calibrated against VLREC coverage output; PD-safe; documented as exploratory, not a headline claim.
+
+### SPM12 Cross-Validation (VLSPM)
+
+- [ ] **VLSPM-01**: VL output cross-validated vs MATLAB `spm_nlsi_GN` on ≥1 spectral DCM problem, **prior-matched** (`hE=8.0`, `prior_mean_a_offset = a_mask/128`, comparison in free-parameter space).
+- [ ] **VLSPM-02**: Compare `Ep` within ~10% relative tolerance + model-ranking agreement, and free energy (VL `free_energy` ≡ SPM `DCM.F`, ~5%); **never** element-wise `Cp` nor absolute-F across models.
+- [ ] **VLSPM-03**: Reuse the existing `validation/` SPM pipeline (`export_to_mat`, MATLAB batch, `compare_results`) + new `run_vl_validation.py` + `compare_free_energies()`.
+
+### Numerical Robustness (VLROBUST)
+
+- [ ] **VLROBUST-01**: VL convergence + multi-restart determinism regression tests across the three forward models (fixed seed → stable result; non-determinism sources documented).
+- [ ] **VLROBUST-02**: Precision-matrix intractability guard — task DCM VL fails loud (expected vs actual matrix size in the message) when dt × duration exceeds a tractable T; the dt ≥ 0.1 floor is documented.
+- [ ] **VLROBUST-03**: Stability-boundary / `eig_clamp` behavior characterized — recovery degradation near the boundary documented; the non-injective regime flagged.
+
+## v0.7.0 Out of Scope
+
+Explicit anti-features for v0.7.0 (documented to prevent scope creep).
+
+| Feature | Reason |
+|---------|--------|
+| Absolute-ΔF BMR pruning as a primary result | Structurally broken by Laplace overconfidence (job 55772525); relative ranking is the valid mode |
+| Element-wise `Cp` comparison / absolute-F-across-models vs SPM12 | Not comparable across implementations; compare `Ep` + ranking + matched-problem F only |
+| Standalone SBC / calibration dimension | Light CI-coverage rides inside VLREC-02; full SBC deferred |
+| Real-data application (Cam-CAN M/EEG, foundation models) | Gated on VL being proven first → v0.8.0+ |
+| SBI / SBC structural calibration fix | Separate (uncalibrated) inference path, not VL → later milestone |
+| Rewriting PyTorch forward models in JAX | NumPyro NUTS only as a Gaussian-proxy secondary oracle, per the project NumPyro strategy |
+
+## v0.7.0 Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| VLINFRA-01..05 | TBD (roadmap) | Pending |
+| VLREC-01..05 | TBD (roadmap) | Pending |
+| VLBMR-01..03 | TBD (roadmap) | Pending |
+| VLSPM-01..03 | TBD (roadmap) | Pending |
+| VLROBUST-01..03 | TBD (roadmap) | Pending |
+
+**Coverage:** 17 v0.7.0 requirements; phase mapping filled by the roadmapper.
+
 ---
 *Requirements defined: 2026-04-17*
-*Last updated: 2026-05-21 — v0.5.0 requirements added (18 total). Phase 18 complete: TEST-01..13 and BIDS-01..03 flipped to Complete after gsd-verifier confirmed 17/17 must-haves. Phase 19 PIPE-01..02 pending.*
+*Last updated: 2026-06-10 — v0.7.0 Variational Laplace Validation requirements added (17 across
+VLINFRA/VLREC/VLBMR/VLSPM/VLROBUST). VL-validation-led; real-data + SBI deferred. v0.3.0 RECOV
+(Phase 16.1) remains pending; v0.4.0/v0.5.0 complete.*
