@@ -66,7 +66,11 @@ SBI calibration) is built-but-un-run and **deferred to v0.7.0**. See
 
 ### Active
 
-## Current Milestone: v0.3.0 Bilinear DCM Extension
+## Paused Milestone: v0.3.0 Bilinear DCM Extension (Phase 16.1 incomplete)
+
+> Phases 13-15 complete; Phase 16 acceptance failed (RECOV-04 B-RMSE) and the 16.1 diagnostic
+> was never executed. The VL engine (v0.6.0) plausibly fixes this B-collapse cheaply — revisit
+> after v0.7.0 if a clean v0.3.0 close is wanted. Not blocking.
 
 **Goal:** Extend the neural state equation from the linear form `dx/dt = Ax + Cu` to
 the full bilinear form `dx/dt = Ax + Σ_j u_j·B_j·x + Cu` (Friston, Harrison & Penny
@@ -89,33 +93,38 @@ Pyro generative model + priors, simulator, and recovery benchmark.
 - SPM12 cross-validation of bilinear DCM (requires MATLAB; v0.4+ candidate)
 - NumPyro backends, regularization study, semi-amortized pipeline, amortized calibration (deferred to v0.4.0+)
 
-## Next Milestone: v0.7.0 — VL Validation + Real-Data Application (proposed)
+## Current Milestone: v0.7.0 — Variational Laplace Validation (VL-validation-led)
 
-**Goal:** Promote the v0.6.0 deliverables from synthetic-validated to real-data-validated, and
-formalize the Variational Laplace engine with a systematic validation matrix. Seeded by the
-v0.6.0 audit's deferred items and `.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md`.
+**Goal:** Prove the Variational Laplace engine works *completely* on synthetic / known-ground-truth
+problems before any real data. Establish a systematic validation matrix, cross-validate against
+SPM12 `spm_nlsi_GN`, standardize VL+BMR model comparison, and harden numerical robustness. No
+real data this milestone. Seed: `.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md` + v0.6.0 audit.
 
-**Candidate scope (to refine in `/gsd:new-milestone`):**
+**Target features (confirmed scope):**
 
-- **VL validation matrix** — recovery × N × SNR, SPM12 cross-check, calibration from the full
-  covariance (Phase B of the draft).
-- **VL + BMR model comparison** — relative-evidence ranking + separation gap; fix absolute-ΔF
-  via posterior tempering (todo `vl-overconfidence-for-bmr`).
-- **Real Cam-CAN M/EEG interpretability** — the deferred Phase 22 real-data gates (real training,
-  source-localized ROIs); requires `camcan_loader.py` + DUA access.
-- **Real foundation-model runs** — execute TRIBE v2 / LaBraM / BrainOmni extractors on real
-  weights + cross-modal comparison (needs A100; first validate the parcellation nilearn path).
-- **SBI reconciliation** — fix SBC structural calibration (stable-region prior / reparam) OR
-  scope SBI as an optional speed-up benchmarked against calibrated VL.
+- **Synthetic recovery matrix (N × SNR)** — systematic parameter recovery across network sizes
+  and noise, for spectral / task / latent-circuit forward models. CI coverage reported as a
+  standard recovery metric (calibration rides along; not a separate SBC phase).
+- **SPM12 cross-validation** — numeric agreement of VL output vs MATLAB `spm_nlsi_GN` on identical
+  problems (prior-matched). Builds on the v0.1.0 SPM12 `.mat` export + MATLAB batch infrastructure.
+- **VL + BMR model comparison** — standardize BMR-on-VL (relative-evidence ranking + separation
+  gap); fix the absolute-ΔF Laplace-overconfidence via posterior tempering (todo
+  `vl-overconfidence-for-bmr`).
+- **Numerical robustness / edge cases** — convergence, the dt/precision-matrix intractability
+  (Phase 28 note), stability-boundary handling, multi-restart determinism.
 
-**Infra prerequisite:** fix the Mutagen `models/` ignore (recreate session with anchored
-ignores) before any M3 run touching `src/pyro_dcm/models/` — todo `mutagen-models-ignore`.
+**Explicitly deferred (NOT v0.7.0 — gated on VL being proven first):**
 
-**Explicitly deferred beyond v0.7.0:**
+- All real-data application — real Cam-CAN M/EEG (Phase 22 gates), real foundation-model runs
+  (Phase 24), real-M/EEG demos. → v0.8.0+ once VL is validated.
+- SBI reconciliation / SBC structural fix — SBI is a separate (uncalibrated) inference path,
+  not VL. → later milestone.
+- Posterior calibration/coverage as a standalone SBC dimension (light CI-coverage only, within
+  the recovery matrix).
+- Neural ODE extension; learned `C_obs`; nn4psych actor-critic networks.
 
-- Neural ODE extension (Approach 2; separate milestone).
-- nn4psych actor-critic networks (behavioral, not neural data).
-- Learned `C_obs` for latent-circuit DCM (fixed at identity through v0.6.0).
+**Infra prerequisite:** fix the Mutagen `models/` ignore (recreate session with anchored ignores)
+before any M3 run touching `src/pyro_dcm/models/` — todo `mutagen-models-ignore`.
 
 ### Out of Scope
 
@@ -163,7 +172,7 @@ ignores) before any M3 run touching `src/pyro_dcm/models/` — todo `mutagen-mod
 | Scope-cut v0.6.0 at completion | Ship synthetic methodology + VL engine; defer real-data application rather than block on data/compute access | ✓ Good — honest milestone close (v0.6.0) |
 
 ---
-*Last updated: 2026-06-10 after v0.6.0 milestone shipped (scope-cut). Validated section gained
-v0.4.0/v0.5.0/v0.6.0 deliverables; next-milestone goals set to v0.7.0 (VL validation + real-data).
-Note: v0.3.0 RECOV (Phase 16.1) remains genuinely incomplete and is still listed as the current
-in-progress milestone above.*
+*Last updated: 2026-06-10 — started milestone v0.7.0 (Variational Laplace Validation,
+VL-validation-led; no real data). Confirmed scope: synthetic recovery matrix (N×SNR), SPM12
+cross-validation, VL+BMR comparison, numerical robustness. Real-data + SBI deferred to v0.8.0+.
+v0.3.0 relabeled Paused (Phase 16.1 incomplete).*

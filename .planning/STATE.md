@@ -9,10 +9,13 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 
 ## Current Position
 
-**Milestone:** v0.6.0 ✅ **SHIPPED 2026-06-10 (scope-cut)** — archived to `milestones/v0.6.0-*`,
-tagged `v0.6.0`. Real-data application deferred to v0.7.0. Next: `/gsd:new-milestone` for v0.7.0.
+**Milestone:** v0.7.0 Variational Laplace Validation — **STARTED 2026-06-10 (VL-validation-led)**.
+Phase: Not started (defining requirements). Status: Defining requirements.
+Confirmed scope: synthetic recovery matrix (N×SNR), SPM12 cross-validation (user has MATLAB),
+VL+BMR comparison + overconfidence fix, numerical robustness. **No real data; SBI deferred.**
+Phase numbering continues from 28 → v0.7.0 starts at **Phase 29**.
 
-<details><summary>v0.6.0 completion detail (audited + scope-cut)</summary>
+<details><summary>v0.6.0 — SHIPPED 2026-06-10 (scope-cut), archived + tagged</summary>
 **Phase:** All 34 plans executed (Phases 20-27 + retroactive Phase 28 VL engine).
 **Status:** Goal-backward audit (`.planning/v0.6.0-AUDIT.md`) found every plan executed but the
 **real-data scientific claims undelivered** (pivoted to synthetic or built-but-not-run). v0.6.0
