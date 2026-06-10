@@ -487,6 +487,13 @@ dependency root; no cluster requirement.
 `benchmarks/` runner registry + `.npz` fixtures + metrics).
 **Requirements:** VLINFRA-01, VLINFRA-02, VLINFRA-03, VLINFRA-04, VLINFRA-05, VLREC-05,
 VLROBUST-01, VLROBUST-02
+**Plans:** 5 plans (3 waves)
+Plans:
+- [ ] 29-01-PLAN.md — BenchmarkConfig VL fields + MATLAB_PATH in config.py + vl pytest marker (VLINFRA-01, VLINFRA-05)
+- [ ] 29-02-PLAN.md — rank_connections() relative ranking + temper_vl_posterior() PD guard + unit tests (VLINFRA-03, VLINFRA-04)
+- [ ] 29-03-PLAN.md — C-order CSD round-trip regression test + task-DCM precision intractability guard (VLREC-05, VLROBUST-02)
+- [ ] 29-04-PLAN.md — Three VL runners (spectral/task/latent_circuit) + RUNNER_REGISTRY + N=2 smoke tests (VLINFRA-02)
+- [ ] 29-05-PLAN.md — VL convergence + multi-restart determinism tests across all 3 forward models + non-determinism docs (VLROBUST-01)
 
 **Success Criteria** (what must be TRUE):
 
@@ -597,7 +604,7 @@ round-trip test). Independent of Phase 30; runs concurrently.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 29. VL Validation Infrastructure & BMR Rank Functions | 0/? | Not started | -- |
+| 29. VL Validation Infrastructure & BMR Rank Functions | 0/5 | Planned | -- |
 | 30. Recovery Matrix Sweep (M3 Cluster) | 0/? | Not started | -- |
 | 31. BMR Validation & Posterior Tempering (Exploratory) | 0/? | Not started | -- |
 | 32. SPM12 Cross-Validation (Local / MATLAB) | 0/? | Not started | -- |
@@ -630,7 +637,7 @@ round-trip test). Independent of Phase 30; runs concurrently.
 | 26. SBI for Spectral DCM | v0.6.0 | 2/2 | ❌ SBC 2/9; calibration → v0.7.0 | 2026-05-31 |
 | 27. Publication Artifacts | v0.6.0 | 3/3 | ✅ Delivered (synthetic results) | 2026-05-31 |
 | 28. Variational Laplace Inference Engine (retroactive) | v0.6.0 | n/a | ✅ Delivered (SPM12 spm_nlsi_GN + ForwardModel) | 2026-06-09 |
-| 29. VL Validation Infrastructure & BMR Rank Functions | v0.7.0 | 0/? | Not started | -- |
+| 29. VL Validation Infrastructure & BMR Rank Functions | v0.7.0 | 0/5 | Planned | -- |
 | 30. Recovery Matrix Sweep (M3 Cluster) | v0.7.0 | 0/? | Not started | -- |
 | 31. BMR Validation & Posterior Tempering (Exploratory) | v0.7.0 | 0/? | Not started | -- |
 | 32. SPM12 Cross-Validation (Local / MATLAB) | v0.7.0 | 0/? | Not started | -- |
