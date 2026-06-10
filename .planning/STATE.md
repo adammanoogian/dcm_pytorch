@@ -10,7 +10,12 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 **Milestone:** v0.7.0 Variational Laplace Validation — **ROADMAPPED 2026-06-10 (VL-validation-led)**.
-**Phase: 29 — VL Validation Infrastructure & BMR Rank Functions. Status: In progress (29-01 + 29-02 + 29-03 done 2026-06-10).**
+**Phase: 29 — VL Validation Infrastructure & BMR Rank Functions. Status: In progress (29-01 + 29-02 + 29-03 + 29-04 done 2026-06-10).**
+**29-04 DONE:** three `method="vl"` benchmark runners (`run_spectral_vl`, `run_task_vl`,
+`run_latent_circuit_vl`) following the `(BenchmarkConfig)->dict` contract, registered additively in
+`RUNNER_REGISTRY`; N=2/1-seed laptop smoke suite (`tests/test_vl_runners_smoke.py`) green in 113s.
+Fixed a blocking `TaskDCMForward.predict` bug (`integrate_ode` took `step_size=`, not `options=`).
+VLINFRA-02 delivered. Commits 372e203, 6a09579, a731fd5.
 **29-01 DONE:** VL config foundation — optional None-default VL fields on `BenchmarkConfig`
 (`max_iter`, `hyperprior_mean`, `hyperprior_precision`, `prior_mean_a_offset`; zero behavior change),
 centralized env-overridable `MATLAB_PATH` in root `config.py`, registered `vl` pytest marker.
@@ -114,6 +119,9 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
 - **[29-03-D1] _TASK_PRECISION_MAX_DIM=5000 caps the dense (T*N,T*N) task-DCM precision.** TaskDCMForward.build_precision fails loud (ValueError with expected-vs-actual size) above the cap; enforces the dt>=0.1 floor (VLROBUST-02, pitfall N1). Tractable path unchanged.
 - **[29-03-D2] C-order CSD index contract (j fastest, i, w) locked by regression test.** tests/test_csd_corder_roundtrip.py guards the commit-64e326f fix against silent column-major/transpose regression (VLREC-05, pitfall S4). Registered the `vl` pytest marker (was unregistered).
 - **[29-01-D1] All four new BenchmarkConfig VL fields default to None.** `max_iter`, `hyperprior_mean`, `hyperprior_precision`, `prior_mean_a_offset` appended after `fixtures_dir` (preserving positional order); zero behavior change for every existing caller / quick_config / full_config / test (VLINFRA-01). Consumed only by VL runners (Plan 29-04).
+- **[29-04-D1] Spectral VL runner passes context={"freqs": freqs}, not the plan's {}.** `SpectralDCMForward.predict` reads `context["freqs"]`; the VL engine injects `a_mask` itself. Empty context raises `KeyError`. task_vl uses `t_eval` at TR resolution + `dt=0.1` internal RK4 step so predicted-BOLD rows match observed and `T*N` stays << the 5000 precision cap (guard never trips).
+- **[29-04-D2] Fixed latent TaskDCMForward.predict bug: integrate_ode uses step_size=, not options=.** Task VL was never exercised through a runner before; the invalid `options={"step_size": ...}` kwarg raised `TypeError`. Matches `LatentCircuitForward._integrate`. Orthogonal to the pre-existing `test_vl_forward_model_protocol.py` `dt_sim` signature-drift failures (those remain, out of scope).
+- **[29-04-D3] LC smoke test uses max_iter=4 (slowest fit) to keep the 3-runner suite under the 3-min laptop budget.** Full N×SNR multi-seed sweep is Phase 30/M3; the smoke proves plumbing (dict shape + finite A-RMSE without raising), not recovery quality. Full vl suite = 113s laptop CPU.
 - **[29-01-D2] MATLAB_PATH centralized in root config.py, env-overridable.** Default matches the hardcoded literal in validation/run_validation.py:58 (`C:/Program Files/MATLAB/R2022a/bin/matlab`); that file deliberately untouched (consuming refactor is Phase 32). Single source of truth for the SPM12 bridge (VLINFRA-05).
 - Prior v0.3.0/v0.4.0/v0.5.0 decisions: see earlier STATE.md history in git log.
 
@@ -224,20 +232,18 @@ validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
 
 ## Session Continuity
 
-Last session: 2026-06-10 (executed Phase 29 Plans 01 + 02 + 03 in parallel)
-Stopped at: Completed 29-01-PLAN.md — VL config foundation: optional None-default VL fields on
-  `BenchmarkConfig` (max_iter, hyperprior_mean, hyperprior_precision, prior_mean_a_offset; zero
-  behavior change), centralized env-overridable `MATLAB_PATH` in root config.py, registered the
-  `vl` marker. VLINFRA-01 + VLINFRA-05. Commits 9403941, 07f7f4b, a2d69c6. Also completed
-  29-02-PLAN.md — `rank_connections()` (relative single-prune BMR ranking +
-  separation gap, VLINFRA-03) and `temper_vl_posterior()` (temperature scale + loud Cholesky PD
-  guard, VLINFRA-04) added to `model_selection/bmr.py`, re-exported, 5 vl unit tests pass.
-  Commits 6cbb349, fb7aea7, 03fe8f4. Also completed 29-03-PLAN.md: C-order CSD round-trip
-  regression test (VLREC-05, guards commit 64e326f) + TaskDCMForward.build_precision intractability
-  guard (VLROBUST-02, expected-vs-actual ValueError, dt>=0.1 floor) + 2 regression tests; registered
-  `vl` marker. Commits bc30477, d12eb84, 09c9375.
-Next: execute remaining Phase 29 plans (29-04, 29-05) via `/gsd:execute-phase 29`.
+Last session: 2026-06-10 (executed Phase 29 Plan 04)
+Stopped at: Completed 29-04-PLAN.md — three `method="vl"` benchmark runners (`run_spectral_vl`,
+  `run_task_vl`, `run_latent_circuit_vl`) following the `(BenchmarkConfig)->dict` contract,
+  registered additively in `RUNNER_REGISTRY`; N=2/1-seed laptop smoke suite
+  (`tests/test_vl_runners_smoke.py`) green in 113s; fixed a blocking `TaskDCMForward.predict`
+  `integrate_ode` bug (step_size= not options=). VLINFRA-02. Commits 372e203, 6a09579, a731fd5.
+  Prior 29-01/02/03 (commits 9403941/07f7f4b/a2d69c6, 6cbb349/fb7aea7/03fe8f4, bc30477/d12eb84/09c9375):
+  VL config fields + `vl` marker + `MATLAB_PATH`; `rank_connections()` + `temper_vl_posterior()`;
+  C-order CSD roundtrip test + task precision guard.
+Next: execute remaining Phase 29 plan (29-05) via `/gsd:execute-phase 29`.
   Note: pre-existing failures in tests/test_vl_forward_model_protocol.py task-DCM cases
-  (make_block_stimulus/simulate_task_dcm signature drift) are unrelated to 29-03 — worth a
-  cleanup pass. INFRA reminder: fix the Mutagen `models/` ignore before any v0.7.0 M3 run.
+  (make_block_stimulus/simulate_task_dcm `dt_sim` signature drift) predate 29-03/29-04 (confirmed on
+  baseline a064e69) — worth a cleanup pass. INFRA reminder: fix the Mutagen `models/` ignore before
+  any v0.7.0 M3 latent-circuit run.
 Resume file: None

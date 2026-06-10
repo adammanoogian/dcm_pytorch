@@ -492,7 +492,7 @@ Plans:
 - [x] 29-01-PLAN.md — BenchmarkConfig VL fields + MATLAB_PATH in config.py + vl pytest marker (VLINFRA-01, VLINFRA-05) ✅ 2026-06-10
 - [ ] 29-02-PLAN.md — rank_connections() relative ranking + temper_vl_posterior() PD guard + unit tests (VLINFRA-03, VLINFRA-04)
 - [x] 29-03-PLAN.md — C-order CSD round-trip regression test + task-DCM precision intractability guard (VLREC-05, VLROBUST-02) ✅ 2026-06-10 (vl pytest marker registered here as prerequisite)
-- [ ] 29-04-PLAN.md — Three VL runners (spectral/task/latent_circuit) + RUNNER_REGISTRY + N=2 smoke tests (VLINFRA-02)
+- [x] 29-04-PLAN.md — Three VL runners (spectral/task/latent_circuit) + RUNNER_REGISTRY + N=2 smoke tests (VLINFRA-02) ✅ 2026-06-10
 - [ ] 29-05-PLAN.md — VL convergence + multi-restart determinism tests across all 3 forward models + non-determinism docs (VLROBUST-01)
 
 **Success Criteria** (what must be TRUE):
