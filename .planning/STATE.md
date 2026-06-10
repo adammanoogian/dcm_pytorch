@@ -10,7 +10,20 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 **Milestone:** v0.7.0 Variational Laplace Validation (VL-validation-led).
-**Phase 30 — Recovery Matrix Sweep: IN PROGRESS (2/3 plans).**
+**Phase 30 — Recovery Matrix Sweep: ✅ COMPLETE 2026-06-10 (3/3 plans).**
+**30-03 DONE 2026-06-10:** harvest + classifier + report over the COMPLETE M3 sweep (job 56346424).
+`benchmarks/recovery_matrix_thresholds.py` (documented per-cell thresholds RMSE_A 0.05 / sign 0.80 /
+coverage 0.85, SHRINKAGE_SOFT_TARGET 0.7 informational; `classify_cell` -> pass | identifiability_limit
+WITH evidence, never raises on a failing cell, skips missing metrics) + `cluster/scripts/
+recovery_matrix_aggregate.py` (glob per-cell JSON excl. local; classify; write recovery_matrix.csv/json;
+eig_clamp/boundary regime from max_real_eig_list + shrinkage; fail-loud on zero files; parameterized
+report path) + `tests/test_recovery_matrix_aggregate.py` (4 vl tests, ~5s) + `30-RECOVERY-MATRIX-REPORT.md`.
+**REAL RESULTS: 5 PASS (spectral 0-3, latent cell 9), 1 IDENTIFIABILITY-LIMIT (latent cell 8 N=4 SNR=1:
+RMSE 0.0501 marginally over provisional 0.05; sister cell 9 passes — audit-outlier case), 4 ERRORED (task
+cells 4-7: torchdiffeq 'underflow in dt 0.0', surfaced not dropped). eig_clamp held (0 in-band draws); low
+shrinkage at high SNR documented as expected Laplace overconfidence (VLROBUST-03).** ruff+mypy clean.
+Commits 29978dd (thresholds), 32a93ed (aggregator), 819201e (tests), eb30643 (real-results report+matrix).
+**VLREC-04 + VLROBUST-03 satisfied → Phase 30 CLOSED. Next: `/gsd:plan-phase 31` (tempering calibration).**
 **30-02 DONE 2026-06-10:** recovery-matrix sweep driver + M3 submission. `benchmarks/recovery_matrix_grid.py`
 (GRID constants N{2,4}×SNR{1,3}×{spectral,task,latent}, `enumerate_cells`/`cell_for_index` → 10 stable cells
 [spectral 4 + task 4 + latent 2; latent N-axis collapsed to fixed N=4], `run_one_cell` reusing Phase 29 VL
@@ -102,6 +115,9 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
 
 ## Decisions
 
+- **[30-03-D1] `classify_cell` is pass-or-documented-limit, never silent (VLREC-04).** A cell PASSES iff every PRESENT check (RMSE_A <= 0.05, masked sign >= 0.80, coverage_95 >= 0.85) passes; a check whose metric is `None` is SKIPPED (`pass=None`), never auto-failed; a failing cell returns `status="identifiability_limit"` WITH an evidence block (shrinkage/coverage/RMSE IQR/convergence) — it NEVER raises. The classifier raises only on structurally malformed input (a contracted key absent). Thresholds are provisional documented defaults (no Fisher-info bound yet); SHRINKAGE_SOFT_TARGET 0.7 is informational evidence only (low shrinkage = expected Laplace overconfidence, job 55772525), never a gate.
+- **[30-03-D2] Boundary regime characterized from `raw.max_real_eig_list`, not an explicit field.** The per-cell JSON has NO `boundary_rejections` field; VLROBUST-03 characterization uses the accepted-draw max-real-eig distribution (proximity to the `[-0.05,0]` band; 0 accepted draws in-band → exclusion held) plus the shrinkage-below-soft-target overconfidence flag. The aggregator excludes `recovery_matrix_local_*.json` and parses the array index from the `_<idx>.json` suffix (cell 9 used the array PARENT job id 56346424, cells 0-8 used per-task ids 5634644X).
+- **[30-03-D3] Task-DCM cells (4-7) errored at the simulator, surfaced as errored cells.** All four task cells failed with torchdiffeq `underflow in dt 0.0` inside `simulate_task_dcm` (adaptive-step underflow) — consistent with the pre-existing task-path `dt_sim` fragility (29-05 note). VLREC-04 requires these be SURFACED (report + CSV `status=error`), not dropped; they are. Re-running task variant after fixing the simulator dt is a follow-up, NOT a 30-03 classifier defect. Spectral + latent_circuit coverage is available for Phase 31; task coverage is missing pending the simulator fix.
 - **[30-01-D1] Per-region R2 is consumed, not computed, by `assemble_cell_metrics`.** The VL runners emit no per-seed trajectories, so the assembler reads a driver-supplied `r2_per_region_list` (the 30-02 driver calls `compute_trajectory_r_squared(pooled=False)`) and median-aggregates; it NEVER re-pools (guards the pooled-R2 artifact R1). Spectral/task have no trajectory -> `r2_per_region=None` + note. Same pattern for `shrinkage_list`/`coverage_list`: median when present, None+note when absent, never fabricated.
 - **[30-01-D2] Near-boundary-A exclusion band [-0.05,0] is inclusive-rejected, exposed as `NEAR_BOUNDARY_LO/HI`.** `exclude_near_boundary_A` returns True (acceptable) only when max Re eig < -0.05 or > 0; `resample_A_until_accepted` drives a seeded closure and raises RuntimeError (tries count) if exhausted. Keeps ground truth inside the eig_clamp-injective regime (pitfall N2, VLREC-03).
 - **[30-01-D3] Spectral SNR diverges from task/latent: `{'noise_log_amplitude':-log(snr)}` vs `{'SNR':snr}`.** `snr_for_model` is the one place SNR semantics differ across the three forward models; the 30-02 driver expands the spectral scalar into the `noise_params` b/c observation-noise tensors. Keeps the matrix SNR axis comparable.
@@ -274,8 +290,19 @@ validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
 
 ## Session Continuity
 
-Last session: 2026-06-10 (executed Phase 30 Plan 02)
-Stopped at: Completed 30-02-PLAN.md — recovery-matrix sweep driver + M3 submission.
+Last session: 2026-06-10 (executed Phase 30 Plan 03)
+Stopped at: Completed 30-03-PLAN.md — POST-RESULTS harvest + classifier + report over the COMPLETE M3
+  sweep (job 56346424). `benchmarks/recovery_matrix_thresholds.py` (classify_cell pass | identifiability_limit
+  with evidence) + `cluster/scripts/recovery_matrix_aggregate.py` (matrix CSV/JSON + report + eig_clamp
+  regime) + `tests/test_recovery_matrix_aggregate.py` (4 vl tests) + `30-RECOVERY-MATRIX-REPORT.md`.
+  REAL VERDICT: 5 PASS / 1 identifiability-limit (latent cell 8, marginal RMSE 0.0501) / 4 ERRORED task
+  cells surfaced (torchdiffeq underflow). Phase 30 CLOSED (3/3); VLREC-04 + VLROBUST-03 satisfied.
+  Commits 29978dd, 32a93ed, 819201e, eb30643. ruff+mypy clean.
+  **Next: `/gsd:plan-phase 31` (BMR tempering calibration) — consumes recovery_matrix.json coverage.
+  CARRY-FORWARD: task-DCM coverage is MISSING (cells 4-7 errored); if Phase 31 needs task coverage, fix
+  the simulate_task_dcm adaptive-step underflow and re-run those cells on M3 first.**
+Prior session: 2026-06-10 (executed Phase 30 Plan 02)
+Earlier-prior: Completed 30-02-PLAN.md — recovery-matrix sweep driver + M3 submission.
   `benchmarks/recovery_matrix_grid.py` (10-cell grid, `run_one_cell` reusing Phase 29 VL fit logic + SNR/
   boundary/metric wiring), `cluster/scripts/recovery_matrix_cell.py` (env-driven SLURM entrypoint),
   `cluster/sbatch/recovery_matrix_sweep.sbatch` (array 0-9, no-pip, dt≥0.1). LOCAL faithfulness pre-check
