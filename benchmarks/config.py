@@ -51,6 +51,25 @@ class BenchmarkConfig:
     fixtures_dir : str or None
         Path to shared fixtures directory. ``None`` means inline
         generation (v0.1.0 behavior).
+    max_iter : int or None
+        Variational Laplace Gauss-Newton iteration cap, passed to
+        ``run_variational_laplace_generic(..., max_iter=...)``. ``None``
+        lets the runner use the engine default of 128. Used only by VL
+        runners; SVI runners ignore it.
+    hyperprior_mean : float or None
+        SPM12 spectral-DCM hyperprior mean ``hE`` (8.0). ``None`` uses the
+        engine's data-dependent default. Used only for SPM12-matched runs.
+    hyperprior_precision : float or None
+        SPM12 hyperprior precision ``ihC`` (128.0). ``None`` uses the engine
+        default. Used only for SPM12-matched runs.
+    prior_mean_a_offset : float or None
+        SPM12 A prior-mean offset ``a_mask / 128``. ``None`` means a zero
+        offset. Used only for SPM12-matched runs (Phase 32).
+
+    Notes
+    -----
+    Task DCM VL requires ``dt >= 0.1`` to keep the ``(T*N, T*N)`` precision
+    matrix tractable; see VLROBUST-02.
     """
 
     variant: str
@@ -67,6 +86,10 @@ class BenchmarkConfig:
     n_regions_list: list[int] = field(default_factory=lambda: [3])
     elbo_type: str = "trace_elbo"
     fixtures_dir: str | None = None
+    max_iter: int | None = None
+    hyperprior_mean: float | None = None
+    hyperprior_precision: float | None = None
+    prior_mean_a_offset: float | None = None
 
     @classmethod
     def quick_config(
