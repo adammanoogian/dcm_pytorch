@@ -411,7 +411,7 @@ class TaskDCMForward:
         y0 = torch.zeros(5 * N, dtype=torch.float64)
         solution = integrate_ode(
             system, y0, self._t_eval, method="rk4",
-            options={"step_size": self._dt},
+            step_size=self._dt,
         )
 
         lnv = solution[:, 3 * N : 4 * N]
