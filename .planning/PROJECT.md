@@ -15,6 +15,17 @@ The A matrix (effective connectivity) remains an explicit, interpretable object 
 posterior uncertainty throughout inference — never absorbed into a latent space, never a
 point estimate. This is the scientific meaning that must be preserved above all else.
 
+## Current State
+
+**Shipped v0.6.0 (2026-06-10, scope-cut).** The framework now does DCM-based interpretability
+of deep-learning models trained on neural data, with an SPM12-grade **Variational Laplace**
+engine (`spm_nlsi_GN`: Gauss-Newton E-step, ReML M-step, SVD reduction, full posterior
+covariance) as the default inference, generalized across spectral/task/latent-circuit DCM via a
+`ForwardModel` protocol. Synthetic parameter recovery, Bayesian Model Reduction, and hybrid
+VAE-DCM are validated; real-data application (real Cam-CAN M/EEG, real foundation-model runs,
+SBI calibration) is built-but-un-run and **deferred to v0.7.0**. See
+`.planning/MILESTONES.md` and `milestones/v0.6.0-MILESTONE-AUDIT.md`.
+
 ## Requirements
 
 ### Validated
@@ -43,6 +54,15 @@ point estimate. This is the scientific meaning that must be preserved above all 
 - 9 publication-quality figure types (calibration, scaling, comparison, violin, Pareto, timing) — v0.2.0
 - Practical recommendation guide with Mermaid decision tree — v0.2.0
 - Benchmark narrative with zero TBD entries — v0.2.0
+- Circuit Explorer JSON serializer (`CircuitViz`) for DCM configs + fitted posteriors — v0.4.0
+- MNE/BIDS IO test suite + spectral & task DCM end-to-end pipeline demos (synthetic) — v0.5.0
+- Direct-observation latent-circuit DCM + synthetic recovery (A-RMSE 0.026, B-RMSE 0.0048, pooled-R² 0.961) — v0.6.0
+- **Variational Laplace inference engine** (SPM12 `spm_nlsi_GN`; full posterior covariance) as DCM default — v0.6.0
+- `ForwardModel` protocol generalizing VL across spectral / task / latent-circuit DCM — v0.6.0
+- Bayesian Model Reduction (Friston & Penny 2011), validated vs brute-force ELBO (~93× faster) — v0.6.0
+- Hybrid VAE-DCM amortized inference (A-RMSE 0.076, masked sign recovery 0.77, 0.76 ms) — v0.6.0
+- CT-RNN training + PCA latent-extraction baseline — v0.6.0
+- Real foundation-model extractors (TRIBE v2 / LaBraM / BrainOmni) + real Schaefer parcellation *(infra; un-run)* — v0.6.0
 
 ### Active
 
@@ -69,32 +89,33 @@ Pyro generative model + priors, simulator, and recovery benchmark.
 - SPM12 cross-validation of bilinear DCM (requires MATLAB; v0.4+ candidate)
 - NumPyro backends, regularization study, semi-amortized pipeline, amortized calibration (deferred to v0.4.0+)
 
-## Upcoming Milestone: v0.6.0 Latent Circuit DCM
+## Next Milestone: v0.7.0 — VL Validation + Real-Data Application (proposed)
 
-**Goal:** Apply bilinear DCM as an interpretable model to distill trained RNN latent
-dynamics into small, interpretable directed circuits with posterior uncertainty. Train
-an RNN to predict neural activity from task stimuli, extract hidden state trajectories,
-then fit DCM to those trajectories using a direct observation model (no hemodynamic
-convolution). The bilinear B_j matrices capture how experimental conditions reshape
-effective connectivity — a neuroscience-native parameterization distinct from existing
-latent circuit approaches (Langdon & Engel 2025).
+**Goal:** Promote the v0.6.0 deliverables from synthetic-validated to real-data-validated, and
+formalize the Variational Laplace engine with a systematic validation matrix. Seeded by the
+v0.6.0 audit's deferred items and `.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md`.
 
-**Target features:**
+**Candidate scope (to refine in `/gsd:new-milestone`):**
 
-- Direct observation model for neural-state fitting (y = C_obs @ x + noise; no balloon-Windkessel)
-- Neural data prediction RNN: small continuous-time RNN trained to predict/reproduce neural activity from task stimuli
-- Known-connectivity synthetic RNN for parameter recovery validation (ground truth W_rec)
-- DCM fitting pipeline: extract h(t) from trained RNN, reduce dimensionality, fit bilinear DCM
-- Parameter recovery benchmark: verify DCM recovers known A/B structure from RNN ground truth
-- Comparison to Langdon & Engel (2025) latent circuit inference (nonlinear f() vs bilinear B_j)
-- Publication-quality figures and methods section
+- **VL validation matrix** — recovery × N × SNR, SPM12 cross-check, calibration from the full
+  covariance (Phase B of the draft).
+- **VL + BMR model comparison** — relative-evidence ranking + separation gap; fix absolute-ΔF
+  via posterior tempering (todo `vl-overconfidence-for-bmr`).
+- **Real Cam-CAN M/EEG interpretability** — the deferred Phase 22 real-data gates (real training,
+  source-localized ROIs); requires `camcan_loader.py` + DUA access.
+- **Real foundation-model runs** — execute TRIBE v2 / LaBraM / BrainOmni extractors on real
+  weights + cross-modal comparison (needs A100; first validate the parcellation nilearn path).
+- **SBI reconciliation** — fix SBC structural calibration (stable-region prior / reparam) OR
+  scope SBI as an optional speed-up benchmarked against calibrated VL.
 
-**Explicitly deferred out of v0.6.0:**
+**Infra prerequisite:** fix the Mutagen `models/` ignore (recreate session with anchored
+ignores) before any M3 run touching `src/pyro_dcm/models/` — todo `mutagen-models-ignore`.
 
-- Fitting to real recorded neural data (synthetic/RNN-generated only for this milestone)
-- nn4psych actor-critic networks (behavioral, not neural data)
-- Amortized guides for latent circuit fitting (per-subject SVI first)
-- Neural ODE extension (Approach 2; separate milestone v0.7.0+)
+**Explicitly deferred beyond v0.7.0:**
+
+- Neural ODE extension (Approach 2; separate milestone).
+- nn4psych actor-critic networks (behavioral, not neural data).
+- Learned `C_obs` for latent-circuit DCM (fixed at identity through v0.6.0).
 
 ### Out of Scope
 
@@ -136,8 +157,13 @@ latent circuit approaches (Langdon & Engel 2025).
 | Static A first | Clean first paper; non-stationary A(t) is second contribution | -- Pending |
 | NumPyro for NUTS only | JAX speed for validation sampling, not primary inference | -- Pending |
 | v0.3.0 scoped to bilinear only | Keeps milestone focused and shippable; HEART2ADAPT/PEB/SPM12 extensions land in v0.4+ | -- Pending |
-| Direct observation for RNN latents | No balloon-Windkessel when fitting DCM to RNN hidden states; hemodynamic model only for real BOLD | -- Pending |
-| Neural data prediction RNN (not behavioral) | RNN trained to predict neural activity, not behavioral choices; DCM then distills learned neural dynamics | -- Pending |
+| Direct observation for RNN latents | No balloon-Windkessel when fitting DCM to RNN hidden states; hemodynamic model only for real BOLD | ✓ Good — `LatentCircuitForward` + synthetic recovery (v0.6.0) |
+| Neural data prediction RNN (not behavioral) | RNN trained to predict neural activity, not behavioral choices; DCM then distills learned neural dynamics | — Pending — pipeline synthetic-validated; real-data → v0.7.0 |
+| Variational Laplace as default inference (SPM12 `spm_nlsi_GN`) | Full posterior covariance / structured posterior closes the B-collapse mean-field SVI couldn't; no AutoLowRankMVN/AutoIAF guide needed | ✓ Good — closed Phase 20-05 (v0.6.0) |
+| Scope-cut v0.6.0 at completion | Ship synthetic methodology + VL engine; defer real-data application rather than block on data/compute access | ✓ Good — honest milestone close (v0.6.0) |
 
 ---
-*Last updated: 2026-05-24 after v0.6.0 milestone started*
+*Last updated: 2026-06-10 after v0.6.0 milestone shipped (scope-cut). Validated section gained
+v0.4.0/v0.5.0/v0.6.0 deliverables; next-milestone goals set to v0.7.0 (VL validation + real-data).
+Note: v0.3.0 RECOV (Phase 16.1) remains genuinely incomplete and is still listed as the current
+in-progress milestone above.*

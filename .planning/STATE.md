@@ -2,14 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-24)
+See: .planning/PROJECT.md (updated 2026-06-10)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** v0.6.0 DCM Interpretability for Neural Data Models -- DCM as interpretability tool for deep learning on simulated/real M/EEG data
+**Current focus:** Planning v0.7.0 — VL validation matrix + deferred real-data application (real Cam-CAN M/EEG, real foundation-model runs, SBI calibration). Seed: `.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md`.
 
 ## Current Position
 
-**Milestone:** v0.6.0 — **AUDITED + SCOPE-CUT 2026-06-10**; ready to complete.
+**Milestone:** v0.6.0 ✅ **SHIPPED 2026-06-10 (scope-cut)** — archived to `milestones/v0.6.0-*`,
+tagged `v0.6.0`. Real-data application deferred to v0.7.0. Next: `/gsd:new-milestone` for v0.7.0.
+
+<details><summary>v0.6.0 completion detail (audited + scope-cut)</summary>
 **Phase:** All 34 plans executed (Phases 20-27 + retroactive Phase 28 VL engine).
 **Status:** Goal-backward audit (`.planning/v0.6.0-AUDIT.md`) found every plan executed but the
 **real-data scientific claims undelivered** (pivoted to synthetic or built-but-not-run). v0.6.0
@@ -37,12 +40,12 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
 > + *real-data application* is reserved for v0.7.0 (`.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md`,
 > Phases B–E) via `/gsd:new-milestone`.
 
-**Prior milestones in flight:**
-- v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
-- v0.3.0: Phase 16.1 pending (RECOV-04 B-RMSE diagnostic)
-- v0.6.0: Phase 20 partial (A-RMSE passes, B/R2/ELBO fail) | Phase 21 dropped | Phase 22 COMPLETE | Phase 23 COMPLETE (BMR core + circuit selection + validation test) | Phase 24 COMPLETE (all 4 plans) | Phase 25 COMPLETE (all 4 plans, cluster training pending) | Phase 26 COMPLETE (SBI spectral, cluster training pending) | Phase 27 COMPLETE (references + methods + figures + equations)
+</details>
 
-Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [=========-] 16.1 pending | v0.4.0 [==========] Phase 17 complete | v0.5.0 [==========] Phases 18+19 complete | v0.6.0 [==================] Ph20 partial; Ph21 dropped; Ph22-27 CODE-COMPLETE; cluster validation pending
+**Milestone status:**
+- v0.1.0 ✅ | v0.2.0 ✅ | v0.4.0 ✅ (Phase 17) | v0.5.0 ✅ (Phases 18-19) | **v0.6.0 ✅ shipped 2026-06-10 (scope-cut)**
+- v0.3.0 ⏸ still in progress — Phase 16.1 (RECOV-04 B-RMSE diagnostic) never executed; the only genuinely-open prior milestone.
+- v0.7.0 📋 next — VL validation + deferred real-data (`/gsd:new-milestone`).
 
 ## Decisions
 
