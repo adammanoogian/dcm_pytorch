@@ -89,4 +89,5 @@ markers = [
     "mne: marks tests requiring MNE-Python (run with '-m mne', skip with '-m \"not mne\"')",
     "foundation: marks tests requiring foundation model deps (nilearn, huggingface_hub, braindecode)",
     "latent: marks tests requiring neurogym + scikit-learn (run with '-m latent', skip with '-m \"not latent\"')",
+    "vl: marks Variational Laplace validation tests (run with '-m vl')",
 ]
