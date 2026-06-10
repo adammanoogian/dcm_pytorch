@@ -43,3 +43,6 @@ Repeat after any local edit to `src/pyro_dcm/models/` until the real fix lands.
 
 Before trusting any M3 run that imports from `pyro_dcm.models`, verify the M3 file matches
 local (grep/mtime). See memory `reference-mutagen-models-ignore-footgun`.
+
+## ✅ RESOLVED 2026-06-10
+Recreated the `dcm-pytorch` Mutagen session with `models/` -> `/models/` (root-anchored), leaving data/checkpoints/wandb unanchored. `src/pyro_dcm/models/` now syncs (657 vs 649 files; 0 conflicts; live edit propagated). New session id sync_rfd9rQ8kkxqRaMTkzQ4qYnWyPUtopXaXGGIY2n3HvpH.
