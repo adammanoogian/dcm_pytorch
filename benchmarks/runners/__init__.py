@@ -9,18 +9,21 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from benchmarks.config import BenchmarkConfig
+from benchmarks.config import BenchmarkConfig as BenchmarkConfig
 from benchmarks.runners.latent_circuit_recovery import run_latent_circuit_recovery
+from benchmarks.runners.latent_circuit_vl import run_latent_circuit_vl
 from benchmarks.runners.rdcm_vb import (
     run_rdcm_rigid_vb,
     run_rdcm_sparse_vb,
 )
 from benchmarks.runners.spectral_amortized import run_spectral_amortized
 from benchmarks.runners.spectral_svi import run_spectral_svi
+from benchmarks.runners.spectral_vl import run_spectral_vl
 from benchmarks.runners.spm_reference import run_spm_reference
 from benchmarks.runners.task_amortized import run_task_amortized
 from benchmarks.runners.task_bilinear import run_task_bilinear_svi
 from benchmarks.runners.task_svi import run_task_svi
+from benchmarks.runners.task_vl import run_task_vl
 
 RUNNER_REGISTRY: dict[tuple[str, str], Callable[..., dict[str, Any]]] = {
     ("task", "svi"): run_task_svi,
@@ -32,4 +35,7 @@ RUNNER_REGISTRY: dict[tuple[str, str], Callable[..., dict[str, Any]]] = {
     ("rdcm_sparse", "vb"): run_rdcm_sparse_vb,
     ("spm", "reference"): run_spm_reference,
     ("latent_circuit", "svi"): run_latent_circuit_recovery,
+    ("spectral", "vl"): run_spectral_vl,
+    ("task", "vl"): run_task_vl,
+    ("latent_circuit", "vl"): run_latent_circuit_vl,
 }
