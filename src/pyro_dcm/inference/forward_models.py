@@ -20,6 +20,12 @@ from pyro_dcm.forward_models.neural_state import parameterize_A, parameterize_B
 from pyro_dcm.forward_models.spectral_transfer import spectral_dcm_forward
 from pyro_dcm.inference.csd_precision import compute_csd_precision
 
+# Maximum tractable flattened dimension for the dense task-DCM precision
+# matrix Q of shape (T*N, T*N). At dt < 0.1 with long duration this blows up
+# (e.g. dt=0.01, 100s, N=4 -> T*N = 4e4 -> (4e4, 4e4) dense ~ 13 GB float64).
+# Enforces the dt >= 0.1 floor for task DCM VL (VLROBUST-02, pitfall N1).
+_TASK_PRECISION_MAX_DIM = 5000
+
 
 @runtime_checkable
 class ForwardModel(Protocol):
@@ -341,7 +347,44 @@ class TaskDCMForward:
     def build_precision(
         self, observed: torch.Tensor,
     ) -> tuple[list[torch.Tensor], int]:
+        """Build the dense identity observation precision for task DCM.
+
+        Returns a single ``(ny, ny)`` identity precision (``ny = T * N``) and a
+        Kronecker multiplier of 1. The dense matrix scales as ``(T*N)^2`` in
+        memory, so this method fails LOUD when ``ny`` exceeds
+        ``_TASK_PRECISION_MAX_DIM``: at ``dt < 0.1`` with long duration the
+        precision becomes intractable (e.g. ``dt=0.01, 100s, N=4`` -> ``ny =
+        4e4`` -> a ~13 GB float64 matrix). Callers must therefore use
+        ``dt >= 0.1`` (and/or shorter duration / fewer regions) so that ``T*N``
+        stays tractable (VLROBUST-02, pitfall N1).
+
+        Parameters
+        ----------
+        observed : torch.Tensor
+            Observed BOLD data; ``ny = observed.numel() = T * N``.
+
+        Returns
+        -------
+        Q_list : list of torch.Tensor
+            Single ``(ny, ny)`` identity precision matrix.
+        nq : int
+            Kronecker multiplier (1 for single-trial task DCM).
+
+        Raises
+        ------
+        ValueError
+            If ``ny > _TASK_PRECISION_MAX_DIM``, with a message reporting the
+            actual size, the resulting dense matrix shape, and the expected cap.
+        """
         ny = observed.numel()
+        if ny > _TASK_PRECISION_MAX_DIM:
+            raise ValueError(
+                f"Task DCM precision matrix is intractable: observed has "
+                f"{ny} elements, producing a dense ({ny}, {ny}) precision "
+                f"matrix; expected <= {_TASK_PRECISION_MAX_DIM}. Use dt >= 0.1 "
+                f"(and/or shorter duration / fewer regions) so T*N stays "
+                f"tractable. See VLROBUST-02."
+            )
         Q = torch.eye(ny, dtype=torch.float64, device=observed.device)
         return [Q], 1
 
