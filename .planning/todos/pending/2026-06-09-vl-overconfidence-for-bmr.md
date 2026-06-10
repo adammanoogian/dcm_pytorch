@@ -38,3 +38,10 @@ BMR usage** (Phase 23), not just the latent circuit.
 
 Note: this does NOT affect the Phase 20-05 closure (structure recovered via ranking) or the
 SYNTH-01/02 recovery numbers — it is a calibration caveat for absolute BMR evidence.
+
+## Audit disposition (2026-06-10) — DEFER to v0.7.0 (Phase C)
+
+Does **not** block v0.6.0: relative-ranking BMR is the standardized API and it recovers structure
+(SYNTH-03 3/3). The absolute-ΔF calibration fix (posterior tempering + a `rank_connections()`
+helper) is a **VL refinement** → maps to **v0.7.0 Phase C (VL + BMR model comparison)** in
+`.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md`. Carry forward as-is.

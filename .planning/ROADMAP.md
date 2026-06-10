@@ -388,11 +388,14 @@ Plans:
 
 ---
 
-## Upcoming Milestone: v0.6.0 Latent Circuit DCM
+## Current Milestone: v0.6.0 Latent Circuit DCM (scope-cut; completing)
 
-**Status:** Defined 2026-05-24; restructured 2026-05-26
-**Phases:** 20-27 (8 phases)
-**Requirements covered:** 38+ v0.6.0 requirements (new phases TBD during planning)
+**Status:** Defined 2026-05-24; restructured 2026-05-26; **audited + scope-cut 2026-06-10**.
+All phases executed; real-data scientific claims deferred to v0.7.0 (see audit).
+**Phases:** 20-27 + 28 (VL engine, retroactive consolidation) = 9 phases
+**Requirements covered:** synthetic-validation + inference-engine subset delivered; real-data
+requirements (Phase 22/24/26) carried to v0.7.0
+**Audit:** `.planning/v0.6.0-AUDIT.md` · **VL consolidation:** Phase 28 SUMMARY
 
 ### Overview
 
@@ -419,11 +422,20 @@ interpretability tool for models trained on real neuroimaging data.
 Phase 20. Phase 24 (foundation models) depends on Phase 20 + 22. Phases 25-26
 (hybrid VAE-DCM, SBI) can run in parallel after Phase 20.
 
-**Milestone acceptance gate:** (1) Parameter recovery on synthetic ground truth
-passes RECOV-equivalent criteria; (2) DCM fit to neural-data-model latent dynamics
-produces interpretable effective connectivity on real M/EEG; (3) ELBO or BMR
-correctly selects circuit architecture; (4) Foundation model comparison across
-modalities; (5) Publication figures and methods section complete.
+**Milestone acceptance gate (ORIGINAL, 2026-05-24):** (1) Parameter recovery on synthetic
+ground truth passes RECOV-equivalent criteria; (2) DCM fit to neural-data-model latent dynamics
+produces interpretable effective connectivity on real M/EEG; (3) ELBO or BMR correctly selects
+circuit architecture; (4) Foundation model comparison across modalities; (5) Publication figures
+and methods section complete.
+
+**Milestone acceptance gate (SCOPE-CUT, audited 2026-06-10):** v0.6.0 closes on its delivered
+core — (1) ✅ synthetic parameter recovery passes RECOV-equivalent criteria (Phase 20, via VL);
+(3) ✅ BMR correctly selects circuit architecture (Phase 23); (5) ✅ publication figures + methods
+complete (Phase 27); plus the SPM12-grade VL inference engine (Phase 28). Gates **(2) real-M/EEG
+interpretability** and **(4) cross-modal foundation comparison** are **DEFERRED to v0.7.0** — the
+infrastructure is built and ready (Phase 22 synthetic-validated pipeline; Phase 24 extractors +
+real parcellation) but blocked on data access (DUA), compute (A100), and SBC calibration. Deferred,
+not failed.
 
 ### Phases
 
@@ -682,18 +694,26 @@ Plans:
 
 ### Progress
 
-**Execution Order:** 20 (+ 21 in parallel) -> 22 -> 23 (can overlap with 22) -> 24 (can overlap with 23) -> 25/26 (can overlap) -> 27
+**Execution Order:** 20 (+ 21 in parallel) -> 22 -> 23 (can overlap with 22) -> 24 (can overlap with 23) -> 25/26 (can overlap) -> 27 -> 28 (VL engine, retroactive)
 
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 20. Direct Observation Forward Model, Simulator & Synthetic Validation | 4/5 | Plans 01-04 complete; Plan 05 acceptance needs rework | -- |
-| 21. CT-RNN Training & Latent Extraction | 4/4 | Complete (20 seeds trained, trajectories extracted) | 2026-05-26 |
-| 22. DCM Interpretability for Neural Data Models | 0/6 | Planned | -- |
-| 23. Bayesian Model Reduction | 0/3 | Planned | -- |
-| 24. Foundation Model Use Cases (TRIBE + M/EEG) | 0/4 | Planned | -- |
-| 25. Hybrid VAE-DCM | 0/4 | Planned | -- |
-| 26. SBI for Spectral DCM | 0/2 | Planned | -- |
-| 27. Publication Artifacts | 0/3 | Planned | -- |
+**Audited 2026-06-10** (`.planning/v0.6.0-AUDIT.md`). Every plan executed (34/34 incl. Phase
+28), but goal-backward audit found the **real-data** scientific claims undelivered (pivoted to
+synthetic or built-but-not-run). v0.6.0 **scope-cut** to its delivered core: synthetic-validated
+methodology + SPM12-grade VL inference engine + ready (un-run) real-data infrastructure.
+Real-data application (Phase 22 real Cam-CAN, Phase 24 real foundation-model execution, Phase 26
+real M/EEG + SBC calibration) **deferred to v0.7.0** — recorded as deferred, NOT failed.
+
+| Phase | Plans | Audited Status | Completed |
+|-------|-------|----------------|-----------|
+| 20. Direct Obs Forward Model + Synthetic Validation | 5/5 | ✅ DELIVERED — closed via VL (A-RMSE 0.026, B-RMSE 0.0048, pooled-R² 0.961, BMR 3/3) | 2026-06-09 |
+| 21. CT-RNN Training & Latent Extraction | 4/4 | ✅ DELIVERED (20 seeds, trajectories extracted) | 2026-05-26 |
+| 22. DCM Interpretability for Neural Data Models | 6/6 | ⚠️ SYNTHETIC-ONLY — pivoted from real Cam-CAN (commit 2e7bda8); gates 1–2 (real M/EEG, source ROIs) → v0.7.0 | 2026-05-31 |
+| 23. Bayesian Model Reduction | 3/3 | ✅ DELIVERED (BMR ~93× faster than ELBO; validated) | 2026-05-31 |
+| 24. Foundation Model Use Cases (TRIBE + M/EEG) | 4/4 | ⚠️ INFRASTRUCTURE-ONLY — extractors+parcellation real but never run on real weights → v0.7.0 | 2026-05-31 |
+| 25. Hybrid VAE-DCM | 4/4 | ⚠️ 3/4 — HVAE-02 sign recovery indeterminate (masked-metric re-eval pending) | 2026-05-31 |
+| 26. SBI for Spectral DCM | 2/2 | ❌ SBC FAILED 2/9 (structural); real-M/EEG demo unplanned → v0.7.0 | 2026-05-31 |
+| 27. Publication Artifacts | 3/3 | ✅ DELIVERED (documents synthetic results) | 2026-05-31 |
+| 28. Variational Laplace Inference Engine (retroactive) | n/a | ✅ DELIVERED — SPM12 `spm_nlsi_GN` engine + ForwardModel protocol; delivered v0.6.0's inference | 2026-06-09 |
 
 ---
 
@@ -714,15 +734,20 @@ Plans:
 | 17. Circuit Visualization Module | v0.4.0 | 1/1 | Complete | 2026-04-24 |
 | 18. MNE/BIDS IO Test Suite | v0.5.0 | 2/2 | Complete (verified 17/17 must-haves) | 2026-05-21 |
 | 19. End-to-End Pipeline Demos | v0.5.0 | 2/2 | Complete (verified 10/10 must-haves) | 2026-05-24 |
-| 20. Direct Observation Forward Model, Simulator & Synthetic Validation | v0.6.0 | 4/5 | Plans 01-04 complete; 05 needs rework | -- |
-| 21. CT-RNN Training & Latent Extraction | v0.6.0 | 4/4 | Complete | 2026-05-26 |
-| 22. DCM Interpretability for Neural Data Models | v0.6.0 | 0/6 | Planned | -- |
-| 23. Bayesian Model Reduction | v0.6.0 | 0/3 | Planned | -- |
-| 24. Foundation Model Use Cases (TRIBE + M/EEG) | v0.6.0 | 0/4 | Planned | -- |
-| 25. Hybrid VAE-DCM | v0.6.0 | 0/4 | Planned | -- |
-| 26. SBI for Spectral DCM | v0.6.0 | 0/2 | Planned | -- |
-| 27. Publication Artifacts | v0.6.0 | 0/3 | Planned | -- |
+| 20. Direct Observation Forward Model, Simulator & Synthetic Validation | v0.6.0 | 5/5 | ✅ Delivered (via VL) | 2026-06-09 |
+| 21. CT-RNN Training & Latent Extraction | v0.6.0 | 4/4 | ✅ Delivered | 2026-05-26 |
+| 22. DCM Interpretability for Neural Data Models | v0.6.0 | 6/6 | ⚠️ Synthetic-only; real-data → v0.7.0 | 2026-05-31 |
+| 23. Bayesian Model Reduction | v0.6.0 | 3/3 | ✅ Delivered | 2026-05-31 |
+| 24. Foundation Model Use Cases (TRIBE + M/EEG) | v0.6.0 | 4/4 | ⚠️ Infrastructure-only; real runs → v0.7.0 | 2026-05-31 |
+| 25. Hybrid VAE-DCM | v0.6.0 | 4/4 | ⚠️ 3/4; HVAE-02 re-eval pending | 2026-05-31 |
+| 26. SBI for Spectral DCM | v0.6.0 | 2/2 | ❌ SBC 2/9; calibration → v0.7.0 | 2026-05-31 |
+| 27. Publication Artifacts | v0.6.0 | 3/3 | ✅ Delivered (synthetic results) | 2026-05-31 |
+| 28. Variational Laplace Inference Engine (retroactive) | v0.6.0 | n/a | ✅ Delivered (SPM12 spm_nlsi_GN + ForwardModel) | 2026-06-09 |
 
 ---
 *Roadmap created: 2026-04-07*
-*Last updated: 2026-05-26 -- Phase 24 planned (4 plans, 3 waves): foundation model extractor infrastructure, TRIBE v2 fMRI pipeline, M/EEG foundation model pipeline (LaBraM + BrainOmni), cross-modal comparison. Phase 26 planned (2 plans, 2 waves). Phase 25 planned (4 plans, 4 waves). Phase 27 planned (3 plans, 2 waves). v0.6.0 restructured: new core is DCM as interpretability tool for neural data models (Phase 22). Phase 21 complete. Phase 20-05 needs rework.*
+*Last updated: 2026-06-10 -- v0.6.0 audited + scope-cut. All 34 plans executed; goal-backward
+audit (`.planning/v0.6.0-AUDIT.md`) found real-data claims (Phase 22/24/26) undelivered →
+deferred to v0.7.0 (not failed). Added Phase 28 (retroactive VL/SPM12 inference-engine
+consolidation). Progress tables reconciled from stale "0/N Planned" to audited status.*
+*Prior update: 2026-05-26 -- Phase 24 planned (4 plans, 3 waves): foundation model extractor infrastructure, TRIBE v2 fMRI pipeline, M/EEG foundation model pipeline (LaBraM + BrainOmni), cross-modal comparison. Phase 26 planned (2 plans, 2 waves). Phase 25 planned (4 plans, 4 waves). Phase 27 planned (3 plans, 2 waves). v0.6.0 restructured: new core is DCM as interpretability tool for neural data models (Phase 22). Phase 21 complete. Phase 20-05 needs rework.*

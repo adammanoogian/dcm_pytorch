@@ -36,3 +36,21 @@ Fix (commit pending):
 masked number on the *existing* trained encoder, add an eval-only path to the train script
 (load `results/hybrid_vae_dcm/encoder_checkpoint.pt`, skip training, recompute) and re-run on
 M3 -- a quick job, no retraining. Expected to confirm HVAE-02 passes.
+
+## Audit disposition (2026-06-10) — IN v0.6.0 SCOPE; the one closing action
+
+HVAE-02 is **synthetic recovery**, so it falls inside v0.6.0's scope-cut "delivered core"
+(unlike the real-data gaps, which moved to v0.7.0). The milestone audit
+(`.planning/v0.6.0-AUDIT.md`) rates it **indeterminate**: the masked-metric *fix* is committed
+but the masked number (~0.71) was never recomputed on the actual checkpoint — `recovery_report.json`
+still holds the unmasked 0.4425.
+
+**This is the only gap that should ideally close before v0.6.0 completion.** Two acceptable
+resolutions:
+1. **Confirm** — run the eval-only path on M3 (load checkpoint, recompute masked sign recovery,
+   no retraining; <5 min cluster job) and record the exact number. Converts indeterminate → met.
+2. **Accept-with-caveat** — close v0.6.0 noting HVAE-02 as "met under the corrected masked metric
+   (~0.71 estimated); exact re-eval deferred." Defensible since the unmasked failure is a proven
+   metric artifact, but leaves a soft spot.
+
+Recommendation: option 1 if M3 is unlocked (cheap, makes the milestone airtight); else option 2.

@@ -77,3 +77,12 @@ add further degeneracy.
 **Pragmatic stance:** amortized SBI for this spectral DCM is not yet calibrated and should not
 back a scientific claim. **VL/SVI is the trustworthy, calibrated path** (Phase 20-05 closed via
 VL) — SBI is an optional speed-up to revisit, not a blocker for v0.6.0 results.
+
+## Audit disposition (2026-06-10) — DEFER to v0.7.0 (Phase D)
+
+The milestone audit confirms SBI-03 **acceptance-failed** (SBC 2/9, structural) and SBI-04 (real
+M/EEG demo) was never planned. Under the v0.6.0 scope-cut, SBI is **not a v0.6.0 deliverable** —
+the calibrated inference path is VL. Carry both the structural-calibration fix (stable-region
+prior / reparam) and the real-M/EEG demo to **v0.7.0 Phase D (SBI reconciliation)** in
+`.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md`, where the framing decision is "fix SBC vs. scope
+SBI as an optional benchmark against calibrated VL."

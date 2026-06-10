@@ -9,26 +9,32 @@ See: .planning/PROJECT.md (updated 2026-05-24)
 
 ## Current Position
 
-**Milestone:** v0.6.0 (restructured 2026-05-27; simulation-first pivot)
-**Phase:** v0.6.0 code-complete — all phases 23-27 merged; cluster validation returned
-**Plan:** Consolidation + post-consolidation Variational Laplace work (see note below)
-**Status:** All 14 plans across phases 23-27 executed. Cluster validation jobs returned (2026-05-31):
-  - **BMR vs ELBO (Phase 23):** ✅ PASSED — BMR 93x faster than ELBO; `pytest` 1 passed in 151.7s (job 55772525).
-  - **SBI Spectral (Phase 26):** ✅ completed exit-0 — estimator + SBC ranks saved (job 55772094).
-  - **Hybrid VAE-DCM (Phase 25):** ⚠️ 3/4 acceptance criteria met (job 55774467, 200 epochs / ~8.7h):
-    A_free RMSE 0.076 (<0.3 ✅), KL 18.8 (>0.1 ✅ no collapse), inference 0.76ms (<1s ✅),
-    **A sign recovery 0.4425 — FAILS HVAE-02 threshold of >0.6.** Mirrors the Phase 20-05 B/sign
-    recovery shortfall; needs investigation alongside 20-05.
-**Last activity:** 2026-06-09 -- Doc-debt cleanup: validation artifacts committed, STATE/SUMMARYs backfilled.
+**Milestone:** v0.6.0 — **AUDITED + SCOPE-CUT 2026-06-10**; ready to complete.
+**Phase:** All 34 plans executed (Phases 20-27 + retroactive Phase 28 VL engine).
+**Status:** Goal-backward audit (`.planning/v0.6.0-AUDIT.md`) found every plan executed but the
+**real-data scientific claims undelivered** (pivoted to synthetic or built-but-not-run). v0.6.0
+**scope-cut** to its delivered core; real-data application **deferred to v0.7.0** (recorded as
+deferred, NOT failed). User-approved both decisions 2026-06-10.
 
-> **⚠️ Planning-doc drift (discovered 2026-06-09):** A body of **Variational Laplace** work
-> postdates the 2026-05-28 consolidation and is NOT captured in ROADMAP/STATE: ForwardModel
-> protocol, spectral DCM default switched SVI→VL, ReML M-step (8 Fisher-scoring iters),
-> Q-based CSD observation precision (`spm_dcm_csd_Q`), SVD parameter-space reduction,
-> SPM12-compatible hyperpriors, analytical hemodynamic Jacobian. Commit prefixes `21.2-*`,
-> `21.3-02` reference phases not in the current roadmap. **Reconciliation drafted 2026-06-09:**
-> see `.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md` (full commit inventory + proposed phase
-> structure A–E + open decisions) — feed it to `/gsd:new-milestone` to formalize v0.7.0.
+  - ✅ **Delivered:** Phase 20 synthetic recovery (via VL: A-RMSE 0.026, B-RMSE 0.0048, pooled-R²
+    0.961, BMR 3/3) · Phase 21 CT-RNN · Phase 23 BMR (~93× faster) · Phase 27 pub artifacts ·
+    **Phase 28 SPM12-grade VL inference engine** (the path that actually delivered v0.6.0 inference).
+  - ⚠️ **Synthetic/infra-only → v0.7.0:** Phase 22 (pivoted from real Cam-CAN to synthetic OU;
+    gates 1-2 unmet) · Phase 24 (real extractors + real parcellation built, never run on real
+    weights; M/EEG pipeline scripts deleted in merge).
+  - ⚠️ **In-scope, open:** Phase 25 HVAE-02 sign recovery **indeterminate** — masked-metric fix
+    committed but never recomputed on the checkpoint (the one v0.6.0-closing action; see todo).
+  - ❌ **→ v0.7.0:** Phase 26 SBI SBC failed 2/9 (structural); real-M/EEG demo unplanned.
+**Last activity:** 2026-06-10 -- Milestone audit + scope-cut: ROADMAP reconciled (stale
+"0/N Planned" → audited status), Phase 28 VL consolidation written, 4 gaps triaged.
+
+> **✅ Planning-doc drift RESOLVED 2026-06-10.** The post-consolidation Variational Laplace work
+> (ForwardModel protocol, SVI→VL default, ReML M-step, `spm_dcm_csd_Q` precision, SVD reduction,
+> SPM12 hyperpriors, analytical hemodynamic Jacobian, `LatentCircuitForward`) is now documented as
+> **retroactive Phase 28** (`.planning/phases/28-variational-laplace-engine/28-CONSOLIDATION-SUMMARY.md`)
+> inside v0.6.0 — it's what delivered v0.6.0's inference. The forward-looking VL *validation matrix*
+> + *real-data application* is reserved for v0.7.0 (`.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md`,
+> Phases B–E) via `/gsd:new-milestone`.
 
 **Prior milestones in flight:**
 - v0.5.0: Phase 18 COMPLETE; Phase 19 COMPLETE (both plans done)
@@ -88,8 +94,19 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 
 ## Blockers
 
-**v0.6.0 milestone is NOT cleanly validated — 4 acceptance/quality gaps surfaced during
-2026-06-09 doc-debt cleanup. Milestone audit/completion is blocked until triaged:**
+**AUDIT COMPLETE 2026-06-10 (`.planning/v0.6.0-AUDIT.md`).** The 4 gaps below are triaged.
+**Nothing hard-blocks v0.6.0 completion under the scope-cut** — real-data gaps (Phase 22/24/26)
+are formally **deferred to v0.7.0**; the only in-scope open item is the **HVAE-02 masked-metric
+re-eval** (a <5-min M3 job, or accept-with-caveat). Recommended next action: optionally close
+HVAE-02, then `/gsd:complete-milestone`. Detail retained below.
+
+**Triage summary:**
+1. **[20-05]** ✅ closed (VL). 2. **[25/HVAE-02]** ⚠️ in-scope, indeterminate — eval-only re-run
+to confirm (~0.71 masked, expected pass). 3. **[26/SBI-03]** → v0.7.0 Phase D (structural, not a
+v0.6.0 deliverable). 4. **[24-01 parcellation]** ✅ No-Placeholders violation resolved; runtime
+validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
+
+<details><summary>Original 4-gap analysis (pre-audit, 2026-06-09 — retained)</summary>
 
 1. **[Phase 20-05] ✅ FULLY CLOSED via Variational Laplace 2026-06-09 — SYNTH-01/02/03 all pass.**
    - **SYNTH-01/02** (job 56268248, 10 seeds): A-RMSE 0.026, **B-RMSE 0.0048** (vs SVI ~0.31),
@@ -139,6 +156,9 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
    contiguous blocks instead of the real Schaefer atlas vertex-to-parcel mapping. Fetches real
    atlas labels but averages the wrong vertices → scientifically invalid ROI timeseries for any
    real Phase 24 foundation-model analysis. Needs the nilearn surface-projection pipeline.
+   *(2026-06-10: RESOLVED — rewrite confirmed real by audit; runtime validation → v0.7.0.)*
+
+</details>
 
 ### Quick Tasks Completed
 
@@ -167,10 +187,12 @@ Progress: v0.1.0 [==========] 100% | v0.2.0 [==========] 100% | v0.3.0 [========
 
 ## Session Continuity
 
-Last session: 2026-06-09 (doc-debt cleanup; cluster validation triaged)
-Stopped at: Validation artifacts committed; SUMMARYs backfilled (23-01/03, 24-01, 25-01, 26-01/02, 27-01/03);
-  STATE updated. Two open recovery gaps under investigation: Phase 20-05 (B/R2/ELBO) and Phase 25 HVAE-02
-  (sign recovery 0.44 < 0.6).
-Next: (1) Root-cause Phase 20-05 acceptance failures; (2) reconcile undocumented Variational Laplace work
-  into the roadmap (v0.7.0?); (3) milestone audit once 20-05 + HVAE sign-recovery resolved.
+Last session: 2026-06-10 (v0.6.0 milestone audit + scope-cut + VL consolidation)
+Stopped at: Goal-backward audit complete (`.planning/v0.6.0-AUDIT.md`). User approved scope-cut
+  (defer real-data to v0.7.0) + VL-as-retro-Phase-28. ROADMAP reconciled, Phase 28 SUMMARY written,
+  4 gaps triaged (3 → v0.7.0; HVAE-02 in-scope/open), STATE updated.
+Next: (1) OPTIONAL — close HVAE-02 via eval-only masked-sign-recovery re-run on M3 (needs m3-unlock;
+  <5 min, no retraining) OR accept-with-caveat; (2) `/gsd:complete-milestone` to archive v0.6.0;
+  (3) `/gsd:new-milestone` for v0.7.0 (VL validation matrix + deferred real-data; consume
+  `v0.7.0-VL-RECONCILIATION-DRAFT.md`).
 Resume file: None

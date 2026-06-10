@@ -37,3 +37,14 @@ code is correct-against-the-API but unexecuted. A `@pytest.mark.slow` integratio
 sizes are non-uniform once `pip install '.[foundation]'` is done. Verify the exact nilearn API
 (`fetch_surf_fsaverage` keys `pial_left/white_left`, `vol_to_surf(inner_mesh=...)`) against the
 installed nilearn version at that point.
+
+## Audit disposition (2026-06-10) — VIOLATION RESOLVED; runtime validation → v0.7.0
+
+The **No-Placeholders-Ever violation is RESOLVED** — `parcellation.py` is now real code (audit
+confirmed the rewrite: `aggregate_vertices_by_labels` + real nilearn `vol_to_surf`, no silent
+fallback). This does **not** block v0.6.0 closure: under the scope-cut, parcellation is only
+*exercised* by real foundation-model runs (Phase 24), which are **deferred to v0.7.0**.
+
+Priority lowered high → **low/deferred**. The remaining runtime validation is a **v0.7.0
+prerequisite** (it gates the first real Phase-24 run) and should be done as the opening step of
+the v0.7.0 foundation-model phase, when `[foundation]`/nilearn is installed on the cluster.
