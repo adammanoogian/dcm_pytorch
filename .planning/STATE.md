@@ -10,7 +10,14 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 **Milestone:** v0.7.0 Variational Laplace Validation — **ROADMAPPED 2026-06-10 (VL-validation-led)**.
-**Phase: 29 — VL Validation Infrastructure & BMR Rank Functions. Status: In progress (29-01 + 29-02 + 29-03 + 29-04 done 2026-06-10).**
+**Phase: 29 — VL Validation Infrastructure & BMR Rank Functions. Status: In progress (29-01 + 29-02 + 29-03 + 29-04 + 29-05 done 2026-06-10).**
+**29-05 DONE:** VL determinism regression suite (`tests/test_vl_determinism.py`, 5 `@pytest.mark.vl`
+tests, ~2m42s laptop): fixed-seed determinism across spectral/task/latent-circuit (same seed ->
+posterior means equal within atol 1e-8, bitwise preferred), seed-sensitivity guard, and multi-restart
+reproducibility (pitfall N4: fixed restart-seed schedule -> same winner). Methods note
+`docs/03_methods_reference/vl_determinism_notes.md` documents the within-machine determinism contract +
+non-determinism sources (BLAS order, float64 accumulation, rk4 ODE, FD step N5) + cross-machine caveat.
+VLROBUST-01 delivered. Commits ed71f9c, b0bfd6e.
 **29-04 DONE:** three `method="vl"` benchmark runners (`run_spectral_vl`, `run_task_vl`,
 `run_latent_circuit_vl`) following the `(BenchmarkConfig)->dict` contract, registered additively in
 `RUNNER_REGISTRY`; N=2/1-seed laptop smoke suite (`tests/test_vl_runners_smoke.py`) green in 113s.
@@ -69,6 +76,8 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
 
 ## Decisions
 
+- **[29-05-D1] VL determinism is contracted within-machine at atol 1e-8, NOT enforced via `torch.use_deterministic_algorithms`.** That mode raises on the engine's linalg ops (solve/slogdet/cholesky/matrix_exp); reproducibility is achieved via fixed seeds + identical inputs. Cross-machine (laptop vs M3 BLAS) may differ below atol ~1e-6, so Phase 30 must compare within-machine, not bitwise across machines. Documented in `docs/03_methods_reference/vl_determinism_notes.md`.
+- **[29-05-D2] Multi-restart stays a test-local helper, not an engine feature.** `_multistart_spectral` re-seeds + re-fits from the prior start and selects highest final free energy; pitfall N4 means the restart PATH is reproducible but the selected mode is basin-dependent (not guaranteed global). Engine multi-restart wrapping remains out of scope.
 - **[29-02-D1] rank_connections is purely relative — absolute delta-F is never a pass/fail criterion.** VL Laplace overconfidence (job 55772525: truly-absent edge scored delta_F=-115.9, indistinguishable by sign) drives every reduction deeply negative. Only relative ordering of K single-prune costs + a separation gap (largest consecutive drop on sorted ascending costs) are reported. Avoids pitfall C1 by construction.
 - **[29-02-D2] temper_vl_posterior is a primitive only; calibration deferred to Phase 31.** Temperature scale + symmetrize + loud Cholesky PD guard (ValueError with shape + factor). Default factor 1.0 = backwards-compatible identity; calibrated factor determined against Phase 30 coverage curves.
 - **[20-01-D1] hemodynamic=False as keyword-only after stability_check_every.** No positional break for existing callers; bit-exact backward compat preserved.
@@ -232,18 +241,19 @@ validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
 
 ## Session Continuity
 
-Last session: 2026-06-10 (executed Phase 29 Plan 04)
-Stopped at: Completed 29-04-PLAN.md — three `method="vl"` benchmark runners (`run_spectral_vl`,
-  `run_task_vl`, `run_latent_circuit_vl`) following the `(BenchmarkConfig)->dict` contract,
-  registered additively in `RUNNER_REGISTRY`; N=2/1-seed laptop smoke suite
-  (`tests/test_vl_runners_smoke.py`) green in 113s; fixed a blocking `TaskDCMForward.predict`
-  `integrate_ode` bug (step_size= not options=). VLINFRA-02. Commits 372e203, 6a09579, a731fd5.
-  Prior 29-01/02/03 (commits 9403941/07f7f4b/a2d69c6, 6cbb349/fb7aea7/03fe8f4, bc30477/d12eb84/09c9375):
-  VL config fields + `vl` marker + `MATLAB_PATH`; `rank_connections()` + `temper_vl_posterior()`;
-  C-order CSD roundtrip test + task precision guard.
-Next: execute remaining Phase 29 plan (29-05) via `/gsd:execute-phase 29`.
+Last session: 2026-06-10 (executed Phase 29 Plan 05)
+Stopped at: Completed 29-05-PLAN.md — VL determinism regression suite
+  (`tests/test_vl_determinism.py`, 5 `@pytest.mark.vl` tests, ~2m42s laptop): fixed-seed determinism
+  across spectral/task/latent-circuit (same seed -> posterior means equal within atol 1e-8, bitwise
+  preferred), seed-sensitivity guard, multi-restart reproducibility (pitfall N4). Methods note
+  `docs/03_methods_reference/vl_determinism_notes.md` documents the within-machine determinism contract
+  + non-determinism sources (BLAS order, float64 accumulation, rk4 ODE, FD step N5) + cross-machine
+  caveat. VLROBUST-01. Commits ed71f9c (tests), b0bfd6e (docs). ruff+mypy clean on the new file.
+  Prior 29-04 (commits 372e203, 6a09579, a731fd5): three `method="vl"` runners. 29-01/02/03 prior.
+Next: Phase 29 is the final v0.7.0 infra phase before the Phase 30 recovery sweep; check ROADMAP for
+  whether 29 has further plans, else `/gsd:plan-phase 30`.
   Note: pre-existing failures in tests/test_vl_forward_model_protocol.py task-DCM cases
-  (make_block_stimulus/simulate_task_dcm `dt_sim` signature drift) predate 29-03/29-04 (confirmed on
-  baseline a064e69) — worth a cleanup pass. INFRA reminder: fix the Mutagen `models/` ignore before
-  any v0.7.0 M3 latent-circuit run.
+  (make_block_stimulus/simulate_task_dcm `dt_sim` signature drift) predate 29-03/29-04/29-05 (confirmed
+  on baseline a064e69) — worth a cleanup pass; NOT introduced by 29-05. INFRA reminder: fix the Mutagen
+  `models/` ignore before any v0.7.0 M3 latent-circuit run.
 Resume file: None
