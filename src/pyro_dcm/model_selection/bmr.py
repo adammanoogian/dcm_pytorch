@@ -19,6 +19,7 @@ __all__ = [
     "bmr_circuit_selection",
     "enumerate_reduced_models",
     "make_reduced_prior_zero_connection",
+    "rank_connections",
 ]
 
 
@@ -390,4 +391,158 @@ def bmr_circuit_selection(
         "full_model_rank": full_model_rank,
         "n_candidates": len(results),
         "prunable_indices": prunable_indices,
+    }
+
+
+def _single_prune_costs(
+    posterior_mean: torch.Tensor,
+    posterior_cov: torch.Tensor,
+    prior_mean: torch.Tensor,
+    prior_cov: torch.Tensor,
+    prunable_indices: list[int],
+    shrinkage_variance: float,
+) -> list[dict]:
+    """Score each single-connection reduction (K BMR calls).
+
+    Returns one dict ``{"index": k, "prune_delta_f": delta_f}`` per index
+    in ``prunable_indices``, in input order.
+    """
+    costs: list[dict] = []
+    for k in prunable_indices:
+        r_mean, r_cov = make_reduced_prior_zero_connection(
+            prior_mean,
+            prior_cov,
+            [k],
+            shrinkage_variance=shrinkage_variance,
+        )
+        delta_f, _, _ = bayesian_model_reduction(
+            posterior_mean,
+            posterior_cov,
+            prior_mean,
+            prior_cov,
+            r_mean,
+            r_cov,
+        )
+        costs.append({"index": k, "prune_delta_f": delta_f})
+    return costs
+
+
+def rank_connections(
+    posterior_mean: torch.Tensor,
+    posterior_cov: torch.Tensor,
+    prior_mean: torch.Tensor,
+    prior_cov: torch.Tensor,
+    prunable_indices: list[int],
+    shrinkage_variance: float = 1e-8,
+) -> dict:
+    """Rank connections by single-prune cost (relative BMR, never absolute).
+
+    For each prunable index ``k``, builds a single-connection reduced prior
+    via :func:`make_reduced_prior_zero_connection` and scores it with
+    :func:`bayesian_model_reduction`. This is exactly ``K`` BMR calls (one
+    per index), not the ``2^K`` of :func:`enumerate_reduced_models`. The
+    single-prune ``delta_f`` is the *prune cost*: a more negative value means
+    pruning that connection costs more evidence, i.e. the connection is more
+    essential. Connections are returned ordered most-essential-first.
+
+    Implements the relative-ranking mode of [REF-070] Friston & Penny (2011)
+    Eq. 4-8 BMR delta-F.
+
+    Parameters
+    ----------
+    posterior_mean : torch.Tensor, shape (D,)
+        Mean of the full-model posterior.
+    posterior_cov : torch.Tensor, shape (D, D)
+        Covariance of the full-model posterior.
+    prior_mean : torch.Tensor, shape (D,)
+        Mean of the full-model prior.
+    prior_cov : torch.Tensor, shape (D, D)
+        Covariance of the full-model prior.
+    prunable_indices : list[int]
+        Indices of parameters eligible for pruning (length ``K >= 1``).
+    shrinkage_variance : float, optional
+        Variance for the shrunk parameter in each reduced prior.
+        Default is 1e-8.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys:
+
+        - ``ranked`` : list[dict] -- the per-connection dicts sorted ascending
+          by ``prune_delta_f`` (most-essential / most-negative first). Each
+          entry has keys ``index``, ``prune_delta_f``, ``rank`` (1-based), and
+          ``gap_to_next`` (``prune_delta_f`` of the next entry minus this one,
+          a non-negative number, or ``None`` for the last entry).
+        - ``separation_gap`` : float -- the maximum ``gap_to_next`` across the
+          list, the largest consecutive drop in essentiality.
+        - ``separation_after_rank`` : int -- the 1-based rank after which
+          ``separation_gap`` occurs (the cut between essential and
+          non-essential edges).
+        - ``prunable_indices`` : list[int] -- echo of input for provenance.
+
+    Raises
+    ------
+    ValueError
+        If ``prunable_indices`` is empty, or any index is out of range for
+        ``posterior_mean.shape[0]``.
+
+    Notes
+    -----
+    Absolute delta-F is deliberately NOT used as a pass/fail pruning
+    criterion. Under VL the Laplace posterior is sharply overconfident at high
+    SNR (posterior std ~0.001-0.01x the prior std), so the reduced-model
+    delta-F is driven deeply negative for *every* connection -- present or
+    absent alike (cluster job 55772525: a truly-absent edge scored
+    delta_F = -115.9, indistinguishable from present edges by sign). Only the
+    *relative ordering* of prune costs and the *separation gap* between
+    essential and non-essential edges are meaningful. Inputs are cast to
+    float64 internally by :func:`bayesian_model_reduction`.
+
+    References
+    ----------
+    Friston, K. J. & Penny, W. D. (2011). Post hoc Bayesian model
+    selection. NeuroImage, 56(4), 2089-2099.
+    """
+    k = len(prunable_indices)
+    if k == 0:
+        raise ValueError("rank_connections requires >=1 prunable index; got 0")
+    d = posterior_mean.shape[0]
+    for idx in prunable_indices:
+        if idx < 0 or idx >= d:
+            raise ValueError(
+                f"prunable index {idx} out of range; "
+                f"expected 0 <= index < {d}"
+            )
+
+    costs = _single_prune_costs(
+        posterior_mean,
+        posterior_cov,
+        prior_mean,
+        prior_cov,
+        prunable_indices,
+        shrinkage_variance,
+    )
+
+    # Sort ascending: most-essential (most-negative prune cost) first.
+    ranked = sorted(costs, key=lambda c: c["prune_delta_f"])
+
+    separation_gap = 0.0
+    separation_after_rank = len(ranked)
+    for i, entry in enumerate(ranked):
+        entry["rank"] = i + 1
+        if i + 1 < len(ranked):
+            gap = ranked[i + 1]["prune_delta_f"] - entry["prune_delta_f"]
+            entry["gap_to_next"] = gap
+            if gap > separation_gap:
+                separation_gap = gap
+                separation_after_rank = i + 1
+        else:
+            entry["gap_to_next"] = None
+
+    return {
+        "ranked": ranked,
+        "separation_gap": float(separation_gap),
+        "separation_after_rank": int(separation_after_rank),
+        "prunable_indices": list(prunable_indices),
     }
