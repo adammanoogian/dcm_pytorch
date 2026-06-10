@@ -532,6 +532,11 @@ evidence.
 **Branch:** `gsd/phase-30-recovery-matrix-sweep` (proposed)
 **Depends on:** Phase 29 (VL runners + VL-aware `BenchmarkConfig` + metric helpers).
 **Requirements:** VLREC-01, VLREC-02, VLREC-03, VLREC-04, VLROBUST-03
+**Plans:** 3 plans (3 waves)
+Plans:
+- [ ] 30-01-PLAN.md — Hardened per-cell metric assembler (per-region R2, masked sign recovery, 95% coverage, RMSE, std_post/std_prior shrinkage) + near-boundary-A exclusion band [-0.05, 0] + per-model SNR injection + unit tests (laptop) (VLREC-02, VLREC-03)
+- [ ] 30-02-PLAN.md — Recovery-matrix grid driver + env-driven single-cell entrypoint + SLURM array sbatch (no-pip, dt>=0.1) + local <3min faithfulness pre-check + SUBMIT small grid (N in {2,4} x SNR in {1,3} x 3 models, >=10 seeds = 120 fits) to M3 (records job id) (VLREC-01, VLREC-03)
+- [ ] 30-03-PLAN.md — POST-RESULTS harvest+aggregate: documented per-cell thresholds + classifier (pass | identifiability-limit-with-evidence, no silent failures) + matrix CSV/JSON + eig_clamp/boundary regime characterization + report (VLREC-04, VLROBUST-03)
 
 **Success Criteria** (what must be TRUE):
 
@@ -605,7 +610,7 @@ round-trip test). Independent of Phase 30; runs concurrently.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 29. VL Validation Infrastructure & BMR Rank Functions | 5/5 | ✅ Complete (verified 6/6, 17/17 vl tests) | 2026-06-10 |
-| 30. Recovery Matrix Sweep (M3 Cluster) | 0/? | Not started | -- |
+| 30. Recovery Matrix Sweep (M3 Cluster) | 0/3 | Planned (3 plans, 3 waves) | -- |
 | 31. BMR Validation & Posterior Tempering (Exploratory) | 0/? | Not started | -- |
 | 32. SPM12 Cross-Validation (Local / MATLAB) | 0/? | Not started | -- |
 
