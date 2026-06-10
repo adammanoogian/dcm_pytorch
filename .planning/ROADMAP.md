@@ -610,7 +610,7 @@ round-trip test). Independent of Phase 30; runs concurrently.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 29. VL Validation Infrastructure & BMR Rank Functions | 5/5 | ✅ Complete (verified 6/6, 17/17 vl tests) | 2026-06-10 |
-| 30. Recovery Matrix Sweep (M3 Cluster) | 3/3 | Complete 2026-06-10 (matrix harvested: 5 PASS, 1 ident-limit, 4 errored task cells surfaced; eig_clamp regime characterized) | -- |
+| 30. Recovery Matrix Sweep (M3 Cluster) | 3/3 | ⚠️ Harness complete; spectral+latent VALIDATED (5 PASS, 1 ident-limit); task variant BLOCKED (4 cells: simulate_task_dcm underflow) → gap. job 56346424 | 2026-06-11 |
 | 31. BMR Validation & Posterior Tempering (Exploratory) | 0/? | Not started | -- |
 | 32. SPM12 Cross-Validation (Local / MATLAB) | 0/? | Not started | -- |
 

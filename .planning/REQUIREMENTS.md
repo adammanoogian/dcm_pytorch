@@ -296,11 +296,11 @@ Explicit anti-features for v0.7.0 (documented to prevent scope creep).
 | VLREC-05 | Phase 29 | Complete |
 | VLROBUST-01 | Phase 29 | Complete |
 | VLROBUST-02 | Phase 29 | Complete |
-| VLREC-01 | Phase 30 | Pending |
-| VLREC-02 | Phase 30 | Pending |
-| VLREC-03 | Phase 30 | Pending |
-| VLREC-04 | Phase 30 | Pending |
-| VLROBUST-03 | Phase 30 | Pending |
+| VLREC-01 | Phase 30 | Complete |
+| VLREC-02 | Phase 30 | Complete |
+| VLREC-03 | Phase 30 | Complete |
+| VLREC-04 | Phase 30 | Partial (spectral+latent verdicts done; task variant blocked by simulate_task_dcm underflow — gap) |
+| VLROBUST-03 | Phase 30 | Complete |
 | VLBMR-01 | Phase 31 | Pending |
 | VLBMR-02 | Phase 31 | Pending |
 | VLBMR-03 | Phase 31 | Pending |
