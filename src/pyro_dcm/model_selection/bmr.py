@@ -20,6 +20,7 @@ __all__ = [
     "enumerate_reduced_models",
     "make_reduced_prior_zero_connection",
     "rank_connections",
+    "temper_vl_posterior",
 ]
 
 
@@ -546,3 +547,67 @@ def rank_connections(
         "separation_after_rank": int(separation_after_rank),
         "prunable_indices": list(prunable_indices),
     }
+
+
+def temper_vl_posterior(
+    sigma_post: torch.Tensor,
+    tempering_factor: float = 1.0,
+) -> torch.Tensor:
+    """Scale a VL posterior covariance by a temperature, guarding PD.
+
+    Multiplies the posterior covariance by ``tempering_factor`` and asserts
+    the result is positive-definite via a Cholesky factorization, raising
+    loudly if it is not. This is an exploratory primitive only -- the factor
+    is NOT calibrated here.
+
+    Parameters
+    ----------
+    sigma_post : torch.Tensor, shape (D, D)
+        VL posterior covariance to temper.
+    tempering_factor : float, optional
+        Positive multiplicative temperature. Default is 1.0 (identity, i.e.
+        backwards-compatible no-op).
+
+    Returns
+    -------
+    torch.Tensor, shape (D, D)
+        The symmetrized tempered covariance,
+        ``0.5 * (T + T.T)`` with ``T = tempering_factor * sigma_post``,
+        in float64.
+
+    Raises
+    ------
+    ValueError
+        If ``tempering_factor <= 0``, or if the tempered covariance is not
+        positive-definite (Cholesky fails). The PD-failure message includes
+        the matrix shape and the ``tempering_factor``.
+
+    Notes
+    -----
+    The motivation is that VL's ReML M-step underestimates the posterior
+    covariance at high SNR (see pitfall C1 / cluster job 55772525). A
+    ``tempering_factor > 1`` inflates the covariance to partially restore an
+    absolute-delta-F BMR regime. The calibrated factor is determined
+    empirically in Phase 31 against the Phase 30 coverage curves; the default
+    ``1.0`` is the identity transform and is backwards-compatible.
+    """
+    if tempering_factor <= 0:
+        raise ValueError(
+            f"tempering_factor must be > 0; got {tempering_factor}"
+        )
+
+    sigma = sigma_post.to(torch.float64)
+    sigma_tempered = tempering_factor * sigma
+    sigma_tempered = 0.5 * (sigma_tempered + sigma_tempered.T)
+
+    try:
+        torch.linalg.cholesky(sigma_tempered)
+    except torch.linalg.LinAlgError as err:
+        raise ValueError(
+            f"Tempered posterior covariance (shape "
+            f"{tuple(sigma_tempered.shape)}, "
+            f"tempering_factor={tempering_factor}) is not positive-definite "
+            f"(Cholesky failed)."
+        ) from err
+
+    return sigma_tempered
