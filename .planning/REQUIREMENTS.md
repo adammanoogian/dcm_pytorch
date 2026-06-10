@@ -288,16 +288,39 @@ Explicit anti-features for v0.7.0 (documented to prevent scope creep).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VLINFRA-01..05 | TBD (roadmap) | Pending |
-| VLREC-01..05 | TBD (roadmap) | Pending |
-| VLBMR-01..03 | TBD (roadmap) | Pending |
-| VLSPM-01..03 | TBD (roadmap) | Pending |
-| VLROBUST-01..03 | TBD (roadmap) | Pending |
+| VLINFRA-01 | Phase 29 | Pending |
+| VLINFRA-02 | Phase 29 | Pending |
+| VLINFRA-03 | Phase 29 | Pending |
+| VLINFRA-04 | Phase 29 | Pending |
+| VLINFRA-05 | Phase 29 | Pending |
+| VLREC-05 | Phase 29 | Pending |
+| VLROBUST-01 | Phase 29 | Pending |
+| VLROBUST-02 | Phase 29 | Pending |
+| VLREC-01 | Phase 30 | Pending |
+| VLREC-02 | Phase 30 | Pending |
+| VLREC-03 | Phase 30 | Pending |
+| VLREC-04 | Phase 30 | Pending |
+| VLROBUST-03 | Phase 30 | Pending |
+| VLBMR-01 | Phase 31 | Pending |
+| VLBMR-02 | Phase 31 | Pending |
+| VLBMR-03 | Phase 31 | Pending |
+| VLSPM-01 | Phase 32 | Pending |
+| VLSPM-02 | Phase 32 | Pending |
+| VLSPM-03 | Phase 32 | Pending |
 
-**Coverage:** 17 v0.7.0 requirements; phase mapping filled by the roadmapper.
+**Coverage:** 19 v0.7.0 requirement IDs (VLINFRA-01..05, VLREC-01..05, VLBMR-01..03,
+VLSPM-01..03, VLROBUST-01..03); 19/19 mapped to exactly one phase; 0 unmapped, 0 duplicated.
+
+**Per-phase distribution:**
+- Phase 29 (VL Validation Infrastructure & BMR Rank Functions): 8 reqs (VLINFRA-01..05,
+  VLREC-05, VLROBUST-01, VLROBUST-02)
+- Phase 30 (Recovery Matrix Sweep, M3 cluster): 5 reqs (VLREC-01..04, VLROBUST-03)
+- Phase 31 (BMR Validation & Posterior Tempering): 3 reqs (VLBMR-01..03)
+- Phase 32 (SPM12 Cross-Validation, local/MATLAB): 3 reqs (VLSPM-01..03)
 
 ---
 *Requirements defined: 2026-04-17*
 *Last updated: 2026-06-10 — v0.7.0 Variational Laplace Validation requirements added (17 across
 VLINFRA/VLREC/VLBMR/VLSPM/VLROBUST). VL-validation-led; real-data + SBI deferred. v0.3.0 RECOV
 (Phase 16.1) remains pending; v0.4.0/v0.5.0 complete.*
+*Last updated: 2026-06-10 — v0.7.0 traceability mapped to Phases 29-32 by roadmapper (19 IDs; 100% coverage). 29=infra+BMR helpers+robustness guards, 30=recovery sweep (M3), 31=BMR validation+tempering, 32=SPM12 cross-validation (local).*

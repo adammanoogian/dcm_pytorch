@@ -9,11 +9,15 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 
 ## Current Position
 
-**Milestone:** v0.7.0 Variational Laplace Validation — **STARTED 2026-06-10 (VL-validation-led)**.
-Phase: Not started (defining requirements). Status: Defining requirements.
-Confirmed scope: synthetic recovery matrix (N×SNR), SPM12 cross-validation (user has MATLAB),
-VL+BMR comparison + overconfidence fix, numerical robustness. **No real data; SBI deferred.**
-Phase numbering continues from 28 → v0.7.0 starts at **Phase 29**.
+**Milestone:** v0.7.0 Variational Laplace Validation — **ROADMAPPED 2026-06-10 (VL-validation-led)**.
+**Phase: 29 — VL Validation Infrastructure & BMR Rank Functions. Status: Not started / ready to plan.**
+Roadmap drafted: 4 phases (29-32), 19/19 requirements mapped. Critical path 29 -> 30 -> 31; Phase
+32 (SPM12, local/MATLAB) runs in parallel with Phase 30 (recovery sweep, M3 cluster). Confirmed
+scope: synthetic recovery matrix (N×SNR), SPM12 cross-validation (user has MATLAB), VL+BMR
+comparison + overconfidence fix (relative ranking only), numerical robustness. **No real data;
+SBI deferred to v0.8.0+.** Phase numbering continues from 28 → v0.7.0 = Phases 29-32.
+**Next:** `/gsd:plan-phase 29`. **PREREQUISITE for Phase 30 latent-circuit M3 runs:** fix the
+Mutagen `models/` ignore (recreate session with anchored ignores).
 
 <details><summary>v0.6.0 — SHIPPED 2026-06-10 (scope-cut), archived + tagged</summary>
 **Phase:** All 34 plans executed (Phases 20-27 + retroactive Phase 28 VL engine).

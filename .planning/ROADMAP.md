@@ -8,6 +8,7 @@
 - **v0.4.0 Circuit Explorer** - Phase 17+ (defined 2026-04-24; not yet started)
 - **v0.5.0 MNE-Python Integration** - Phases 18-19 (in progress; started 2026-05-21)
 - ✅ **v0.6.0 Latent Circuit DCM** - Phases 20-28 (shipped 2026-06-10, scope-cut; real-data → v0.7.0)
+- 📋 **v0.7.0 Variational Laplace Validation** - Phases 29-32 (defined 2026-06-10; not yet started)
 
 <details>
 <summary>v0.1.0 Foundation (Phases 1-8) - SHIPPED 2026-04-03</summary>
@@ -413,6 +414,196 @@ Full archive: `.planning/milestones/v0.6.0-ROADMAP.md` · Audit: `.planning/mile
 
 ---
 
+## Current Milestone: v0.7.0 Variational Laplace Validation
+
+**Status:** Defined 2026-06-10 (not yet started; ready to plan Phase 29).
+**Phases:** 29-32 (4 phases)
+**Requirements covered:** 19/19 v0.7.0 requirements (VLINFRA-01..05, VLREC-01..05,
+VLBMR-01..03, VLSPM-01..03, VLROBUST-01..03) mapped to exactly one phase each.
+
+### Overview
+
+v0.7.0 is a **validation-breadth** milestone, not a new-capability one. The Variational
+Laplace (VL) engine (SPM12 `spm_nlsi_GN` port, shipped retroactively as Phase 28), the BMR
+model-selection module, and all three forward models (SpectralDCM, TaskDCM, LatentCircuit)
+already exist and pass narrow smoke tests. v0.7.0 proves the engine is trustworthy across a
+Cartesian product of network sizes, SNR levels, and forward models -- and that it agrees with
+MATLAB SPM12 -- **before any real-data application** (real data and SBI calibration are
+explicitly deferred to v0.8.0+). The work is almost entirely new glue code and test harnesses
+over a frozen foundation: no new dependencies; the only `pyproject.toml` change is a new `vl`
+pytest marker.
+
+The single empirical finding that shapes the whole milestone is the **BMR overconfidence
+failure** (cluster job 55772525): VL posterior std is ~0.001-0.01x prior std at high SNR, so
+absolute-ΔF pruning is structurally broken. The only valid model-comparison mode is
+**relative ranking + separation gap**; posterior tempering is exploratory and must be
+calibrated from the Phase 30 coverage output before it can be trusted.
+
+**Critical path:** Phase 29 (infra + BMR helpers, laptop, dependency root) -> Phase 30
+(recovery-matrix sweep, M3 cluster) -> Phase 31 (BMR validation + tempering, depends on Phase
+30 coverage). **Phase 32 (SPM12 cross-validation, local/MATLAB) runs in parallel with Phase
+30** -- it is laptop-only and independent of the cluster sweep.
+
+**Milestone acceptance gate:** (1) the recovery matrix passes documented per-cell thresholds
+across N x SNR x {spectral, task, latent-circuit} -- or documents identifiability limits with
+evidence (no silent failures); (2) BMR relative ranking recovers true circuit structure with a
+reported separation gap and agrees with brute-force ELBO; (3) VL agrees with SPM12 `spm_nlsi_GN`
+on >=1 spectral problem in free-parameter space (`Ep` within ~10%, F within ~5%, ranking
+agreement); (4) VL convergence/determinism and numerical-robustness guards pass across all three
+forward models. **Never** absolute-ΔF BMR, element-wise `Cp`, or absolute-F-across-models.
+
+### Cross-cutting constraints (apply to multiple phases)
+
+- **M3 cluster routing.** Every multi-seed recovery sweep (Phase 30) routes to the Monash M3
+  cluster via `sbatch`; laptop is for smoke tests (N=2, 1 seed) only. No `pip install` inside
+  SLURM array jobs.
+- **Mutagen `models/` ignore is a PREREQUISITE for latent-circuit cluster runs.** The unanchored
+  `models/` Mutagen ignore silently excludes `src/pyro_dcm/models/` from M3 sync; only
+  `latent_circuit_vl` imports from that package (`LC_*_PRIOR_VARIANCE`). The session must be
+  recreated with anchored ignores (todo `mutagen-models-ignore`) BEFORE any latent-circuit M3
+  job in Phase 30. Spectral/task runners are unaffected.
+- **SPM12 prior matching (Phase 32).** `hyperprior_mean = hE = 8.0`, `hyperprior_precision =
+  1/128`, `prior_mean_a_offset = a_mask/128`; compare in **free-parameter space**, never
+  parameterised A. **Never** compare element-wise `Cp` nor absolute F across engines -- model
+  ranking + matched-problem F only.
+- **Recovery metric hardening (Phases 30, 31).** Per-region R² (never variance-pooled),
+  masked sign recovery (`|true| > threshold`, never `sign(0)`), CI coverage, RMSE, and
+  identifiability shrinkage `std_post/std_prior`.
+- **Stability-boundary exclusion (Phase 30).** Exclude near-boundary A (max Re eig in
+  [-0.05, 0]) to avoid the `eig_clamp` non-injectivity confound; **task DCM enforces dt >= 0.1**.
+
+### Phases
+
+#### Phase 29: VL Validation Infrastructure & BMR Rank Functions
+
+**Goal:** The benchmark and BMR layers expose everything downstream validation needs -- three
+registered VL runners, VL-aware `BenchmarkConfig`, the corrected relative-ranking BMR API, a
+PD-safe posterior-tempering primitive, and the precision-intractability / dt guards -- with VL
+convergence + multi-restart determinism proven across all three forward models. Laptop-runnable
+dependency root; no cluster requirement.
+
+**Branch:** `gsd/phase-29-vl-validation-infra` (proposed)
+**Depends on:** v0.6.0 frozen foundation (Phase 28 VL engine, `model_selection/bmr.py`, v0.2.0
+`benchmarks/` runner registry + `.npz` fixtures + metrics).
+**Requirements:** VLINFRA-01, VLINFRA-02, VLINFRA-03, VLINFRA-04, VLINFRA-05, VLREC-05,
+VLROBUST-01, VLROBUST-02
+
+**Success Criteria** (what must be TRUE):
+
+  1. `BenchmarkConfig` gains optional VL fields (`max_iter`, `hyperprior_mean`,
+     `hyperprior_precision`, `prior_mean_a_offset`) with `None` defaults; every existing
+     benchmark caller and test passes unchanged (zero behavior change) (VLINFRA-01).
+  2. Three VL runners (`spectral_vl`, `task_vl`, `latent_circuit_vl`) are registered under
+     `method="vl"` in `RUNNER_REGISTRY`, reuse the v0.2.0 `.npz` fixture + metrics
+     infrastructure, and smoke-test green at N=2, 1 seed on laptop. The `vl` pytest marker is
+     registered in `pyproject.toml` and `MATLAB_PATH` is centralized in `config.py` (VLINFRA-02,
+     VLINFRA-05).
+  3. `rank_connections()` runs K single-connection BMR calls and returns connections ranked by
+     prune cost with a separation-gap statistic; unit tests confirm the ranking and gap on a
+     known ground-truth circuit (VLINFRA-03, builds the relative-ranking-from-the-start mode
+     that avoids the absolute-ΔF pitfall C1).
+  4. `temper_vl_posterior()` scales the VL posterior covariance by a temperature and asserts
+     positive-definiteness (Cholesky) on the tempered covariance, raising loud on failure
+     (VLINFRA-04).
+  5. VL convergence + multi-restart **determinism** regression tests pass across all three
+     forward models (fixed seed -> stable result; non-determinism sources documented), and the
+     task-DCM precision-matrix **intractability guard** fails loud with expected-vs-actual matrix
+     size when `dt x duration` exceeds a tractable T, with the `dt >= 0.1` floor documented
+     (VLROBUST-01, VLROBUST-02).
+  6. A C-order CSD round-trip regression test is added to the suite, guarding the
+     column-major<->row-major / complex-CSD indexing bug class **before any SPM
+     cross-validation run** (VLREC-05).
+
+#### Phase 30: Recovery Matrix Sweep (M3 Cluster)
+
+**Goal:** A per-cell recovery matrix over N x SNR x {spectral, task, latent-circuit} (>=10
+seeds/cell) is computed on M3 with the hardened metric suite, producing the coverage and
+identifiability output that every downstream diagnostic and the tempering calibration consume --
+either passing documented per-cell thresholds or documenting identifiability limits with
+evidence.
+
+**Branch:** `gsd/phase-30-recovery-matrix-sweep` (proposed)
+**Depends on:** Phase 29 (VL runners + VL-aware `BenchmarkConfig` + metric helpers).
+**Requirements:** VLREC-01, VLREC-02, VLREC-03, VLREC-04, VLROBUST-03
+
+**Success Criteria** (what must be TRUE):
+
+  1. The sweep executes on the **M3 cluster** over N x SNR x {spectral, task, latent-circuit}
+     with >=10 seeds per cell, emitting per-cell JSON/CSV; latent-circuit jobs run only after the
+     Mutagen `models/` sync fix is confirmed (VLREC-01).
+  2. Per-cell metrics use **per-region R² (not variance-pooled)**, **masked** sign recovery
+     (`|true| > threshold`), 95% CI coverage, RMSE, and identifiability shrinkage
+     `std_post/std_prior` -- hardened against the `sign(0)` and pooled-R² artifacts (VLREC-02).
+  3. The recovery design **excludes near-stability-boundary A** (max Re eig in [-0.05, 0]) to
+     avoid the `eig_clamp` non-injectivity confound, and **task DCM enforces dt >= 0.1** (VLREC-03).
+  4. Every cell either **passes its documented threshold** or its **identifiability limit is
+     documented with evidence** (no silent failures); the eig_clamp / stability-boundary regime
+     is characterized -- recovery degradation near the boundary is documented and the
+     non-injective regime is flagged (VLREC-04, VLROBUST-03).
+
+#### Phase 31: BMR Validation & Posterior Tempering (Exploratory)
+
+**Goal:** Bayesian Model Reduction is validated as a defensible model-comparison tool -- relative
+evidence ranking recovers the true circuit structure with a reported separation gap and agrees
+with brute-force ELBO -- with posterior tempering offered only as an exploratory, PD-safe restore
+of an absolute-ΔF regime calibrated against the Phase 30 coverage output.
+
+**Branch:** `gsd/phase-31-bmr-validation-tempering` (proposed)
+**Depends on:** Phase 29 (`rank_connections` + `temper_vl_posterior`) and Phase 30 (recovery
+posteriors + coverage curves for tempering calibration).
+**Requirements:** VLBMR-01, VLBMR-02, VLBMR-03
+
+**Success Criteria** (what must be TRUE):
+
+  1. BMR **relative-evidence ranking** recovers the true circuit structure (top-K essential edges
+     == true edges) on synthetic ground truth, with the separation gap reported -- the primary,
+     defensible model-comparison result (VLBMR-01).
+  2. BMR-on-VL agrees with **brute-force ELBO** model comparison on a small model set, validating
+     the analytic approximation (VLBMR-02).
+  3. Posterior tempering is reported as **exploratory only**: tempered and untempered rankings are
+     shown side by side, the temperature is calibrated against Phase 30 coverage, and the tempered
+     covariance is asserted PD (Cholesky); tempering is documented as NOT a headline claim and
+     absolute-ΔF is never used as a pass/fail criterion (VLBMR-03, avoids pitfall C1/C2).
+
+#### Phase 32: SPM12 Cross-Validation (Local / MATLAB)
+
+**Goal:** VL output is cross-validated against MATLAB `spm_nlsi_GN` on a prior-matched spectral
+DCM problem, agreeing on posterior means in free-parameter space, on matched-problem free energy,
+and on model ranking -- reusing the existing `validation/` SPM bridge. Runs locally (MATLAB
+required) and **in parallel with the Phase 30 cluster sweep**.
+
+**Branch:** `gsd/phase-32-spm12-cross-validation` (proposed)
+**Depends on:** Phase 29 (VL-aware `BenchmarkConfig` prior-matching fields + C-order CSD
+round-trip test). Independent of Phase 30; runs concurrently.
+**Requirements:** VLSPM-01, VLSPM-02, VLSPM-03
+
+**Success Criteria** (what must be TRUE):
+
+  1. VL output is cross-validated vs MATLAB `spm_nlsi_GN` on >=1 spectral DCM problem,
+     **prior-matched** (`hE = 8.0`, `prior_mean_a_offset = a_mask/128`, comparison in
+     **free-parameter space**) (VLSPM-01, avoids pitfalls S1+S2).
+  2. `Ep` agrees within ~10% relative tolerance with model-ranking agreement, and free energy
+     agrees (VL `free_energy` == SPM `DCM.F`, ~5%) on the **matched** problem; the suite
+     **never** compares element-wise `Cp` nor absolute F across models (VLSPM-02, avoids pitfall
+     S3).
+  3. The existing `validation/` SPM pipeline (`export_to_mat`, MATLAB batch, `compare_results`)
+     is reused, extended only by `run_vl_validation.py` + `compare_free_energies()`; the C-order
+     CSD round-trip test (Phase 29) is green before any comparison run (VLSPM-03, avoids matrix
+     layout pitfall S4).
+
+### Progress
+
+**Execution Order:** 29 -> 30 -> 31, with 32 in parallel with 30 (32 depends only on 29).
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 29. VL Validation Infrastructure & BMR Rank Functions | 0/? | Not started | -- |
+| 30. Recovery Matrix Sweep (M3 Cluster) | 0/? | Not started | -- |
+| 31. BMR Validation & Posterior Tempering (Exploratory) | 0/? | Not started | -- |
+| 32. SPM12 Cross-Validation (Local / MATLAB) | 0/? | Not started | -- |
+
+---
+
 ## Cumulative Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -439,9 +630,14 @@ Full archive: `.planning/milestones/v0.6.0-ROADMAP.md` · Audit: `.planning/mile
 | 26. SBI for Spectral DCM | v0.6.0 | 2/2 | ❌ SBC 2/9; calibration → v0.7.0 | 2026-05-31 |
 | 27. Publication Artifacts | v0.6.0 | 3/3 | ✅ Delivered (synthetic results) | 2026-05-31 |
 | 28. Variational Laplace Inference Engine (retroactive) | v0.6.0 | n/a | ✅ Delivered (SPM12 spm_nlsi_GN + ForwardModel) | 2026-06-09 |
+| 29. VL Validation Infrastructure & BMR Rank Functions | v0.7.0 | 0/? | Not started | -- |
+| 30. Recovery Matrix Sweep (M3 Cluster) | v0.7.0 | 0/? | Not started | -- |
+| 31. BMR Validation & Posterior Tempering (Exploratory) | v0.7.0 | 0/? | Not started | -- |
+| 32. SPM12 Cross-Validation (Local / MATLAB) | v0.7.0 | 0/? | Not started | -- |
 
 ---
 *Roadmap created: 2026-04-07*
+*Last updated: 2026-06-10 -- v0.7.0 Variational Laplace Validation added (Phases 29-32; 19 reqs across VLINFRA/VLREC/VLBMR/VLSPM/VLROBUST). Critical path 29->30->31; 32 parallel to 30. Validation-led; real-data + SBI deferred to v0.8.0+.*
 *Last updated: 2026-06-10 -- v0.6.0 audited + scope-cut. All 34 plans executed; goal-backward
 audit (`.planning/v0.6.0-AUDIT.md`) found real-data claims (Phase 22/24/26) undelivered →
 deferred to v0.7.0 (not failed). Added Phase 28 (retroactive VL/SPM12 inference-engine
