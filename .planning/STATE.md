@@ -10,7 +10,11 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 **Milestone:** v0.7.0 Variational Laplace Validation — **ROADMAPPED 2026-06-10 (VL-validation-led)**.
-**Phase: 29 — VL Validation Infrastructure & BMR Rank Functions. Status: In progress (1/5 plans — 29-03 numerical-robustness guards done 2026-06-10).**
+**Phase: 29 — VL Validation Infrastructure & BMR Rank Functions. Status: In progress (29-02 + 29-03 done 2026-06-10).**
+**29-02 DONE:** `rank_connections()` (relative single-prune BMR ranking + separation gap; absolute
+delta-F never a pass/fail rule per job 55772525) and `temper_vl_posterior()` (temperature scale +
+loud Cholesky PD guard, calibration deferred to Phase 31) added to `model_selection/bmr.py`,
+re-exported, 5 vl unit tests pass on a known circuit. VLINFRA-03/04 delivered.
 Roadmap drafted: 4 phases (29-32), 19/19 requirements mapped. Critical path 29 -> 30 -> 31; Phase
 32 (SPM12, local/MATLAB) runs in parallel with Phase 30 (recovery sweep, M3 cluster). Confirmed
 scope: synthetic recovery matrix (N×SNR), SPM12 cross-validation (user has MATLAB), VL+BMR
@@ -56,6 +60,8 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
 
 ## Decisions
 
+- **[29-02-D1] rank_connections is purely relative — absolute delta-F is never a pass/fail criterion.** VL Laplace overconfidence (job 55772525: truly-absent edge scored delta_F=-115.9, indistinguishable by sign) drives every reduction deeply negative. Only relative ordering of K single-prune costs + a separation gap (largest consecutive drop on sorted ascending costs) are reported. Avoids pitfall C1 by construction.
+- **[29-02-D2] temper_vl_posterior is a primitive only; calibration deferred to Phase 31.** Temperature scale + symmetrize + loud Cholesky PD guard (ValueError with shape + factor). Default factor 1.0 = backwards-compatible identity; calibrated factor determined against Phase 30 coverage curves.
 - **[20-01-D1] hemodynamic=False as keyword-only after stability_check_every.** No positional break for existing callers; bit-exact backward compat preserved.
 - **[20-01-D2] simulate_latent_circuit reuses _normalize_B_list/_normalize_stimulus_to_input_fn from task_simulator.** DRY: bilinear path is identical; private helpers imported directly.
 - **[20-01-D3] Initial state torch.zeros(N) not make_initial_state (5N).** make_initial_state returns wrong shape for hemodynamic=False mode.
@@ -212,12 +218,15 @@ validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
 
 ## Session Continuity
 
-Last session: 2026-06-10 (executed Phase 29 Plan 03 — VL numerical-robustness guards)
-Stopped at: Completed 29-03-PLAN.md. Added C-order CSD round-trip regression test (VLREC-05,
-  guards commit 64e326f) + TaskDCMForward.build_precision intractability guard (VLROBUST-02,
-  expected-vs-actual ValueError, dt>=0.1 floor) + 2 regression tests; registered `vl` marker.
-  Commits bc30477, d12eb84, 09c9375. Phase 29 now 1/5 plans complete.
-Next: execute remaining Phase 29 plans (29-01, 29-02, 29-04, 29-05) via `/gsd:execute-phase 29`.
+Last session: 2026-06-10 (executed Phase 29 Plans 02 + 03 in parallel)
+Stopped at: Completed 29-02-PLAN.md — `rank_connections()` (relative single-prune BMR ranking +
+  separation gap, VLINFRA-03) and `temper_vl_posterior()` (temperature scale + loud Cholesky PD
+  guard, VLINFRA-04) added to `model_selection/bmr.py`, re-exported, 5 vl unit tests pass.
+  Commits 6cbb349, fb7aea7, 03fe8f4. Also completed 29-03-PLAN.md: C-order CSD round-trip
+  regression test (VLREC-05, guards commit 64e326f) + TaskDCMForward.build_precision intractability
+  guard (VLROBUST-02, expected-vs-actual ValueError, dt>=0.1 floor) + 2 regression tests; registered
+  `vl` marker. Commits bc30477, d12eb84, 09c9375.
+Next: execute remaining Phase 29 plans (29-01, 29-04, 29-05) via `/gsd:execute-phase 29`.
   Note: pre-existing failures in tests/test_vl_forward_model_protocol.py task-DCM cases
   (make_block_stimulus/simulate_task_dcm signature drift) are unrelated to 29-03 — worth a
   cleanup pass. INFRA reminder: fix the Mutagen `models/` ignore before any v0.7.0 M3 run.
