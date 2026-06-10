@@ -22,8 +22,9 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
   - ⚠️ **Synthetic/infra-only → v0.7.0:** Phase 22 (pivoted from real Cam-CAN to synthetic OU;
     gates 1-2 unmet) · Phase 24 (real extractors + real parcellation built, never run on real
     weights; M/EEG pipeline scripts deleted in merge).
-  - ⚠️ **In-scope, open:** Phase 25 HVAE-02 sign recovery **indeterminate** — masked-metric fix
-    committed but never recomputed on the checkpoint (the one v0.6.0-closing action; see todo).
+  - ✅ **Phase 25 HVAE-02 CONFIRMED 2026-06-10** — eval-only re-run (job 56331599) on the trained
+    checkpoint reproduced RMSE 0.0761 + unmasked 0.4425 exactly, and **masked sign recovery 0.7745
+    > 0.6 → PASS**. Phase 25 now 4/4. The 0.4425 was purely the `sign(0)` artifact.
   - ❌ **→ v0.7.0:** Phase 26 SBI SBC failed 2/9 (structural); real-M/EEG demo unplanned.
 **Last activity:** 2026-06-10 -- Milestone audit + scope-cut: ROADMAP reconciled (stale
 "0/N Planned" → audited status), Phase 28 VL consolidation written, 4 gaps triaged.
@@ -101,10 +102,12 @@ re-eval** (a <5-min M3 job, or accept-with-caveat). Recommended next action: opt
 HVAE-02, then `/gsd:complete-milestone`. Detail retained below.
 
 **Triage summary:**
-1. **[20-05]** ✅ closed (VL). 2. **[25/HVAE-02]** ⚠️ in-scope, indeterminate — eval-only re-run
-to confirm (~0.71 masked, expected pass). 3. **[26/SBI-03]** → v0.7.0 Phase D (structural, not a
-v0.6.0 deliverable). 4. **[24-01 parcellation]** ✅ No-Placeholders violation resolved; runtime
+1. **[20-05]** ✅ closed (VL). 2. **[25/HVAE-02]** ✅ CONFIRMED 2026-06-10 (masked 0.7745, job
+56331599) — Phase 25 now 4/4. 3. **[26/SBI-03]** → v0.7.0 Phase D (structural, not a v0.6.0
+deliverable). 4. **[24-01 parcellation]** ✅ No-Placeholders violation resolved; runtime
 validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
+
+**No remaining in-scope blockers — v0.6.0 is clean for `/gsd:complete-milestone`.**
 
 <details><summary>Original 4-gap analysis (pre-audit, 2026-06-09 — retained)</summary>
 
@@ -169,15 +172,25 @@ validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
 
 ### Pending Todos
 
-6 pending — see `.planning/todos/pending/`.
+6 pending — see `.planning/todos/pending/`. (HVAE-02 sign-recovery todo → `done/` 2026-06-10.)
+- **Mutagen `models/` ignore (HIGH, INFRA)** — unanchored ignore excludes `src/pyro_dcm/models/`
+  from M3 sync; recreate session with anchored ignores before v0.7.0 M3 runs
 - Neural ODE DCM (Approach 2) — separate milestone v0.7.0+ after v0.6.0 informs whether bilinear suffices
 - ROI projection for latent circuit DCM — map PCA circuit nodes back to brain ROIs; blocked on behavioral + neuroimaging dataset
-- **Parcellation placeholder fix (HIGH)** — `parcellation.py:146` naive blocks vs real Schaefer mapping; No-Placeholders violation
-- **Phase 25 HVAE-02 sign recovery 0.44<0.6** — likely metric/identifiability artifact (cf. 20-05 R²)
-- **Phase 26 SBI-03 SBC calibration fails (2/9)** — under-training / embedding / prior audit
-- **VL overconfidence for BMR** — absolute prune threshold suppressed; relative ranking works (from 20-05 SYNTH-03)
+- **Parcellation runtime validation → v0.7.0** — placeholder REMOVED; only nilearn runtime check remains
+- **Phase 26 SBI-03 SBC calibration → v0.7.0 Phase D** — structural; VL is the calibrated path
+- **VL overconfidence for BMR → v0.7.0 Phase C** — absolute prune threshold suppressed; relative ranking works
 
 ## Key Risks
+
+- **[INFRA, surfaced 2026-06-10] Mutagen silently excludes `src/pyro_dcm/models/` from M3
+  sync.** The `dcm-pytorch` session's unanchored `models/` ignore matches the source package;
+  M3 was frozen at May 29. Invisible (reports "Watching", no conflict). Past impact nil (only
+  the June-9 metric helper was stale; VL engine is in the synced `inference/`). Future hazard:
+  edits under `models/` won't deploy. Stopgap: `scp` (path is ignored → safe). Fix: recreate
+  session with anchored ignores — todo `mutagen-models-ignore`, memory
+  `reference-mutagen-models-ignore-footgun`.
+
 
 - **Bilinear misspecification (LC1).** Bilinear DCM is a first-order approximation of nonlinear RNN dynamics. Mitigated by linearization quality diagnostic and L&E nonlinear comparison.
 - **Prior scale mismatch (LC4).** BOLD-calibrated priors wrong for RNN hidden states. Mitigated by mandatory recalibration on 5+ synthetic RNNs in Phase 20.
@@ -191,8 +204,8 @@ Last session: 2026-06-10 (v0.6.0 milestone audit + scope-cut + VL consolidation)
 Stopped at: Goal-backward audit complete (`.planning/v0.6.0-AUDIT.md`). User approved scope-cut
   (defer real-data to v0.7.0) + VL-as-retro-Phase-28. ROADMAP reconciled, Phase 28 SUMMARY written,
   4 gaps triaged (3 → v0.7.0; HVAE-02 in-scope/open), STATE updated.
-Next: (1) OPTIONAL — close HVAE-02 via eval-only masked-sign-recovery re-run on M3 (needs m3-unlock;
-  <5 min, no retraining) OR accept-with-caveat; (2) `/gsd:complete-milestone` to archive v0.6.0;
-  (3) `/gsd:new-milestone` for v0.7.0 (VL validation matrix + deferred real-data; consume
-  `v0.7.0-VL-RECONCILIATION-DRAFT.md`).
+Next: (1) `/gsd:complete-milestone` to archive v0.6.0 (all in-scope gates met; HVAE-02 confirmed);
+  (2) `/gsd:new-milestone` for v0.7.0 (VL validation matrix + deferred real-data; consume
+  `v0.7.0-VL-RECONCILIATION-DRAFT.md`); (3) INFRA — fix the Mutagen `models/` ignore (recreate
+  session with anchored ignores) before any v0.7.0 M3 run touching `src/pyro_dcm/models/`.
 Resume file: None

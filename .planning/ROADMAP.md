@@ -710,7 +710,7 @@ real M/EEG + SBC calibration) **deferred to v0.7.0** — recorded as deferred, N
 | 22. DCM Interpretability for Neural Data Models | 6/6 | ⚠️ SYNTHETIC-ONLY — pivoted from real Cam-CAN (commit 2e7bda8); gates 1–2 (real M/EEG, source ROIs) → v0.7.0 | 2026-05-31 |
 | 23. Bayesian Model Reduction | 3/3 | ✅ DELIVERED (BMR ~93× faster than ELBO; validated) | 2026-05-31 |
 | 24. Foundation Model Use Cases (TRIBE + M/EEG) | 4/4 | ⚠️ INFRASTRUCTURE-ONLY — extractors+parcellation real but never run on real weights → v0.7.0 | 2026-05-31 |
-| 25. Hybrid VAE-DCM | 4/4 | ⚠️ 3/4 — HVAE-02 sign recovery indeterminate (masked-metric re-eval pending) | 2026-05-31 |
+| 25. Hybrid VAE-DCM | 4/4 | ✅ DELIVERED — 4/4; HVAE-02 confirmed (masked sign recovery 0.77, job 56331599) | 2026-06-10 |
 | 26. SBI for Spectral DCM | 2/2 | ❌ SBC FAILED 2/9 (structural); real-M/EEG demo unplanned → v0.7.0 | 2026-05-31 |
 | 27. Publication Artifacts | 3/3 | ✅ DELIVERED (documents synthetic results) | 2026-05-31 |
 | 28. Variational Laplace Inference Engine (retroactive) | n/a | ✅ DELIVERED — SPM12 `spm_nlsi_GN` engine + ForwardModel protocol; delivered v0.6.0's inference | 2026-06-09 |
@@ -739,7 +739,7 @@ real M/EEG + SBC calibration) **deferred to v0.7.0** — recorded as deferred, N
 | 22. DCM Interpretability for Neural Data Models | v0.6.0 | 6/6 | ⚠️ Synthetic-only; real-data → v0.7.0 | 2026-05-31 |
 | 23. Bayesian Model Reduction | v0.6.0 | 3/3 | ✅ Delivered | 2026-05-31 |
 | 24. Foundation Model Use Cases (TRIBE + M/EEG) | v0.6.0 | 4/4 | ⚠️ Infrastructure-only; real runs → v0.7.0 | 2026-05-31 |
-| 25. Hybrid VAE-DCM | v0.6.0 | 4/4 | ⚠️ 3/4; HVAE-02 re-eval pending | 2026-05-31 |
+| 25. Hybrid VAE-DCM | v0.6.0 | 4/4 | ✅ Delivered (HVAE-02 confirmed, masked 0.77) | 2026-06-10 |
 | 26. SBI for Spectral DCM | v0.6.0 | 2/2 | ❌ SBC 2/9; calibration → v0.7.0 | 2026-05-31 |
 | 27. Publication Artifacts | v0.6.0 | 3/3 | ✅ Delivered (synthetic results) | 2026-05-31 |
 | 28. Variational Laplace Inference Engine (retroactive) | v0.6.0 | n/a | ✅ Delivered (SPM12 spm_nlsi_GN + ForwardModel) | 2026-06-09 |

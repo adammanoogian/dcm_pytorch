@@ -9,6 +9,16 @@ files:
   - .planning/phases/25-hybrid-vae-dcm/25-04-SUMMARY.md
 ---
 
+## ✅ RESOLVED 2026-06-10 — HVAE-02 CONFIRMED PASS
+
+Eval-only re-run on the trained checkpoint (job 56331599, `scripts/eval_hybrid_vae_dcm.py`)
+reproduced the original held-out evaluation exactly — RMSE **0.0761** (reported 0.076) and
+UNMASKED sign recovery **0.4425** (reported 0.4425) — and the **MASKED sign recovery is
+0.7745 ± 0.133 > 0.6 → PASS**. Phase 25 is now 4/4. `results/hybrid_vae_dcm/eval_recovery_report.json`.
+(Closing this required scp-ing `src/pyro_dcm/models/` to M3 — see todo `mutagen-models-ignore`.)
+
+---
+
 ## Problem
 
 Full HVAE-DCM cluster training (job 55774467, 200 epochs) met 3/4 HVAE acceptance criteria but
