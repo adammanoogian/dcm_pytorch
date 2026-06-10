@@ -11,6 +11,8 @@ from pyro_dcm.model_selection.bmr import (
     bmr_circuit_selection,
     enumerate_reduced_models,
     make_reduced_prior_zero_connection,
+    rank_connections,
+    temper_vl_posterior,
 )
 
 __all__ = [
@@ -18,4 +20,6 @@ __all__ = [
     "bmr_circuit_selection",
     "enumerate_reduced_models",
     "make_reduced_prior_zero_connection",
+    "rank_connections",
+    "temper_vl_posterior",
 ]
