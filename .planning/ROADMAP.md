@@ -604,7 +604,7 @@ round-trip test). Independent of Phase 30; runs concurrently.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 29. VL Validation Infrastructure & BMR Rank Functions | 1/5 | In progress | -- |
+| 29. VL Validation Infrastructure & BMR Rank Functions | 5/5 | ✅ Complete (verified 6/6, 17/17 vl tests) | 2026-06-10 |
 | 30. Recovery Matrix Sweep (M3 Cluster) | 0/? | Not started | -- |
 | 31. BMR Validation & Posterior Tempering (Exploratory) | 0/? | Not started | -- |
 | 32. SPM12 Cross-Validation (Local / MATLAB) | 0/? | Not started | -- |
@@ -637,7 +637,7 @@ round-trip test). Independent of Phase 30; runs concurrently.
 | 26. SBI for Spectral DCM | v0.6.0 | 2/2 | ❌ SBC 2/9; calibration → v0.7.0 | 2026-05-31 |
 | 27. Publication Artifacts | v0.6.0 | 3/3 | ✅ Delivered (synthetic results) | 2026-05-31 |
 | 28. Variational Laplace Inference Engine (retroactive) | v0.6.0 | n/a | ✅ Delivered (SPM12 spm_nlsi_GN + ForwardModel) | 2026-06-09 |
-| 29. VL Validation Infrastructure & BMR Rank Functions | v0.7.0 | 1/5 | In progress | -- |
+| 29. VL Validation Infrastructure & BMR Rank Functions | v0.7.0 | 5/5 | ✅ Complete (verified 6/6) | 2026-06-10 |
 | 30. Recovery Matrix Sweep (M3 Cluster) | v0.7.0 | 0/? | Not started | -- |
 | 31. BMR Validation & Posterior Tempering (Exploratory) | v0.7.0 | 0/? | Not started | -- |
 | 32. SPM12 Cross-Validation (Local / MATLAB) | v0.7.0 | 0/? | Not started | -- |

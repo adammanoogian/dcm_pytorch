@@ -288,14 +288,14 @@ Explicit anti-features for v0.7.0 (documented to prevent scope creep).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VLINFRA-01 | Phase 29 | Pending |
-| VLINFRA-02 | Phase 29 | Pending |
-| VLINFRA-03 | Phase 29 | Pending |
-| VLINFRA-04 | Phase 29 | Pending |
-| VLINFRA-05 | Phase 29 | Pending |
-| VLREC-05 | Phase 29 | Pending |
-| VLROBUST-01 | Phase 29 | Pending |
-| VLROBUST-02 | Phase 29 | Pending |
+| VLINFRA-01 | Phase 29 | Complete |
+| VLINFRA-02 | Phase 29 | Complete |
+| VLINFRA-03 | Phase 29 | Complete |
+| VLINFRA-04 | Phase 29 | Complete |
+| VLINFRA-05 | Phase 29 | Complete |
+| VLREC-05 | Phase 29 | Complete |
+| VLROBUST-01 | Phase 29 | Complete |
+| VLROBUST-02 | Phase 29 | Complete |
 | VLREC-01 | Phase 30 | Pending |
 | VLREC-02 | Phase 30 | Pending |
 | VLREC-03 | Phase 30 | Pending |

@@ -9,8 +9,13 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 
 ## Current Position
 
-**Milestone:** v0.7.0 Variational Laplace Validation — **ROADMAPPED 2026-06-10 (VL-validation-led)**.
-**Phase: 29 — VL Validation Infrastructure & BMR Rank Functions. Status: In progress (29-01 + 29-02 + 29-03 + 29-04 + 29-05 done 2026-06-10).**
+**Milestone:** v0.7.0 Variational Laplace Validation (VL-validation-led).
+**Phase 29 — VL Validation Infrastructure & BMR Rank Functions: ✅ COMPLETE 2026-06-10** (5/5 plans;
+verifier passed 6/6; 17/17 vl tests green; all laptop). **Next: Phase 30 — Recovery Matrix Sweep (M3
+cluster).** Phase 30 PREREQUISITES before launch: (1) fix the Mutagen `models/` ignore (recreate
+`dcm-pytorch` session with anchored ignores) — required for latent-circuit M3 runs only; spectral/task
+sweeps are unaffected; (2) decide the sweep grid (N values × SNR values × seeds) and confirm the
+multi-hour cluster job. Phase 32 (SPM12, local/MATLAB) can run in parallel with 30.
 **29-05 DONE:** VL determinism regression suite (`tests/test_vl_determinism.py`, 5 `@pytest.mark.vl`
 tests, ~2m42s laptop): fixed-seed determinism across spectral/task/latent-circuit (same seed ->
 posterior means equal within atol 1e-8, bitwise preferred), seed-sensitivity guard, and multi-restart
