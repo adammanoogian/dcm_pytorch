@@ -1,0 +1,11 @@
+cell_index,variant,n_regions,snr,rmse_a_median,rmse_a_q25,rmse_a_q75,sign_recovery_masked,coverage_95,shrinkage_median,r2_per_region,convergence_rate,n_success,n_failed,status,reason
+0,spectral,2,1.0,0.0014010429625373004,0.00022157968482971503,0.00245447324203179,1.0,1.0,0.21086958591138671,,1.0,10,0,pass,pass: all present checks met documented thresholds
+1,spectral,2,3.0,0.012932923427824832,0.008821853209107163,0.01873682296237226,1.0,1.0,0.2081806373227101,,1.0,10,0,pass,pass: all present checks met documented thresholds
+2,spectral,4,1.0,0.0007488831564770775,0.000544169247891714,0.0009596339040969524,1.0,1.0,0.031806698486270706,,1.0,10,0,pass,pass: all present checks met documented thresholds
+3,spectral,4,3.0,0.0009865203716632456,0.00045747107192675544,0.001499657151704241,1.0,1.0,0.02901536048367559,,1.0,10,0,pass,pass: all present checks met documented thresholds
+4,task,2,1.0,,,,,,,,,,,error,errored: underflow in dt 0.0
+5,task,2,3.0,,,,,,,,,,,error,errored: underflow in dt 0.0
+6,task,4,1.0,,,,,,,,,,,error,errored: underflow in dt 0.0
+7,task,4,3.0,,,,,,,,,,,error,errored: underflow in dt 0.0
+8,latent_circuit,4,1.0,0.0501132010042016,0.04213460613981168,0.08191967001066573,1.0,,0.5019618202600273,0.07604554348923885,1.0,10,0,identifiability_limit,"identifiability limit: failed checks rmse_a(observed=0.0501132010042016, threshold=0.05); skipped (metric None): coverage_95"
+9,latent_circuit,4,3.0,0.039625706100970826,0.03761483716468706,0.06427946213410551,1.0,,0.34649001084004794,0.34545725795835075,1.0,10,0,pass,"pass: all present checks met documented thresholds (skipped, metric None: coverage_95)"
