@@ -25,6 +25,10 @@ TAPAS_RDCM_PATH : pathlib.Path
     `validation/run_rdcm_validation.py` and `validation/run_validation.py`.
     Override via the ``TAPAS_RDCM_PATH`` environment variable when running
     on a different machine (e.g., Monash M3 cluster).
+MATLAB_PATH : pathlib.Path
+    Path to the MATLAB binary used by the SPM12 cross-validation bridge
+    (Phase 32, ``validation/run_vl_validation.py``). Override via the
+    ``MATLAB_PATH`` environment variable when running on a different machine.
 """
 
 from __future__ import annotations
@@ -42,5 +46,12 @@ TAPAS_RDCM_PATH: Path = Path(
     os.environ.get(
         "TAPAS_RDCM_PATH",
         "C:/Users/aman0087/Documents/Github/tapas/rDCM",
+    )
+)
+
+MATLAB_PATH: Path = Path(
+    os.environ.get(
+        "MATLAB_PATH",
+        "C:/Program Files/MATLAB/R2022a/bin/matlab",
     )
 )
