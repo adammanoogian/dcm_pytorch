@@ -10,7 +10,18 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 **Milestone:** v0.7.0 Variational Laplace Validation (VL-validation-led).
-**Phase 30 — Recovery Matrix Sweep: IN PROGRESS (1/3 plans).**
+**Phase 30 — Recovery Matrix Sweep: IN PROGRESS (2/3 plans).**
+**30-02 DONE 2026-06-10:** recovery-matrix sweep driver + M3 submission. `benchmarks/recovery_matrix_grid.py`
+(GRID constants N{2,4}×SNR{1,3}×{spectral,task,latent}, `enumerate_cells`/`cell_for_index` → 10 stable cells
+[spectral 4 + task 4 + latent 2; latent N-axis collapsed to fixed N=4], `run_one_cell` reusing Phase 29 VL
+simulate/forward symbols + per-cell SNR injection + near-boundary-A exclusion + per-region R2/shrinkage) +
+`cluster/scripts/recovery_matrix_cell.py` (env-driven SLURM entrypoint, status=error never aborts the array,
+per-cell JSON) + `cluster/sbatch/recovery_matrix_sweep.sbatch` (array 0-9, NO pip, dt≥0.1, comp/8h/16G).
+LOCAL faithfulness pre-check PASSED (task 0 spectral N=2 SNR=1 quick max_iter=6: 10/10 seeds, 28.7s, valid
+per-cell JSON w/ populated metrics). **SUBMITTED M3 array job 56346424 (120 fits, all 10 tasks RUNNING incl.
+latent cells 8/9; Mutagen models/ fix confirmed in place on M3).** Results → `cluster/results/
+recovery_matrix_56346424_<0..9>.json` (synced back via Mutagen). ruff+mypy clean. Commits 5c7547a (grid),
+10918ce (cluster). **Next: 30-03 harvest+classifier AFTER job 56346424 completes.**
 **30-01 DONE 2026-06-10:** hardened per-cell recovery-metric assembler `benchmarks/recovery_matrix_metrics.py`
 (+ `tests/test_recovery_matrix_metrics.py`, 7 vl tests, 3.2s laptop). `assemble_cell_metrics()` turns one VL
 runner result into per-region R2 (NOT pooled — consumed from a driver `r2_per_region_list` built via
@@ -94,6 +105,9 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
 - **[30-01-D1] Per-region R2 is consumed, not computed, by `assemble_cell_metrics`.** The VL runners emit no per-seed trajectories, so the assembler reads a driver-supplied `r2_per_region_list` (the 30-02 driver calls `compute_trajectory_r_squared(pooled=False)`) and median-aggregates; it NEVER re-pools (guards the pooled-R2 artifact R1). Spectral/task have no trajectory -> `r2_per_region=None` + note. Same pattern for `shrinkage_list`/`coverage_list`: median when present, None+note when absent, never fabricated.
 - **[30-01-D2] Near-boundary-A exclusion band [-0.05,0] is inclusive-rejected, exposed as `NEAR_BOUNDARY_LO/HI`.** `exclude_near_boundary_A` returns True (acceptable) only when max Re eig < -0.05 or > 0; `resample_A_until_accepted` drives a seeded closure and raises RuntimeError (tries count) if exhausted. Keeps ground truth inside the eig_clamp-injective regime (pitfall N2, VLREC-03).
 - **[30-01-D3] Spectral SNR diverges from task/latent: `{'noise_log_amplitude':-log(snr)}` vs `{'SNR':snr}`.** `snr_for_model` is the one place SNR semantics differ across the three forward models; the 30-02 driver expands the spectral scalar into the `noise_params` b/c observation-noise tensors. Keeps the matrix SNR axis comparable.
+- **[30-02-D1] The grid driver INLINES the per-variant VL simulate→fit loop (importing the same simulate/forward symbols the Phase 29 runners use) to thread per-cell SNR**, rather than forking the runners or using env-var globals. Plan's preferred "no globals" seam; keeps the SNR axis comparable while reusing all fit logic. SNR injected via `snr_for_model`: spectral overrides the `noise_params['b']` global observation-noise log-amplitude (index [0,0]); task/latent pass the `SNR` kwarg into the simulator.
+- **[30-02-D2] Seeds run INSIDE one array task** (`config.n_datasets=GRID_SEEDS=10`), so 10 cells = 10 SLURM array tasks = 120 fits. Seeds are NOT separate array tasks (mirrors the runner per-seed loop). sbatch `--array=0-9` must equal `len(enumerate_cells())`.
+- **[30-02-D3] `latent_circuit` collapses the N axis to fixed N=4** (its ground truth is the fixed bilinear topology); the grid emits 10 cells (spectral 4 + task 4 + latent 2), never a fabricated N=2 latent-circuit cell. Recorded as `n_axis_note` on those cells.
 - **[30-01-D4] `# type: ignore[import-untyped]` on the `masked_sign_recovery` import; pyproject mypy config left untouched.** `pyro_dcm` ships no `py.typed` (same condition affects every existing pyro_dcm-importing benchmark); scoped the fix to the plan's declared file rather than adding a repo-wide mypy override.
 - **[29-05-D1] VL determinism is contracted within-machine at atol 1e-8, NOT enforced via `torch.use_deterministic_algorithms`.** That mode raises on the engine's linalg ops (solve/slogdet/cholesky/matrix_exp); reproducibility is achieved via fixed seeds + identical inputs. Cross-machine (laptop vs M3 BLAS) may differ below atol ~1e-6, so Phase 30 must compare within-machine, not bitwise across machines. Documented in `docs/03_methods_reference/vl_determinism_notes.md`.
 - **[29-05-D2] Multi-restart stays a test-local helper, not an engine feature.** `_multistart_spectral` re-seeds + re-fits from the prior start and selects highest final free energy; pitfall N4 means the restart PATH is reproducible but the selected mode is basin-dependent (not guaranteed global). Engine multi-restart wrapping remains out of scope.
@@ -260,17 +274,22 @@ validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
 
 ## Session Continuity
 
-Last session: 2026-06-10 (executed Phase 30 Plan 01)
-Stopped at: Completed 30-01-PLAN.md — hardened per-cell recovery-metric assembler
-  (`benchmarks/recovery_matrix_metrics.py` + `tests/test_recovery_matrix_metrics.py`, 7 vl tests, 3.2s
-  laptop). `assemble_cell_metrics` (per-region R2 not pooled, masked sign recovery, 95% coverage, RMSE,
-  shrinkage) + `exclude_near_boundary_A`/`resample_A_until_accepted` ([-0.05,0] band, N2) +
-  `snr_for_model` (per-model SNR knob). ruff+mypy clean. Commits 6ae82cd (lib), 9fb55f4 (tests).
-  Next: 30-02 sweep driver — routes to M3 cluster (multi-hour N×SNR×seeds job); fix the Mutagen
-  `models/` ignore first if the sweep includes latent-circuit. Full `-m vl` suite NOT re-run this plan
-  (heavy VL-fit suites test_vl_determinism ~2m42s + test_vl_runners_smoke ~113s exceed the 3-min laptop
-  budget; zero regression risk since only two new files were added — confirmed via git diff --name-only).
-Prior session: 2026-06-10 (executed Phase 29 Plan 05) — VL determinism regression suite
+Last session: 2026-06-10 (executed Phase 30 Plan 02)
+Stopped at: Completed 30-02-PLAN.md — recovery-matrix sweep driver + M3 submission.
+  `benchmarks/recovery_matrix_grid.py` (10-cell grid, `run_one_cell` reusing Phase 29 VL fit logic + SNR/
+  boundary/metric wiring), `cluster/scripts/recovery_matrix_cell.py` (env-driven SLURM entrypoint),
+  `cluster/sbatch/recovery_matrix_sweep.sbatch` (array 0-9, no-pip, dt≥0.1). LOCAL faithfulness pre-check
+  PASSED (28.7s, valid JSON). SUBMITTED M3 array job **56346424** (120 fits, all 10 tasks RUNNING; latent
+  cells confirmed synced via the Mutagen models/ fix). Results → cluster/results/recovery_matrix_56346424_
+  <0..9>.json. ruff+mypy clean. Commits 5c7547a (grid), 10918ce (cluster).
+  Next: 30-03 is the POST-RESULTS harvest+classifier — run AFTER job 56346424 completes (monitor via
+  `ssh m3 "squeue -u aman0087 --name=recov_matrix"`; results sync back via Mutagen). The driver loop was
+  NOT re-run for all 120 fits locally (multi-hour, routed to M3 per project rule); the per-cell path is
+  proven by the 28.7s local pre-check + M3 in-env import sanity check.
+Prior session: 2026-06-10 (executed Phase 30 Plan 01) — hardened per-cell recovery-metric assembler
+  (`benchmarks/recovery_matrix_metrics.py` + tests, 7 vl tests). assemble_cell_metrics + near-boundary
+  exclusion + snr_for_model. Commits 6ae82cd, 9fb55f4.
+Earlier session: 2026-06-10 (executed Phase 29 Plan 05) — VL determinism regression suite
   (`tests/test_vl_determinism.py`, 5 `@pytest.mark.vl` tests, ~2m42s laptop): fixed-seed determinism
   across spectral/task/latent-circuit (same seed -> posterior means equal within atol 1e-8, bitwise
   preferred), seed-sensitivity guard, multi-restart reproducibility (pitfall N4). Methods note
