@@ -10,9 +10,19 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 **Milestone:** v0.7.0 Variational Laplace Validation (VL-validation-led).
+**Phase 30 — Recovery Matrix Sweep: IN PROGRESS (1/3 plans).**
+**30-01 DONE 2026-06-10:** hardened per-cell recovery-metric assembler `benchmarks/recovery_matrix_metrics.py`
+(+ `tests/test_recovery_matrix_metrics.py`, 7 vl tests, 3.2s laptop). `assemble_cell_metrics()` turns one VL
+runner result into per-region R2 (NOT pooled — consumed from a driver `r2_per_region_list` built via
+`compute_trajectory_r_squared(pooled=False)`), MASKED sign recovery (reuses `masked_sign_recovery`,
+guards sign(0)), 95% coverage, RMSE median/IQR, std_post/std_prior shrinkage; flat JSON, no tensors leak.
+Plus `exclude_near_boundary_A`/`resample_A_until_accepted` (reject max-Re-eig in [-0.05,0], eig_clamp
+non-injectivity N2; band constants `NEAR_BOUNDARY_LO/HI`) and `snr_for_model` (task/latent `{'SNR':snr}`
+vs spectral `{'noise_log_amplitude':-log(snr)}`). ruff+mypy clean. VLREC-02 + VLREC-03 hardening proven.
+Commits 6ae82cd (lib), 9fb55f4 (tests). **Next: 30-02 sweep driver (M3 cluster).**
 **Phase 29 — VL Validation Infrastructure & BMR Rank Functions: ✅ COMPLETE 2026-06-10** (5/5 plans;
-verifier passed 6/6; 17/17 vl tests green; all laptop). **Next: Phase 30 — Recovery Matrix Sweep (M3
-cluster).** Phase 30 PREREQUISITES before launch: (1) fix the Mutagen `models/` ignore (recreate
+verifier passed 6/6; 17/17 vl tests green; all laptop). Phase 30 PREREQUISITES before the M3 sweep
+launch (30-02): (1) fix the Mutagen `models/` ignore (recreate
 `dcm-pytorch` session with anchored ignores) — required for latent-circuit M3 runs only; spectral/task
 sweeps are unaffected; (2) decide the sweep grid (N values × SNR values × seeds) and confirm the
 multi-hour cluster job. Phase 32 (SPM12, local/MATLAB) can run in parallel with 30.
@@ -81,6 +91,10 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
 
 ## Decisions
 
+- **[30-01-D1] Per-region R2 is consumed, not computed, by `assemble_cell_metrics`.** The VL runners emit no per-seed trajectories, so the assembler reads a driver-supplied `r2_per_region_list` (the 30-02 driver calls `compute_trajectory_r_squared(pooled=False)`) and median-aggregates; it NEVER re-pools (guards the pooled-R2 artifact R1). Spectral/task have no trajectory -> `r2_per_region=None` + note. Same pattern for `shrinkage_list`/`coverage_list`: median when present, None+note when absent, never fabricated.
+- **[30-01-D2] Near-boundary-A exclusion band [-0.05,0] is inclusive-rejected, exposed as `NEAR_BOUNDARY_LO/HI`.** `exclude_near_boundary_A` returns True (acceptable) only when max Re eig < -0.05 or > 0; `resample_A_until_accepted` drives a seeded closure and raises RuntimeError (tries count) if exhausted. Keeps ground truth inside the eig_clamp-injective regime (pitfall N2, VLREC-03).
+- **[30-01-D3] Spectral SNR diverges from task/latent: `{'noise_log_amplitude':-log(snr)}` vs `{'SNR':snr}`.** `snr_for_model` is the one place SNR semantics differ across the three forward models; the 30-02 driver expands the spectral scalar into the `noise_params` b/c observation-noise tensors. Keeps the matrix SNR axis comparable.
+- **[30-01-D4] `# type: ignore[import-untyped]` on the `masked_sign_recovery` import; pyproject mypy config left untouched.** `pyro_dcm` ships no `py.typed` (same condition affects every existing pyro_dcm-importing benchmark); scoped the fix to the plan's declared file rather than adding a repo-wide mypy override.
 - **[29-05-D1] VL determinism is contracted within-machine at atol 1e-8, NOT enforced via `torch.use_deterministic_algorithms`.** That mode raises on the engine's linalg ops (solve/slogdet/cholesky/matrix_exp); reproducibility is achieved via fixed seeds + identical inputs. Cross-machine (laptop vs M3 BLAS) may differ below atol ~1e-6, so Phase 30 must compare within-machine, not bitwise across machines. Documented in `docs/03_methods_reference/vl_determinism_notes.md`.
 - **[29-05-D2] Multi-restart stays a test-local helper, not an engine feature.** `_multistart_spectral` re-seeds + re-fits from the prior start and selects highest final free energy; pitfall N4 means the restart PATH is reproducible but the selected mode is basin-dependent (not guaranteed global). Engine multi-restart wrapping remains out of scope.
 - **[29-02-D1] rank_connections is purely relative — absolute delta-F is never a pass/fail criterion.** VL Laplace overconfidence (job 55772525: truly-absent edge scored delta_F=-115.9, indistinguishable by sign) drives every reduction deeply negative. Only relative ordering of K single-prune costs + a separation gap (largest consecutive drop on sorted ascending costs) are reported. Avoids pitfall C1 by construction.
@@ -246,8 +260,17 @@ validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
 
 ## Session Continuity
 
-Last session: 2026-06-10 (executed Phase 29 Plan 05)
-Stopped at: Completed 29-05-PLAN.md — VL determinism regression suite
+Last session: 2026-06-10 (executed Phase 30 Plan 01)
+Stopped at: Completed 30-01-PLAN.md — hardened per-cell recovery-metric assembler
+  (`benchmarks/recovery_matrix_metrics.py` + `tests/test_recovery_matrix_metrics.py`, 7 vl tests, 3.2s
+  laptop). `assemble_cell_metrics` (per-region R2 not pooled, masked sign recovery, 95% coverage, RMSE,
+  shrinkage) + `exclude_near_boundary_A`/`resample_A_until_accepted` ([-0.05,0] band, N2) +
+  `snr_for_model` (per-model SNR knob). ruff+mypy clean. Commits 6ae82cd (lib), 9fb55f4 (tests).
+  Next: 30-02 sweep driver — routes to M3 cluster (multi-hour N×SNR×seeds job); fix the Mutagen
+  `models/` ignore first if the sweep includes latent-circuit. Full `-m vl` suite NOT re-run this plan
+  (heavy VL-fit suites test_vl_determinism ~2m42s + test_vl_runners_smoke ~113s exceed the 3-min laptop
+  budget; zero regression risk since only two new files were added — confirmed via git diff --name-only).
+Prior session: 2026-06-10 (executed Phase 29 Plan 05) — VL determinism regression suite
   (`tests/test_vl_determinism.py`, 5 `@pytest.mark.vl` tests, ~2m42s laptop): fixed-seed determinism
   across spectral/task/latent-circuit (same seed -> posterior means equal within atol 1e-8, bitwise
   preferred), seed-sensitivity guard, multi-restart reproducibility (pitfall N4). Methods note
