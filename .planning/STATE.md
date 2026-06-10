@@ -10,7 +10,7 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 **Milestone:** v0.7.0 Variational Laplace Validation — **ROADMAPPED 2026-06-10 (VL-validation-led)**.
-**Phase: 29 — VL Validation Infrastructure & BMR Rank Functions. Status: Not started / ready to plan.**
+**Phase: 29 — VL Validation Infrastructure & BMR Rank Functions. Status: In progress (1/5 plans — 29-03 numerical-robustness guards done 2026-06-10).**
 Roadmap drafted: 4 phases (29-32), 19/19 requirements mapped. Critical path 29 -> 30 -> 31; Phase
 32 (SPM12, local/MATLAB) runs in parallel with Phase 30 (recovery sweep, M3 cluster). Confirmed
 scope: synthetic recovery matrix (N×SNR), SPM12 cross-validation (user has MATLAB), VL+BMR
@@ -101,6 +101,8 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
 - **[25-04-D2] Beta floor is 1e-3 (not 0.0) at epoch 0.** When scale=0.0, poutine.scale zeros all log-probs, causing degenerate ELBO (all NaN). 1e-3 floor ensures valid gradients from first epoch.
 - **[25-04-D3] KL estimated analytically from encoder z_loc/z_scale vs N(0,I).** Avoids Trace_ELBO decomposition; 0.5*(scale^2 + loc^2 - 1 - 2*log(scale)).sum() is exact for diagonal Gaussian vs standard normal.
 - **[27-02-D1] Generated figures are gitignored; script is source of truth.** figures/*.png and figures/*.pdf excluded by .gitignore. Regenerate via `python scripts/generate_publication_figures.py`.
+- **[29-03-D1] _TASK_PRECISION_MAX_DIM=5000 caps the dense (T*N,T*N) task-DCM precision.** TaskDCMForward.build_precision fails loud (ValueError with expected-vs-actual size) above the cap; enforces the dt>=0.1 floor (VLROBUST-02, pitfall N1). Tractable path unchanged.
+- **[29-03-D2] C-order CSD index contract (j fastest, i, w) locked by regression test.** tests/test_csd_corder_roundtrip.py guards the commit-64e326f fix against silent column-major/transpose regression (VLREC-05, pitfall S4). Registered the `vl` pytest marker (was unregistered).
 - Prior v0.3.0/v0.4.0/v0.5.0 decisions: see earlier STATE.md history in git log.
 
 ## Blockers
@@ -210,12 +212,13 @@ validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
 
 ## Session Continuity
 
-Last session: 2026-06-10 (v0.6.0 milestone audit + scope-cut + VL consolidation)
-Stopped at: Goal-backward audit complete (`.planning/v0.6.0-AUDIT.md`). User approved scope-cut
-  (defer real-data to v0.7.0) + VL-as-retro-Phase-28. ROADMAP reconciled, Phase 28 SUMMARY written,
-  4 gaps triaged (3 → v0.7.0; HVAE-02 in-scope/open), STATE updated.
-Next: (1) `/gsd:complete-milestone` to archive v0.6.0 (all in-scope gates met; HVAE-02 confirmed);
-  (2) `/gsd:new-milestone` for v0.7.0 (VL validation matrix + deferred real-data; consume
-  `v0.7.0-VL-RECONCILIATION-DRAFT.md`); (3) INFRA — fix the Mutagen `models/` ignore (recreate
-  session with anchored ignores) before any v0.7.0 M3 run touching `src/pyro_dcm/models/`.
+Last session: 2026-06-10 (executed Phase 29 Plan 03 — VL numerical-robustness guards)
+Stopped at: Completed 29-03-PLAN.md. Added C-order CSD round-trip regression test (VLREC-05,
+  guards commit 64e326f) + TaskDCMForward.build_precision intractability guard (VLROBUST-02,
+  expected-vs-actual ValueError, dt>=0.1 floor) + 2 regression tests; registered `vl` marker.
+  Commits bc30477, d12eb84, 09c9375. Phase 29 now 1/5 plans complete.
+Next: execute remaining Phase 29 plans (29-01, 29-02, 29-04, 29-05) via `/gsd:execute-phase 29`.
+  Note: pre-existing failures in tests/test_vl_forward_model_protocol.py task-DCM cases
+  (make_block_stimulus/simulate_task_dcm signature drift) are unrelated to 29-03 — worth a
+  cleanup pass. INFRA reminder: fix the Mutagen `models/` ignore before any v0.7.0 M3 run.
 Resume file: None
