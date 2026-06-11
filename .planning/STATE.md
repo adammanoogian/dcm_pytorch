@@ -10,6 +10,33 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 **Milestone:** v0.7.0 Variational Laplace Validation (VL-validation-led).
+**Phase 32 — SPM12 Cross-Validation: IN PROGRESS (wave-2 code-complete; M3 run PENDING) — the LAST v0.7.0 phase.**
+**32-03 CODE-COMPLETE 2026-06-11 (VLSPM-03, the Phase 32 deliverable — M3 RUN PENDING orchestrator):**
+`run_vl_spectral_dcm_validation(seed=42, n_regions=2, max_iter=64)` in NEW `validation/run_vl_validation.py`
+fits the Phase 28 VL engine on a reciprocal-ASYMMETRIC N=2 spectral problem (A[0,1]=0.15/A[1,0]=0.10,
+post-override stability re-check; reciprocal mandatory per Phase 31 identifiability, asymmetry gives S4
+teeth) with SPM-matched priors (hyperprior_mean=8.0, precision=128.0, prior_mean_a_offset=a_mask/128, S2),
+injects the IDENTICAL observed_csd into SPM via the 32-01 bridge (`export_spectral_dcm_csd_for_spm` +
+`run_spm_spectral_dcm_csd_injected.m`), runs `spm_nlsi_GN`, and compares: Ep free-space 10%
+(`compute_free_param_comparison`, S1 — `theta_post["A_free"]` not parameterized A), matched-F strict 5%
+(`compare_free_energies`, the HEADLINE gate on the identical CSD), relative cross-model ranking over 3
+a_masks (`compare_model_ranking` >=0.80, S3-safe — NO absolute-F-across-models, NO element-wise Cp).
+SPM-gated test `tests/test_vl_spm_cross_validation.py` (spm+slow, skipif(not check_matlab_available()))
+HARD-asserts all three + S4 asymmetry + the no-Cp negative guard; **collects + SKIPS cleanly on this laptop
+(1 skipped, 0 errors — local FlexLM -15 unreachable).** The REAL `spm_nlsi_GN` run is M3 sbatch
+`cluster/sbatch/spm_cross_validation.sbatch` (comp, 16G, 1h, no pip, exports
+MATLAB_PATH=/usr/local/matlab/r2022a/bin/matlab + SPM12_PATH=/home/aman0087/fc37/Carrick/spm12) →
+`cluster/scripts/spm_cross_validation.py` (record-don't-crash per 31-03-D3: a gate miss incl. real 5%-F
+miss is RECORDED in JSON + exit 0; only unexpected exception exits 1) → `cluster/results/
+spm_cross_validation_<jobid>.json`. The `.m` SPM12 addpath is now `getenv('SPM12_PATH')` (local default kept;
+ONLY change to the 32-01 file). MATLAB_PATH from config (env-overridable); SPM12_PATH on the subprocess child
+env — SAME orchestrator runs laptop + M3. ruff clean on all 3 changed Python files; mypy delta is only the
+pre-existing bare-dict [type-arg] + pyro_dcm [import-untyped] (no new class, 32-01-D3/32-02-D2). Decisions
+32-03-D1..D4. Commits fd88aea (Task1 orchestrator), 62555ae (.m SPM12_PATH), 6f5dcfb (Task2 SPM-gated test),
+4234502 (Task3 cluster harness). **HEADLINE matched-F relative_error: PENDING — orchestrator submits the
+sbatch + harvests the JSON.** **Next: orchestrator submits `cluster/sbatch/spm_cross_validation.sbatch`,
+harvests `cluster/results/spm_cross_validation_<jobid>.json`, populates the headline number in SUMMARY+STATE,
+then `/gsd:verify-phase 32` → v0.7.0 close-out.**
 **Phase 32 — SPM12 Cross-Validation: IN PROGRESS (wave-1) — the LAST v0.7.0 phase.**
 **32-01 DONE 2026-06-11 (the SAME-CSD injection bridge):** a Python analytic `(F,N,N)` complex CSD
 now injects element-identical into the SPM12 `DCM.Y.csd`/`DCM.Y.Hz` struct (C-order, NO transpose,
@@ -191,6 +218,10 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
 - **[32-01-D4] The MATLAB injection script is UNEXECUTED at 32-01.** MATLAB R2022a is installed locally but `matlab -batch` failed a license checkout (`-15,10032`), and full SPM estimation is Plan 32-03 by design (plan delivers script + sanity check only). Verified by grep (`DCM.Y.csd`, `DCM.Y.Hz`, `spm_dcm_fmri_csd`, `results.Ep_A/Cp/F`). CARRY-FORWARD to 32-03: confirm `DCM.Y.csd`-populated actually bypasses `spm_dcm_fmri_csd_data` in this SPM12 build, and that the `Ep.A(1,2)`/`Ep.A(2,1)` readout matches the injected asymmetric ground truth (0.15 / 0.10).
 - **[32-02-D1] Strict 5% relative-F is the HARD default gate for VL-vs-SPM matched-F (BINDING user decision).** `compare_free_energies(vl_free_energy, spm_F, rel_tolerance=0.05)` returns `within_tolerance = bool(rel_err < rel_tolerance)` with `rel_err = abs(vl-spm)/max(abs(spm),1e-12)` — a pass/fail gate, NOT a descriptive report (overrides the research's softer fallback). It is single-problem-only (same priors/data/model, same CSD); its docstring forbids S3 cross-model absolute-F use, and cross-model agreement stays `compare_model_ranking` (relative ranking), pinned by `test_cross_model_ranking_is_separate_path`. The 5% target is only meaningful when both F are on the IDENTICAL CSD (same-CSD injection, Plan 32-01). The `within_tolerance` key is a contract consumed by Plan 32-03 (`run_vl_validation.py`) — do not change the signature/return.
 - **[32-02-D2] No new mypy override; `compare_free_energies` returns bare `dict` to match every existing sibling comparator.** `compare_posterior_means`/`compare_model_ranking`/`compute_free_param_comparison` all annotate `-> dict:`; the new function follows the module's established pattern. mypy baseline 15→16 errors, the single delta being the same `[type-arg]` on bare `dict` the whole file already emits (no new error category; pre-existing scipy-stub + bare-generic noise). Scoped to the plan's files, consistent with 30-01-D4. The new test file introduces zero mypy errors of its own; ruff clean on both.
+- **[32-03-D1] MATLAB binary from `config.MATLAB_PATH`; SPM12 via the `SPM12_PATH` child env var (single name across .m, sbatch, subprocess).** `run_vl_validation.py` resolves `[str(MATLAB_PATH), "-batch", ...]` and passes `dict(os.environ)` (carrying the sbatch-exported `SPM12_PATH`) to the MATLAB subprocess; the `.m` reads `getenv('SPM12_PATH')` with a local-default fallback (the ONLY change to the 32-01 file, loud `~exist` guard kept). One env-var name spans the .m, the sbatch, and the subprocess so laptop + M3 share one code path (the addendum prose's `DCM_SPM12_PATH` was reconciled to `SPM12_PATH`, matching the must-have/.m/sbatch/orchestrator instruction).
+- **[32-03-D2] Cross-model ranking uses 3 a_mask scenarios, RELATIVE delta-F only (S3).** full-reciprocal (correct) / single-direction ([1,0] only) / diagonal-only, each re-fit on BOTH engines; `compare_model_ranking` compares only the relative ordering of F (key `"pyro_elbo"` = VL `free_energy[-1]`, higher=better). NEVER absolute F across masks, NEVER element-wise Cp. Single-direction may rank near diagonal-only — itself a valid agreement signal per the Phase 31 identifiability finding.
+- **[32-03-D3] Pre-existing mypy bare-dict `[type-arg]` + `pyro_dcm`/scipy `[import-untyped]` are not gated.** Every `validation/` comparator returns bare `dict`; `pyro_dcm` ships no `py.typed`. Honored the file convention (consistent with 32-01-D3 / 32-02-D2); ruff clean on all 3 changed Python files.
+- **[32-03-D4] The real `spm_nlsi_GN` cross-validation executes on M3; the laptop SPM-gated test auto-skips — both enforce the SAME orchestrator.** Local FlexLM -15 unreachable; MATLAB R2022a + SPM12 verified on the M3 comp partition. The strict 5% matched-F gate is HARD-asserted in the laptop test (which SKIPS without a license) and RECORDED (`matched_f_relative_error`, record-don't-crash per 31-03-D3) in the M3 JSON — both true: the test enforces it, the run reports the real number. A genuine 5%-F miss is a finding to ESCALATE, not to silently relax (the user chose the strict gate + same-CSD path to make it achievable).
 - **[31-03-D1] `temper_vl_posterior` cannot break PD by positive scaling alone; the guard fires only on an already-indefinite input.** A positive scalar times a PD matrix stays PD, so an "over-large T" never breaks a clean posterior. The laptop PD-guard test (`tests/test_bmr_tempering_calibration.py`) therefore feeds a deliberately indefinite covariance (a symmetric matrix with one negative eigenvalue) so the Cholesky genuinely fails, asserting the message names the shape `(3,3)` and `tempering_factor=100.0`. The realistic PD break is captured on the cluster as the C2c cross-condition mode (T=2.0 calibrated on task-N4 breaks PD on task-N2). The plan's "over-large T that breaks PD" is realized exactly this way.
 - **[31-03-D2] Chosen T is the smallest coverage-RAISING candidate even when the coarse ladder overshoots the band (in_band=False).** On the task-N4 stress re-fit seed, the (1,2,5,10,20,50,100) ladder jumps from coverage 0.875 (T=1) straight to 1.0 (T=2), so no candidate lands inside [0.90,0.98]; `select_tempering_factor` returns the closest-to-target (T=2.0, coverage 1.0) with `in_band=False` and never raises. The band [0.90,0.98] is a documented EXPLORATORY choice (research Open Question 3), not a validated schedule; a finer ladder would be needed to hit it exactly. Reported, not gated. The tempered top-K is identical to the untempered ([12,11,3,14,7,13]) — mild tempering preserves the BMR structure.
 - **[31-03-D3] Cross-condition non-PD (C2c) is RECORDED as a structured result, not raised.** The first M3 run (job 56396691) aborted with status=error when T=2.0 broke PD on the held-out task-N2 posterior. Fixed (Rule 1, in the Task 2 cluster script): the held-out untempered ranking is computed unconditionally and only the tempered path is wrapped in a `ValueError` guard, recording `cross_condition_non_pd=true` / `topk_preserved=false` / `non_pd_message`, so the already-successful stress-cell calibration persists and the job finishes status=ok (job 56397206). The C2c is the scientifically interesting outcome (a T tuned on one condition is not PD-safe on another) — surfaced as data, never lost as a crash. Tempering remains EXPLORATORY; absolute delta-F never gated.
@@ -372,6 +403,19 @@ validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
 - **Multi-start convergence (LC11).** ELBO landscape has local optima. Mitigated by >=10 random restarts.
 
 ## Session Continuity
+
+Last session: 2026-06-11 (executed Phase 32 Plan 03 — code-complete; M3 run PENDING orchestrator)
+Stopped at: Completed 32-03-PLAN.md (VLSPM-03, the Phase 32 deliverable) — wrote + committed all 5
+  artifacts: `validation/run_vl_validation.py` (`run_vl_spectral_dcm_validation`, reciprocal-asymmetric
+  N=2, SPM-matched priors, same-CSD injection, Ep 10% / matched-F 5% / relative ranking >=0.80),
+  the `.m` SPM12_PATH parameterization, `tests/test_vl_spm_cross_validation.py` (SPM-gated, collects +
+  skips 1/0-errors on this laptop), and the M3 harness `cluster/scripts/spm_cross_validation.py` +
+  `cluster/sbatch/spm_cross_validation.sbatch` (record-don't-crash). ruff/mypy clean (pre-existing
+  conventions only). DID NOT submit to M3 / ssh / run the VL fit locally. **NEXT (orchestrator): submit
+  `cluster/sbatch/spm_cross_validation.sbatch`, harvest `cluster/results/spm_cross_validation_<jobid>.json`,
+  populate the headline matched-F relative_error placeholder in 32-03-SUMMARY.md + STATE, then
+  `/gsd:verify-phase 32`.**
+Resume file: None (M3 submission is the orchestrator's step, not a continuation gate)
 
 Last session: 2026-06-11 (executed Phase 32 Plan 01)
 Stopped at: Completed 32-01-PLAN.md — the SAME-CSD injection bridge. `export_spectral_dcm_csd_for_spm()`
