@@ -619,7 +619,7 @@ round-trip test). Independent of Phase 30; runs concurrently.
 | 29. VL Validation Infrastructure & BMR Rank Functions | 5/5 | ✅ Complete (verified 6/6, 17/17 vl tests) | 2026-06-10 |
 | 30. Recovery Matrix Sweep (M3 Cluster) | 3/3 | ✅ Complete (verified passed 5/5); 10/10 cells classified, 0 errored: 6 PASS, 4 ident-limit. Spectral+latent+task N=2 VALIDATED; task N=4 documented ID-limit. jobs 56346424 + 56372816 | 2026-06-11 |
 | 31. BMR Validation & Posterior Tempering (Exploratory) | 3/3 | ✅ Complete (verified passed 3/3; 8 vl tests green) — VLBMR-01/02/03; tempering exploratory, never gates absolute ΔF | 2026-06-11 |
-| 32. SPM12 Cross-Validation (Local / MATLAB) | 0/? | Not started | -- |
+| 32. SPM12 Cross-Validation (Local / MATLAB) | 0/3 | Planned (3 plans, 2 waves): same-CSD export+MATLAB injection (S4), compare_free_energies (strict-5%-F gate), VL twin orchestrator + SPM-gated run | -- |
 
 ---
 
