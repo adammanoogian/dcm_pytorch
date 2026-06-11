@@ -78,31 +78,83 @@ if ~isfield(DCM.Y, 'Hz')
     return;
 end
 
-% --- Inject the precomputed CSD (bypass MAR recompute) ---
-% spm_dcm_fmri_csd expects DCM.Y.csd as a cell array {csd} of one (Nf, n, n)
-% block. When it is already populated, spm_dcm_fmri_csd_data is skipped and the
-% supplied CSD is used directly. The .mat written by savemat arrives as a bare
-% numeric (Nf, n, n) array, so wrap it in a cell only if it is not already one.
-DCM.Y.Hz = DCM.Y.Hz(:);            % column vector of frequencies
-if ~iscell(DCM.Y.csd)
-    DCM.Y.csd = {squeeze(DCM.Y.csd)};
+% --- Inject the precomputed CSD and replicate spm_dcm_fmri_csd setup ---
+% IMPORTANT: spm_dcm_fmri_csd.m calls spm_dcm_fmri_csd_data UNCONDITIONALLY
+% (line ~213), which RECOMPUTES DCM.Y.csd from the BOLD timeseries (DCM.Y.y) via
+% a MAR model -- silently OVERWRITING any injected CSD (our DCM.Y.y is a zeros
+% placeholder, so that recompute is degenerate -> spm_nlsi_GN RCOND=NaN ->
+% "Convergence failure"). To genuinely fit the injected analytic CSD we replicate
+% the model setup from spm_dcm_fmri_csd.m (priors + M structure) and call
+% spm_nlsi_GN directly, SKIPPING the data step. For resting-state spectral DCM
+% the input is constant, so DCM.U.csd = zeros (spm_dcm_fmri_csd_data.m "else"
+% branch) -- it does NOT depend on the BOLD.
+% Source: spm_dcm_fmri_csd.m lines 154-243, spm_dcm_fmri_csd_data.m.
+DCM.Y.Hz = DCM.Y.Hz(:);                 % column vector of frequencies
+if iscell(DCM.Y.csd)
+    DCM.Y.csd = DCM.Y.csd{1};
 end
-fprintf('Injected DCM.Y.csd (%d freqs) + DCM.Y.Hz; SPM CSD recompute bypassed.\n', ...
+DCM.Y.csd = squeeze(DCM.Y.csd);         % numeric (Nf, n, n), single session
+fprintf('Injected DCM.Y.csd (%d freqs); SPM CSD recompute SKIPPED.\n', ...
     numel(DCM.Y.Hz));
 
-% --- Ensure required fields ---
-if ~isfield(DCM.Y, 'Q')
-    DCM.Y.Q = spm_Ce(ones(1, double(DCM.n)) * double(DCM.v));
-    fprintf('Added DCM.Y.Q (error precision components).\n');
+n = double(DCM.n);
+
+% Spectral toolbox (spm_csd_fmri_mtf -> spm_mar2csd dependencies)
+if ~isdeployed
+    addpath(fullfile(spm('Dir'), 'toolbox', 'spectral'));
 end
 
-% --- Run spectral DCM estimation on the INJECTED CSD ---
 try
-    fprintf('Running spm_dcm_fmri_csd on injected CSD...\n');
-    DCM = spm_dcm_fmri_csd(DCM);
+    % --- priors (and initial states): spm_dcm_fmri_csd.m line 154 ---
+    [pE, pC, x] = spm_dcm_fmri_priors(DCM.a, DCM.b, DCM.c, DCM.d, DCM.options);
+
+    % --- SPM12 hyperpriors (match the VL engine: hE = 8, hC = 1/128) ---
+    if ~isfield(DCM, 'M')
+        DCM.M = struct();
+    end
+    hE = 8;
+    hC = 1/128;
+    if isfield(DCM.M, 'hE'), hE = DCM.M.hE; end
+    if isfield(DCM.M, 'hC'), hC = DCM.M.hC; end
+
+    % --- model structure: spm_dcm_fmri_csd.m lines 188-211 ---
+    DCM.M.IS = 'spm_csd_fmri_mtf';
+    DCM.M.g  = @spm_gx_fmri;
+    DCM.M.f  = @spm_fx_fmri;
+    DCM.M.x  = x;
+    DCM.M.pE = pE;
+    DCM.M.pC = pC;
+    DCM.M.hE = hE;
+    DCM.M.hC = hC;
+    DCM.M.n  = length(spm_vec(x));
+    DCM.M.m  = size(DCM.U.u, 2);
+    DCM.M.l  = n;
+    DCM.M.p  = DCM.options.order;
+    DCM.M.u  = sparse(n, 1);
+
+    % --- spectral scaffolding normally set by spm_dcm_fmri_csd_data ---
+    Nc        = size(DCM.U.u, 2);
+    DCM.U.csd = zeros(numel(DCM.Y.Hz), Nc, Nc);  % constant input -> zero
+    DCM.Y.p   = DCM.M.p;
+    DCM.Y.pst = (1:double(DCM.v)) * DCM.Y.dt;
+    DCM.M.Hz  = DCM.Y.Hz;
+    DCM.M.dt  = 1/2;
+    DCM.M.N   = 32;
+    DCM.M.ns  = 1/DCM.Y.dt;
+    DCM.Y.X0  = sparse(spm_length(DCM.Y.csd), 0);
+
+    % --- Variational Laplace inversion on the INJECTED CSD ---
+    fprintf('Running spm_nlsi_GN on injected CSD...\n');
+    Y.y = DCM.Y.csd;
+    [Ep, Cp, Eh, F] = spm_nlsi_GN(DCM.M, DCM.U, Y);
+    DCM.Ep = Ep;
+    DCM.Cp = Cp;
+    DCM.Eh = Eh;
+    DCM.F  = F;
+    DCM.Hz = DCM.Y.Hz;
     fprintf('Estimation complete. Free energy F = %.4f\n', DCM.F);
 catch e
-    fprintf('ERROR: spm_dcm_fmri_csd failed: %s\n', e.message);
+    fprintf('ERROR: injected-CSD spectral DCM failed: %s\n', e.message);
     return;
 end
 
