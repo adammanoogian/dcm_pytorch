@@ -6,8 +6,14 @@ present edges, the off-diagonal C-order flat-index set, and an extractor that
 turns a Variational Laplace fit result into the four tensors
 :func:`pyro_dcm.model_selection.bmr.rank_connections` consumes.
 
-This file is PURE plumbing -- it deliberately does NOT call ``rank_connections``
-itself, so the same helpers back both the test and downstream BMR analyses.
+The structure-recovery helpers (``make_sparse_ground_truth_A``,
+``offdiag_indices``, ``bmr_tensors_from_vl_result``) are PURE plumbing and do
+NOT call ``rank_connections`` themselves. Plan 31-03 adds two tempering
+helpers (``select_tempering_factor``, ``tempered_vs_untempered_ranking``) that
+DO call ``rank_connections`` / ``temper_vl_posterior`` -- these are the
+EXPLORATORY posterior-tempering calibration layer (absolute delta-F is never a
+pass/fail criterion; all tempering routes through the PD-guarded
+``temper_vl_posterior``).
 
 References
 ----------
@@ -28,8 +34,14 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from benchmarks.metrics import compute_coverage_from_samples
+from pyro_dcm.model_selection.bmr import (  # type: ignore[import-untyped]
+    rank_connections,
+    temper_vl_posterior,
+)
+
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
 
 def make_sparse_ground_truth_A(
@@ -183,3 +195,174 @@ def bmr_tensors_from_vl_result(
     prior_cov = prior_variance * torch.eye(d, dtype=torch.float64)
 
     return posterior_mean, posterior_cov, prior_mean, prior_cov
+
+
+def select_tempering_factor(
+    true_vals: torch.Tensor,
+    samples_fn: Callable[[float], torch.Tensor],
+    *,
+    target: float = 0.95,
+    band: tuple[float, float] = (0.90, 0.98),
+    candidates: Sequence[float] = (1, 2, 5, 10, 20, 50, 100),
+) -> dict[str, object]:
+    """Select a posterior tempering factor by coverage-matching (EXPLORATORY).
+
+    Sweeps a ladder of candidate temperatures ``T`` (ascending), drawing
+    tempered posterior samples via ``samples_fn(T)`` and recomputing the
+    empirical 95% credible-interval coverage of ``true_vals`` against those
+    samples. Returns the SMALLEST ``T`` whose coverage enters ``band`` -- the
+    minimal inflation that restores nominal calibration. If no candidate lands
+    in the band, returns the candidate whose coverage is closest to ``target``
+    and flags ``in_band=False`` (the miss is SURFACED, never raised; research
+    Section C2).
+
+    Coverage-matching against the Phase 30 ``recovery_matrix.json`` coverage is
+    the calibration the phase brief asks for. The band ``[0.90, 0.98]`` is a
+    deliberate CHOICE reported as exploratory, NOT a validated tempering
+    schedule (research Open Question 3). Tempering is an annotation on the
+    PRIMARY untempered ranking, never a headline claim, and absolute delta-F is
+    never used as a pass/fail criterion.
+
+    Parameters
+    ----------
+    true_vals : torch.Tensor
+        Ground-truth values, shape ``(D,)`` or ``(N, N)`` -- the same A space
+        the Phase 30 coverage was computed on.
+    samples_fn : Callable[[float], torch.Tensor]
+        Maps a temperature ``T`` to tempered posterior samples (shape
+        ``(S, D)`` or ``(S, N, N)``). The caller wires this to
+        :func:`pyro_dcm.model_selection.bmr.temper_vl_posterior` plus a
+        multivariate-normal draw -- ALL tempering routes through that PD guard.
+    target : float, optional
+        Nominal coverage to match. Default ``0.95``.
+    band : tuple[float, float], optional
+        Inclusive ``(low, high)`` acceptance band for the empirical 95%
+        coverage. Default ``(0.90, 0.98)``.
+    candidates : Sequence[float], optional
+        Ascending temperature ladder. Default ``(1, 2, 5, 10, 20, 50, 100)``.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys:
+
+        - ``tempering_factor`` : float -- the chosen ``T``.
+        - ``coverage`` : float -- empirical 95% coverage at the chosen ``T``.
+        - ``in_band`` : bool -- whether the chosen coverage is inside ``band``.
+        - ``trace`` : dict[float, float] -- the full ``{T: coverage}`` sweep.
+        - ``band`` : tuple[float, float] -- echo of the band for provenance.
+        - ``target`` : float -- echo of the target.
+        - ``candidates`` : list[float] -- echo of the swept ladder.
+
+    Raises
+    ------
+    ValueError
+        If ``candidates`` is empty, or ``band`` is malformed
+        (``low > high``).
+    """
+    cands = [float(c) for c in candidates]
+    if not cands:
+        raise ValueError("select_tempering_factor requires >=1 candidate; got 0")
+    low, high = float(band[0]), float(band[1])
+    if low > high:
+        raise ValueError(
+            f"band must satisfy low <= high; got low={low}, high={high}"
+        )
+
+    trace: dict[float, float] = {}
+    for temperature in sorted(cands):
+        samples = samples_fn(temperature)
+        coverage = compute_coverage_from_samples(
+            true_vals, samples, ci_level=0.95,
+        )
+        trace[temperature] = float(coverage)
+
+    in_band_factors = [t for t, c in trace.items() if low <= c <= high]
+    if in_band_factors:
+        chosen = min(in_band_factors)
+        return {
+            "tempering_factor": chosen,
+            "coverage": trace[chosen],
+            "in_band": True,
+            "trace": trace,
+            "band": (low, high),
+            "target": float(target),
+            "candidates": cands,
+        }
+
+    # No candidate entered the band -- surface the closest-to-target T, do NOT
+    # raise (research Section C2: the calibration miss is a reportable result).
+    chosen = min(trace, key=lambda t: abs(trace[t] - float(target)))
+    return {
+        "tempering_factor": chosen,
+        "coverage": trace[chosen],
+        "in_band": False,
+        "trace": trace,
+        "band": (low, high),
+        "target": float(target),
+        "candidates": cands,
+    }
+
+
+def tempered_vs_untempered_ranking(
+    posterior_mean: torch.Tensor,
+    posterior_cov: torch.Tensor,
+    prior_mean: torch.Tensor,
+    prior_cov: torch.Tensor,
+    prunable_indices: list[int],
+    tempering_factor: float,
+) -> dict[str, object]:
+    """Rank connections untempered vs tempered, side by side (EXPLORATORY).
+
+    Computes :func:`pyro_dcm.model_selection.bmr.rank_connections` on the raw VL
+    posterior covariance and on the tempered covariance
+    ``temper_vl_posterior(posterior_cov, tempering_factor)`` (THE PD-guarded
+    primitive -- the tempered Cholesky is never hand-rolled here). The tempered
+    ranking is reported strictly alongside the untempered one; absolute delta-F
+    is never a pass/fail criterion (Pitfall C1/C2).
+
+    Parameters
+    ----------
+    posterior_mean : torch.Tensor, shape (D,)
+        Mean of the full-model VL posterior.
+    posterior_cov : torch.Tensor, shape (D, D)
+        Covariance of the full-model VL posterior.
+    prior_mean : torch.Tensor, shape (D,)
+        Mean of the full-model prior.
+    prior_cov : torch.Tensor, shape (D, D)
+        Covariance of the full-model prior.
+    prunable_indices : list[int]
+        Indices of parameters eligible for pruning (length ``K >= 1``).
+    tempering_factor : float
+        Positive temperature applied to the posterior covariance via
+        :func:`temper_vl_posterior` (raises loudly if it breaks PD).
+
+    Returns
+    -------
+    dict
+        Dictionary with keys:
+
+        - ``tempering_factor`` : float -- echo of the applied temperature.
+        - ``untempered`` : dict -- ``rank_connections`` output on the raw
+          posterior covariance.
+        - ``tempered`` : dict -- ``rank_connections`` output on the tempered
+          covariance.
+
+    Raises
+    ------
+    ValueError
+        If ``temper_vl_posterior`` rejects the factor (non-positive or
+        non-PD tempered covariance; the message names shape and factor).
+    """
+    untempered = rank_connections(
+        posterior_mean, posterior_cov, prior_mean, prior_cov, prunable_indices,
+    )
+    cov_tempered = temper_vl_posterior(posterior_cov, tempering_factor)
+    tempered = rank_connections(
+        posterior_mean, cov_tempered, prior_mean, prior_cov, prunable_indices,
+    )
+    return {
+        "tempering_factor": float(tempering_factor),
+        "untempered": untempered,
+        "tempered": tempered,
+    }
