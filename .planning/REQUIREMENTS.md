@@ -247,10 +247,10 @@ numbering continues from 28; v0.7.0 phases are 29+. Mapped to phases during road
 
 ### Recovery Matrix (VLREC)
 
-- [ ] **VLREC-01**: Recovery-matrix sweep over N × SNR × {spectral, task, latent-circuit}, ≥10 seeds per cell, executed on the M3 cluster.
-- [ ] **VLREC-02**: Per-cell metrics use **per-region R² (not variance-pooled)**, **masked** sign recovery (`|true| > threshold`), CI coverage, RMSE, and identifiability shrinkage `std_post/std_prior` — hardened against the known metric artifacts (`sign(0)`, pooled R²).
-- [ ] **VLREC-03**: Recovery design excludes near-stability-boundary A matrices (max Re eig ∈ [−0.05, 0]) to avoid the `eig_clamp` non-injectivity confound; task DCM enforces dt ≥ 0.1.
-- [ ] **VLREC-04**: Recovery passes documented per-cell thresholds across the matrix, OR identifiability limits are documented with evidence (no silent failures).
+- [x] **VLREC-01**: Recovery-matrix sweep over N × SNR × {spectral, task, latent-circuit}, ≥10 seeds per cell, executed on the M3 cluster.
+- [x] **VLREC-02**: Per-cell metrics use **per-region R² (not variance-pooled)**, **masked** sign recovery (`|true| > threshold`), CI coverage, RMSE, and identifiability shrinkage `std_post/std_prior` — hardened against the known metric artifacts (`sign(0)`, pooled R²).
+- [x] **VLREC-03**: Recovery design excludes near-stability-boundary A matrices (max Re eig ∈ [−0.05, 0]) to avoid the `eig_clamp` non-injectivity confound; task DCM enforces dt ≥ 0.1.
+- [x] **VLREC-04**: Recovery passes documented per-cell thresholds across the matrix, OR identifiability limits are documented with evidence (no silent failures).
 - [ ] **VLREC-05**: C-order CSD round-trip regression test added to the suite (guards the column-major↔row-major / complex-CSD indexing class of bug) before any SPM cross-validation run.
 
 ### BMR Validation (VLBMR)
@@ -299,7 +299,7 @@ Explicit anti-features for v0.7.0 (documented to prevent scope creep).
 | VLREC-01 | Phase 30 | Complete |
 | VLREC-02 | Phase 30 | Complete |
 | VLREC-03 | Phase 30 | Complete |
-| VLREC-04 | Phase 30 | Partial (spectral+latent verdicts done; task variant blocked by simulate_task_dcm underflow — gap) |
+| VLREC-04 | Phase 30 | Complete (10/10 cells classified, 0 errored; task underflow fixed via rk4, job 56372816) |
 | VLROBUST-03 | Phase 30 | Complete |
 | VLBMR-01 | Phase 31 | Pending |
 | VLBMR-02 | Phase 31 | Pending |

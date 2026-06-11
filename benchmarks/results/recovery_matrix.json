@@ -1,8 +1,8 @@
 {
   "n_cells": 10,
-  "n_pass": 5,
-  "n_identifiability_limit": 1,
-  "n_error": 4,
+  "n_pass": 6,
+  "n_identifiability_limit": 4,
+  "n_error": 0,
   "rows": [
     {
       "cell_index": 0,
@@ -81,72 +81,72 @@
       "variant": "task",
       "n_regions": 2,
       "snr": 1.0,
-      "rmse_a_median": null,
-      "rmse_a_q25": null,
-      "rmse_a_q75": null,
-      "sign_recovery_masked": null,
-      "coverage_95": null,
-      "shrinkage_median": null,
+      "rmse_a_median": 0.04699702518763923,
+      "rmse_a_q25": 0.03467098443635662,
+      "rmse_a_q75": 0.12686550860761964,
+      "sign_recovery_masked": 1.0,
+      "coverage_95": 0.75,
+      "shrinkage_median": 0.6778230329004684,
       "r2_per_region": null,
-      "convergence_rate": null,
-      "n_success": null,
-      "n_failed": null,
-      "status": "error",
-      "reason": "errored: underflow in dt 0.0"
+      "convergence_rate": 0.9,
+      "n_success": 10,
+      "n_failed": 0,
+      "status": "identifiability_limit",
+      "reason": "identifiability limit: failed checks coverage_95(observed=0.75, threshold=0.85)"
     },
     {
       "cell_index": 5,
       "variant": "task",
       "n_regions": 2,
       "snr": 3.0,
-      "rmse_a_median": null,
-      "rmse_a_q25": null,
-      "rmse_a_q75": null,
-      "sign_recovery_masked": null,
-      "coverage_95": null,
-      "shrinkage_median": null,
+      "rmse_a_median": 0.03779264799732515,
+      "rmse_a_q25": 0.02522495765488592,
+      "rmse_a_q75": 0.11857934774557591,
+      "sign_recovery_masked": 1.0,
+      "coverage_95": 0.875,
+      "shrinkage_median": 0.5913242056123562,
       "r2_per_region": null,
-      "convergence_rate": null,
-      "n_success": null,
-      "n_failed": null,
-      "status": "error",
-      "reason": "errored: underflow in dt 0.0"
+      "convergence_rate": 0.9,
+      "n_success": 10,
+      "n_failed": 0,
+      "status": "pass",
+      "reason": "pass: all present checks met documented thresholds"
     },
     {
       "cell_index": 6,
       "variant": "task",
       "n_regions": 4,
       "snr": 1.0,
-      "rmse_a_median": null,
-      "rmse_a_q25": null,
-      "rmse_a_q75": null,
-      "sign_recovery_masked": null,
-      "coverage_95": null,
-      "shrinkage_median": null,
+      "rmse_a_median": 0.08439457226128762,
+      "rmse_a_q25": 0.07703449988480104,
+      "rmse_a_q75": 0.09541294833190707,
+      "sign_recovery_masked": 0.5714285969734192,
+      "coverage_95": 0.0,
+      "shrinkage_median": NaN,
       "r2_per_region": null,
-      "convergence_rate": null,
-      "n_success": null,
-      "n_failed": null,
-      "status": "error",
-      "reason": "errored: underflow in dt 0.0"
+      "convergence_rate": 0.4,
+      "n_success": 10,
+      "n_failed": 0,
+      "status": "identifiability_limit",
+      "reason": "identifiability limit: failed checks rmse_a(observed=0.08439457226128762, threshold=0.05), sign_recovery_masked(observed=0.5714285969734192, threshold=0.8), coverage_95(observed=0.0, threshold=0.85)"
     },
     {
       "cell_index": 7,
       "variant": "task",
       "n_regions": 4,
       "snr": 3.0,
-      "rmse_a_median": null,
-      "rmse_a_q25": null,
-      "rmse_a_q75": null,
-      "sign_recovery_masked": null,
-      "coverage_95": null,
-      "shrinkage_median": null,
+      "rmse_a_median": 0.07936537473949129,
+      "rmse_a_q25": 0.067433812821287,
+      "rmse_a_q75": 0.09541294833190707,
+      "sign_recovery_masked": 0.5714285969734192,
+      "coverage_95": 0.0,
+      "shrinkage_median": NaN,
       "r2_per_region": null,
-      "convergence_rate": null,
-      "n_success": null,
-      "n_failed": null,
-      "status": "error",
-      "reason": "errored: underflow in dt 0.0"
+      "convergence_rate": 0.4,
+      "n_success": 10,
+      "n_failed": 0,
+      "status": "identifiability_limit",
+      "reason": "identifiability limit: failed checks rmse_a(observed=0.07936537473949129, threshold=0.05), sign_recovery_masked(observed=0.5714285969734192, threshold=0.8), coverage_95(observed=0.0, threshold=0.85)"
     },
     {
       "cell_index": 8,
@@ -185,40 +185,7 @@
       "reason": "pass: all present checks met documented thresholds (skipped, metric None: coverage_95)"
     }
   ],
-  "errored": [
-    {
-      "cell_index": 4,
-      "variant": "task",
-      "n_regions": 2,
-      "snr": 1.0,
-      "error": "underflow in dt 0.0",
-      "traceback": "Traceback (most recent call last):\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/cluster/scripts/recovery_matrix_cell.py\", line 77, in main\n    result = run_one_cell(\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/benchmarks/recovery_matrix_grid.py\", line 319, in run_one_cell\n    cell_result, raw = _run_task_cell(config, snr)\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/benchmarks/recovery_matrix_grid.py\", line 514, in _run_task_cell\n    sim = simulate_task_dcm(\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/src/pyro_dcm/simulators/task_simulator.py\", line 360, in simulate_task_dcm\n    solution = integrate_ode(\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/src/pyro_dcm/utils/ode_integrator.py\", line 194, in integrate_ode\n    solution = integrator(func, y0, t_eval, **kwargs)\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/odeint.py\", line 80, in odeint\n    solution = solver.integrate(t)\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/solvers.py\", line 34, in integrate\n    solution[i] = self._advance(t[i])\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/rk_common.py\", line 246, in _advance\n    self.rk_state = self._adaptive_step(self.rk_state)\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/rk_common.py\", line 284, in _adaptive_step\n    assert t0 + dt > t0, 'underflow in dt {}'.format(dt.item())\nAssertionError: underflow in dt 0.0\n"
-    },
-    {
-      "cell_index": 5,
-      "variant": "task",
-      "n_regions": 2,
-      "snr": 3.0,
-      "error": "underflow in dt 0.0",
-      "traceback": "Traceback (most recent call last):\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/cluster/scripts/recovery_matrix_cell.py\", line 77, in main\n    result = run_one_cell(\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/benchmarks/recovery_matrix_grid.py\", line 319, in run_one_cell\n    cell_result, raw = _run_task_cell(config, snr)\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/benchmarks/recovery_matrix_grid.py\", line 514, in _run_task_cell\n    sim = simulate_task_dcm(\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/src/pyro_dcm/simulators/task_simulator.py\", line 360, in simulate_task_dcm\n    solution = integrate_ode(\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/src/pyro_dcm/utils/ode_integrator.py\", line 194, in integrate_ode\n    solution = integrator(func, y0, t_eval, **kwargs)\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/odeint.py\", line 80, in odeint\n    solution = solver.integrate(t)\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/solvers.py\", line 34, in integrate\n    solution[i] = self._advance(t[i])\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/rk_common.py\", line 246, in _advance\n    self.rk_state = self._adaptive_step(self.rk_state)\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/rk_common.py\", line 284, in _adaptive_step\n    assert t0 + dt > t0, 'underflow in dt {}'.format(dt.item())\nAssertionError: underflow in dt 0.0\n"
-    },
-    {
-      "cell_index": 6,
-      "variant": "task",
-      "n_regions": 4,
-      "snr": 1.0,
-      "error": "underflow in dt 0.0",
-      "traceback": "Traceback (most recent call last):\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/cluster/scripts/recovery_matrix_cell.py\", line 77, in main\n    result = run_one_cell(\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/benchmarks/recovery_matrix_grid.py\", line 319, in run_one_cell\n    cell_result, raw = _run_task_cell(config, snr)\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/benchmarks/recovery_matrix_grid.py\", line 514, in _run_task_cell\n    sim = simulate_task_dcm(\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/src/pyro_dcm/simulators/task_simulator.py\", line 360, in simulate_task_dcm\n    solution = integrate_ode(\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/src/pyro_dcm/utils/ode_integrator.py\", line 194, in integrate_ode\n    solution = integrator(func, y0, t_eval, **kwargs)\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/odeint.py\", line 80, in odeint\n    solution = solver.integrate(t)\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/solvers.py\", line 34, in integrate\n    solution[i] = self._advance(t[i])\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/rk_common.py\", line 246, in _advance\n    self.rk_state = self._adaptive_step(self.rk_state)\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/rk_common.py\", line 284, in _adaptive_step\n    assert t0 + dt > t0, 'underflow in dt {}'.format(dt.item())\nAssertionError: underflow in dt 0.0\n"
-    },
-    {
-      "cell_index": 7,
-      "variant": "task",
-      "n_regions": 4,
-      "snr": 3.0,
-      "error": "underflow in dt 0.0",
-      "traceback": "Traceback (most recent call last):\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/cluster/scripts/recovery_matrix_cell.py\", line 77, in main\n    result = run_one_cell(\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/benchmarks/recovery_matrix_grid.py\", line 319, in run_one_cell\n    cell_result, raw = _run_task_cell(config, snr)\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/benchmarks/recovery_matrix_grid.py\", line 514, in _run_task_cell\n    sim = simulate_task_dcm(\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/src/pyro_dcm/simulators/task_simulator.py\", line 360, in simulate_task_dcm\n    solution = integrate_ode(\n  File \"/fs04/fc37/adam/projects/dcm_pytorch/src/pyro_dcm/utils/ode_integrator.py\", line 194, in integrate_ode\n    solution = integrator(func, y0, t_eval, **kwargs)\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/odeint.py\", line 80, in odeint\n    solution = solver.integrate(t)\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/solvers.py\", line 34, in integrate\n    solution[i] = self._advance(t[i])\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/rk_common.py\", line 246, in _advance\n    self.rk_state = self._adaptive_step(self.rk_state)\n  File \"/scratch/fc37/aman0087/conda/envs/actinf-py-scripts/lib/python3.10/site-packages/torchdiffeq/_impl/rk_common.py\", line 284, in _adaptive_step\n    assert t0 + dt > t0, 'underflow in dt {}'.format(dt.item())\nAssertionError: underflow in dt 0.0\n"
-    }
-  ],
+  "errored": [],
   "boundary_regime": {
     "band": [
       -0.05,
@@ -280,6 +247,58 @@
         "nearest_to_boundary": -0.2897193471804848
       },
       {
+        "cell_index": 4,
+        "variant": "task",
+        "n_regions": 2,
+        "snr": 1.0,
+        "shrinkage_median": 0.6778230329004684,
+        "coverage_95": 0.75,
+        "n_seeds": 10,
+        "max_eig_max": -0.5,
+        "max_eig_min": -0.5,
+        "in_band_count": 0,
+        "nearest_to_boundary": -0.5
+      },
+      {
+        "cell_index": 5,
+        "variant": "task",
+        "n_regions": 2,
+        "snr": 3.0,
+        "shrinkage_median": 0.5913242056123562,
+        "coverage_95": 0.875,
+        "n_seeds": 10,
+        "max_eig_max": -0.5,
+        "max_eig_min": -0.5,
+        "in_band_count": 0,
+        "nearest_to_boundary": -0.5
+      },
+      {
+        "cell_index": 6,
+        "variant": "task",
+        "n_regions": 4,
+        "snr": 1.0,
+        "shrinkage_median": NaN,
+        "coverage_95": 0.0,
+        "n_seeds": 10,
+        "max_eig_max": -0.19652315328174458,
+        "max_eig_min": -0.48917343872607555,
+        "in_band_count": 0,
+        "nearest_to_boundary": -0.19652315328174458
+      },
+      {
+        "cell_index": 7,
+        "variant": "task",
+        "n_regions": 4,
+        "snr": 3.0,
+        "shrinkage_median": NaN,
+        "coverage_95": 0.0,
+        "n_seeds": 10,
+        "max_eig_max": -0.19652315328174458,
+        "max_eig_min": -0.48917343872607555,
+        "in_band_count": 0,
+        "nearest_to_boundary": -0.19652315328174458
+      },
+      {
         "cell_index": 8,
         "variant": "latent_circuit",
         "n_regions": 4,
@@ -334,6 +353,20 @@
         "n_regions": 4,
         "snr": 3.0,
         "shrinkage_median": 0.02901536048367559
+      },
+      {
+        "cell_index": 4,
+        "variant": "task",
+        "n_regions": 2,
+        "snr": 1.0,
+        "shrinkage_median": 0.6778230329004684
+      },
+      {
+        "cell_index": 5,
+        "variant": "task",
+        "n_regions": 2,
+        "snr": 3.0,
+        "shrinkage_median": 0.5913242056123562
       },
       {
         "cell_index": 8,

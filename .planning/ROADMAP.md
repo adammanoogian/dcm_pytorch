@@ -536,7 +536,7 @@ evidence.
 Plans:
 - [x] 30-01-PLAN.md — Hardened per-cell metric assembler (per-region R2, masked sign recovery, 95% coverage, RMSE, std_post/std_prior shrinkage) + near-boundary-A exclusion band [-0.05, 0] + per-model SNR injection + unit tests (laptop) (VLREC-02, VLREC-03) ✅ 2026-06-10
 - [x] 30-02-PLAN.md — Recovery-matrix grid driver + env-driven single-cell entrypoint + SLURM array sbatch (no-pip, dt>=0.1) + local <3min faithfulness pre-check + SUBMIT small grid (N in {2,4} x SNR in {1,3} x 3 models, >=10 seeds = 120 fits) to M3 ✅ 2026-06-10 (job 56346424, all 10 tasks RUNNING)
-- [x] 30-03-PLAN.md — POST-RESULTS harvest+aggregate: documented per-cell thresholds + classifier (pass | identifiability-limit-with-evidence, no silent failures) + matrix CSV/JSON + eig_clamp/boundary regime characterization + report (VLREC-04, VLROBUST-03) ✅ 2026-06-10 (10/10 cells classified: 5 PASS, 1 ident-limit cell 8, 4 errored task cells surfaced)
+- [x] 30-03-PLAN.md — POST-RESULTS harvest+aggregate: documented per-cell thresholds + classifier (pass | identifiability-limit-with-evidence, no silent failures) + matrix CSV/JSON + eig_clamp/boundary regime characterization + report (VLREC-04, VLROBUST-03) ✅ 2026-06-10; task underflow fixed (rk4) + cells 4-7 re-run on M3 (job 56372816) ✅ 2026-06-11 → **10/10 cells classified, 0 errored: 6 PASS, 4 ident-limit** (task N=2 recovers sign 1.0; task N=4 is a documented identifiability limit)
 
 **Success Criteria** (what must be TRUE):
 
@@ -610,7 +610,7 @@ round-trip test). Independent of Phase 30; runs concurrently.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 29. VL Validation Infrastructure & BMR Rank Functions | 5/5 | ✅ Complete (verified 6/6, 17/17 vl tests) | 2026-06-10 |
-| 30. Recovery Matrix Sweep (M3 Cluster) | 3/3 | ⚠️ Harness complete; spectral+latent VALIDATED (5 PASS, 1 ident-limit); task variant BLOCKED (4 cells: simulate_task_dcm underflow) → gap. job 56346424 | 2026-06-11 |
+| 30. Recovery Matrix Sweep (M3 Cluster) | 3/3 | ✅ Complete (verified passed 5/5); 10/10 cells classified, 0 errored: 6 PASS, 4 ident-limit. Spectral+latent+task N=2 VALIDATED; task N=4 documented ID-limit. jobs 56346424 + 56372816 | 2026-06-11 |
 | 31. BMR Validation & Posterior Tempering (Exploratory) | 0/? | Not started | -- |
 | 32. SPM12 Cross-Validation (Local / MATLAB) | 0/? | Not started | -- |
 
@@ -643,7 +643,7 @@ round-trip test). Independent of Phase 30; runs concurrently.
 | 27. Publication Artifacts | v0.6.0 | 3/3 | ✅ Delivered (synthetic results) | 2026-05-31 |
 | 28. Variational Laplace Inference Engine (retroactive) | v0.6.0 | n/a | ✅ Delivered (SPM12 spm_nlsi_GN + ForwardModel) | 2026-06-09 |
 | 29. VL Validation Infrastructure & BMR Rank Functions | v0.7.0 | 5/5 | ✅ Complete (verified 6/6) | 2026-06-10 |
-| 30. Recovery Matrix Sweep (M3 Cluster) | v0.7.0 | 3/3 | Complete 2026-06-10 (matrix harvested; 5 PASS / 1 ident-limit / 4 errored task cells surfaced) | -- |
+| 30. Recovery Matrix Sweep (M3 Cluster) | v0.7.0 | 3/3 | ✅ Complete 2026-06-11 (10/10 classified, 0 errored; 6 PASS / 4 ident-limit; task underflow fixed via rk4) | 2026-06-11 |
 | 31. BMR Validation & Posterior Tempering (Exploratory) | v0.7.0 | 0/? | Not started | -- |
 | 32. SPM12 Cross-Validation (Local / MATLAB) | v0.7.0 | 0/? | Not started | -- |
 

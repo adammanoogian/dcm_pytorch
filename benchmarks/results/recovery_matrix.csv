@@ -3,9 +3,9 @@ cell_index,variant,n_regions,snr,rmse_a_median,rmse_a_q25,rmse_a_q75,sign_recove
 1,spectral,2,3.0,0.012932923427824832,0.008821853209107163,0.01873682296237226,1.0,1.0,0.2081806373227101,,1.0,10,0,pass,pass: all present checks met documented thresholds
 2,spectral,4,1.0,0.0007488831564770775,0.000544169247891714,0.0009596339040969524,1.0,1.0,0.031806698486270706,,1.0,10,0,pass,pass: all present checks met documented thresholds
 3,spectral,4,3.0,0.0009865203716632456,0.00045747107192675544,0.001499657151704241,1.0,1.0,0.02901536048367559,,1.0,10,0,pass,pass: all present checks met documented thresholds
-4,task,2,1.0,,,,,,,,,,,error,errored: underflow in dt 0.0
-5,task,2,3.0,,,,,,,,,,,error,errored: underflow in dt 0.0
-6,task,4,1.0,,,,,,,,,,,error,errored: underflow in dt 0.0
-7,task,4,3.0,,,,,,,,,,,error,errored: underflow in dt 0.0
+4,task,2,1.0,0.04699702518763923,0.03467098443635662,0.12686550860761964,1.0,0.75,0.6778230329004684,,0.9,10,0,identifiability_limit,"identifiability limit: failed checks coverage_95(observed=0.75, threshold=0.85)"
+5,task,2,3.0,0.03779264799732515,0.02522495765488592,0.11857934774557591,1.0,0.875,0.5913242056123562,,0.9,10,0,pass,pass: all present checks met documented thresholds
+6,task,4,1.0,0.08439457226128762,0.07703449988480104,0.09541294833190707,0.5714285969734192,0.0,nan,,0.4,10,0,identifiability_limit,"identifiability limit: failed checks rmse_a(observed=0.08439457226128762, threshold=0.05), sign_recovery_masked(observed=0.5714285969734192, threshold=0.8), coverage_95(observed=0.0, threshold=0.85)"
+7,task,4,3.0,0.07936537473949129,0.067433812821287,0.09541294833190707,0.5714285969734192,0.0,nan,,0.4,10,0,identifiability_limit,"identifiability limit: failed checks rmse_a(observed=0.07936537473949129, threshold=0.05), sign_recovery_masked(observed=0.5714285969734192, threshold=0.8), coverage_95(observed=0.0, threshold=0.85)"
 8,latent_circuit,4,1.0,0.0501132010042016,0.04213460613981168,0.08191967001066573,1.0,,0.5019618202600273,0.07604554348923885,1.0,10,0,identifiability_limit,"identifiability limit: failed checks rmse_a(observed=0.0501132010042016, threshold=0.05); skipped (metric None): coverage_95"
 9,latent_circuit,4,3.0,0.039625706100970826,0.03761483716468706,0.06427946213410551,1.0,,0.34649001084004794,0.34545725795835075,1.0,10,0,pass,"pass: all present checks met documented thresholds (skipped, metric None: coverage_95)"

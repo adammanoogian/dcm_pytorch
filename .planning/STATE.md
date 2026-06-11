@@ -10,8 +10,17 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 **Milestone:** v0.7.0 Variational Laplace Validation (VL-validation-led).
-**Phase 30 — Recovery Matrix Sweep: ✅ COMPLETE 2026-06-10 (3/3 plans).**
-**30-03 DONE 2026-06-10:** harvest + classifier + report over the COMPLETE M3 sweep (job 56346424).
+**Phase 30 — Recovery Matrix Sweep: ✅ COMPLETE & VERIFIED PASSED 2026-06-11 (3/3 plans, 5/5 criteria).**
+**TASK GAP CLOSED 2026-06-11:** the 4 task cells that errored ("underflow in dt 0.0", torchdiffeq 0.2.5/
+torch 2.10 adaptive `dopri5` underflow in `simulate_task_dcm` ground-truth gen) were fixed by switching
+task ground-truth sim to fixed-step `rk4` (`_run_task_cell`, commit c0a7616) + broadened per-seed except,
+re-run on M3 (job 56372816), and harvested. **FULL MATRIX: 10/10 cells classified, 0 ERRORED — 6 PASS, 4
+identifiability-limit-with-evidence.** Task DCM recovers cleanly at N=2 (sign_masked 1.0, A-RMSE ~0.04;
+cell 5 PASS, cell 4 marginal coverage 0.75); task N=4 is a documented identifiability limit (sign 0.57,
+coverage 0.0, conv 0.4) — a real finding, not a harness failure. VLREC-01..04 + VLROBUST-03 all Complete.
+`30-VERIFICATION.md` status: **passed**. **Next: `/gsd:plan-phase 31` (BMR validation + tempering — task
+N=4 is the natural overconfidence stress case for tempering calibration).**
+**30-03 DONE 2026-06-10:** harvest + classifier + report over the COMPLETE M3 sweep (jobs 56346424 + 56372816).
 `benchmarks/recovery_matrix_thresholds.py` (documented per-cell thresholds RMSE_A 0.05 / sign 0.80 /
 coverage 0.85, SHRINKAGE_SOFT_TARGET 0.7 informational; `classify_cell` -> pass | identifiability_limit
 WITH evidence, never raises on a failing cell, skips missing metrics) + `cluster/scripts/
