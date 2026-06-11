@@ -1,0 +1,254 @@
+{
+  "status": "ok",
+  "job_id": "56397206",
+  "note": "EXPLORATORY -- tempering is NOT a headline claim; absolute delta-F is never a pass/fail criterion (Pitfall C1/C2).",
+  "seed": 42,
+  "max_iter": 64,
+  "tempering_factor": 2.0,
+  "in_band": false,
+  "coverage_target": 0.95,
+  "coverage_band": [
+    0.9,
+    0.98
+  ],
+  "stress_cell": {
+    "variant": "task",
+    "n_regions": 4,
+    "snr": 1.0,
+    "phase30_coverage_95": 0.0,
+    "refit_untempered_coverage_95": 0.875,
+    "tempered_coverage_95": 1.0,
+    "coverage_trace": {
+      "1.0": 0.875,
+      "2.0": 1.0,
+      "5.0": 1.0,
+      "10.0": 1.0,
+      "20.0": 1.0,
+      "50.0": 1.0,
+      "100.0": 1.0
+    },
+    "untempered_ranking": {
+      "ranked": [
+        {
+          "index": 12,
+          "prune_delta_f": -723317.9268149104,
+          "rank": 1,
+          "gap_to_next": 512734.6220651053
+        },
+        {
+          "index": 11,
+          "prune_delta_f": -210583.30474980507,
+          "rank": 2,
+          "gap_to_next": 84047.6930463433
+        },
+        {
+          "index": 3,
+          "prune_delta_f": -126535.61170346178,
+          "rank": 3,
+          "gap_to_next": 35053.68379189391
+        },
+        {
+          "index": 14,
+          "prune_delta_f": -91481.92791156787,
+          "rank": 4,
+          "gap_to_next": 44785.56545376772
+        },
+        {
+          "index": 7,
+          "prune_delta_f": -46696.36245780015,
+          "rank": 5,
+          "gap_to_next": 29162.780110778844
+        },
+        {
+          "index": 13,
+          "prune_delta_f": -17533.582347021304,
+          "rank": 6,
+          "gap_to_next": 4339.498284496203
+        },
+        {
+          "index": 2,
+          "prune_delta_f": -13194.0840625251,
+          "rank": 7,
+          "gap_to_next": 8782.634593056875
+        },
+        {
+          "index": 9,
+          "prune_delta_f": -4411.449469468225,
+          "rank": 8,
+          "gap_to_next": 998.8343024657083
+        },
+        {
+          "index": 6,
+          "prune_delta_f": -3412.615167002517,
+          "rank": 9,
+          "gap_to_next": 706.832877832951
+        },
+        {
+          "index": 1,
+          "prune_delta_f": -2705.782289169566,
+          "rank": 10,
+          "gap_to_next": 1703.4023589662788
+        },
+        {
+          "index": 8,
+          "prune_delta_f": -1002.3799302032872,
+          "rank": 11,
+          "gap_to_next": 996.6134126230276
+        },
+        {
+          "index": 4,
+          "prune_delta_f": -5.766517580259729,
+          "rank": 12,
+          "gap_to_next": null
+        }
+      ],
+      "separation_gap": 512734.6220651053,
+      "separation_after_rank": 1,
+      "prunable_indices": [
+        1,
+        2,
+        3,
+        4,
+        6,
+        7,
+        8,
+        9,
+        11,
+        12,
+        13,
+        14
+      ]
+    },
+    "tempered_ranking": {
+      "ranked": [
+        {
+          "index": 12,
+          "prune_delta_f": -723318.273383931,
+          "rank": 1,
+          "gap_to_next": 512734.62206110277
+        },
+        {
+          "index": 11,
+          "prune_delta_f": -210583.6513228283,
+          "rank": 2,
+          "gap_to_next": 84047.6930461022
+        },
+        {
+          "index": 3,
+          "prune_delta_f": -126535.95827672609,
+          "rank": 3,
+          "gap_to_next": 35053.68379173994
+        },
+        {
+          "index": 14,
+          "prune_delta_f": -91482.27448498615,
+          "rank": 4,
+          "gap_to_next": 44785.56545417282
+        },
+        {
+          "index": 7,
+          "prune_delta_f": -46696.70903081333,
+          "rank": 5,
+          "gap_to_next": 29162.78011036396
+        },
+        {
+          "index": 13,
+          "prune_delta_f": -17533.928920449365,
+          "rank": 6,
+          "gap_to_next": 4339.49828450007
+        },
+        {
+          "index": 2,
+          "prune_delta_f": -13194.430635949295,
+          "rank": 7,
+          "gap_to_next": 8782.634593052464
+        },
+        {
+          "index": 9,
+          "prune_delta_f": -4411.796042896831,
+          "rank": 8,
+          "gap_to_next": 998.8343024729666
+        },
+        {
+          "index": 6,
+          "prune_delta_f": -3412.9617404238643,
+          "rank": 9,
+          "gap_to_next": 706.8328778251789
+        },
+        {
+          "index": 1,
+          "prune_delta_f": -2706.1288625986854,
+          "rank": 10,
+          "gap_to_next": 1703.4023678491558
+        },
+        {
+          "index": 8,
+          "prune_delta_f": -1002.7264947495297,
+          "rank": 11,
+          "gap_to_next": 996.6134136182563
+        },
+        {
+          "index": 4,
+          "prune_delta_f": -6.113081131273402,
+          "rank": 12,
+          "gap_to_next": null
+        }
+      ],
+      "separation_gap": 512734.62206110277,
+      "separation_after_rank": 1,
+      "prunable_indices": [
+        1,
+        2,
+        3,
+        4,
+        6,
+        7,
+        8,
+        9,
+        11,
+        12,
+        13,
+        14
+      ]
+    }
+  },
+  "held_out_cell": {
+    "variant": "task",
+    "n_regions": 2,
+    "snr": 1.0,
+    "phase30_coverage_95": 0.75,
+    "applied_tempering_factor": 2.0,
+    "untempered_topk": [
+      1,
+      2
+    ],
+    "untempered_ranking": {
+      "ranked": [
+        {
+          "index": 1,
+          "prune_delta_f": "-inf",
+          "rank": 1,
+          "gap_to_next": NaN
+        },
+        {
+          "index": 2,
+          "prune_delta_f": "-inf",
+          "rank": 2,
+          "gap_to_next": null
+        }
+      ],
+      "separation_gap": 0.0,
+      "separation_after_rank": 2,
+      "prunable_indices": [
+        1,
+        2
+      ]
+    },
+    "cross_condition_non_pd": true,
+    "tempered_topk": null,
+    "topk_preserved": false,
+    "tempered_ranking": null,
+    "non_pd_message": "Tempered posterior covariance (shape (4, 4), tempering_factor=2.0) is not positive-definite (Cholesky failed)."
+  },
+  "elapsed_s": 432.3
+}
