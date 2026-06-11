@@ -240,6 +240,130 @@ def export_spectral_dcm_for_spm(
     scipy.io.savemat(output_path, {"DCM": DCM})
 
 
+def export_spectral_dcm_csd_for_spm(
+    observed_csd: np.ndarray,
+    freqs: np.ndarray,
+    a_mask: np.ndarray,
+    c_mask: np.ndarray,
+    TR: float,
+    output_path: str,
+    bold_data: np.ndarray | None = None,
+) -> None:
+    """Inject a precomputed complex CSD into an SPM12 spectral DCM .mat file.
+
+    Unlike ``export_spectral_dcm_for_spm`` (which ships BOLD and lets SPM12
+    recompute the CSD internally via its MAR model), this writes the EXACT
+    ``(F, N, N)`` complex cross-spectral density the Pyro-DCM VL engine fits
+    into ``DCM.Y.csd`` and the matching frequency grid into ``DCM.Y.Hz``. The
+    paired MATLAB script ``run_spm_spectral_dcm_csd_injected.m`` then estimates
+    on THAT identical data, so a strict matched-free-energy comparison between
+    the two engines is meaningful (both evaluate F on the same CSD).
+
+    Layout / pitfall S4 (column-major vs row-major)
+    -----------------------------------------------
+    ``observed_csd[w, i, j]`` is the C-order ``(F, N, N)`` CSD with ``j``
+    varying fastest, then ``i``, then ``w`` (the contract locked by
+    ``tests/test_csd_corder_roundtrip.py``). ``scipy.io.savemat`` writes a
+    3-D complex array and MATLAB reads it back as ``(F, N, N)``, so
+    ``DCM.Y.csd(w, i, j)`` (1-based) equals Python ``observed_csd[w-1, i-1,
+    j-1]``. NO transpose is applied here; the injection MATLAB script must
+    index accordingly. A silent transpose would corrupt the asymmetric
+    off-diagonal structure (e.g. ``csd[w, 0, 1] != csd[w, 1, 0]``), which is
+    exactly the bug ``tests/test_csd_injection_roundtrip.py`` guards against.
+
+    Parameters
+    ----------
+    observed_csd : np.ndarray
+        Cross-spectral density, shape ``(F, N, N)``. Cast to
+        ``np.complex128`` (pitfall N3). This is the SAME array the VL engine
+        fits.
+    freqs : np.ndarray
+        Frequency grid in Hz, shape ``(F,)``. Cast to ``np.float64``.
+    a_mask : np.ndarray
+        Binary connectivity mask, shape ``(N, N)``.
+    c_mask : np.ndarray
+        Binary driving input mask, shape ``(N, M)``.
+    TR : float
+        Repetition time in seconds.
+    output_path : str
+        Path for the output .mat file.
+    bold_data : np.ndarray or None, optional
+        Optional BOLD time series, shape ``(v, N)``, used only to set the
+        ``DCM.Y.y`` shape (its values are unused once ``csd`` is injected). If
+        None, a minimal float64 zeros placeholder of shape ``(v, N)`` with
+        ``v = len(freqs) * 8`` is synthesized so ``DCM.v`` / ``DCM.n`` stay
+        consistent.
+
+    Notes
+    -----
+    Mirrors the struct conventions of ``export_spectral_dcm_for_spm``:
+    ``options.induced = 1``, ``options.analysis = 'CSD'``, ``nograph = 1``,
+    ``order = 8``, a minimal constant ``U.u`` input at microtime resolution.
+    SPM12 source: ``spm_dcm_fmri_csd.m`` (when ``DCM.Y.csd`` is populated the
+    internal ``spm_dcm_fmri_csd_data`` CSD estimation is skipped).
+    """
+    observed_csd = np.asarray(observed_csd).astype(np.complex128)
+    freqs = np.asarray(freqs).astype(np.float64)
+
+    N = a_mask.shape[0]
+    M = c_mask.shape[1]
+    num_freqs = freqs.shape[0]
+
+    if bold_data is not None:
+        bold = bold_data.astype(np.float64)
+        v = bold.shape[0]
+    else:
+        v = num_freqs * 8
+        bold = np.zeros((v, N), dtype=np.float64)
+
+    # Microtime resolution for the (unused-but-shape-valid) constant input.
+    microtime_factor = 16
+    u_dt = TR / microtime_factor
+    T_micro = v * microtime_factor + 32
+    stimulus = np.ones((T_micro, M), dtype=np.float64)
+
+    DCM = {
+        "a": a_mask.astype(np.float64),
+        "b": np.zeros((N, N, 0), dtype=np.float64),
+        "c": c_mask.astype(np.float64),
+        "d": np.zeros((N, N, 0), dtype=np.float64),
+        "Y": {
+            "y": bold,
+            "dt": np.array([[TR]]),
+            "X0": np.ones((v, 1), dtype=np.float64),
+            "name": np.array(
+                [[f"R{i + 1}" for i in range(N)]], dtype=object
+            ),
+            # Injected CSD (pitfall S4: C-order (F, N, N), no transpose).
+            "csd": observed_csd,
+            "Hz": freqs.reshape(-1, 1),
+        },
+        "U": {
+            "u": stimulus,
+            "dt": np.array([[u_dt]]),
+            "name": np.array(
+                [[f"stim{i + 1}" for i in range(M)]], dtype=object
+            ),
+        },
+        "n": np.array([[N]]),
+        "v": np.array([[v]]),
+        "TE": np.array([[0.04]]),
+        "delays": np.ones((1, N)) * TR / 2,
+        "options": {
+            "nonlinear": np.array([[0]]),
+            "two_state": np.array([[0]]),
+            "stochastic": np.array([[0]]),
+            "centre": np.array([[0]]),
+            "induced": np.array([[1]]),
+            "nograph": np.array([[1]]),
+            "maxit": np.array([[128]]),
+            "analysis": np.array([["CSD"]], dtype=object),
+            "order": np.array([[8]]),
+        },
+    }
+    scipy.io.savemat(output_path, {"DCM": DCM})
+
+
 def export_rdcm_for_tapas(
     bold_data: np.ndarray,
     stimulus: np.ndarray,
