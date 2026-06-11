@@ -1,0 +1,209 @@
+{
+  "status": "ok",
+  "job_id": "56407635",
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "note": "Phase 32-03 divergence investigation. Q1: is vl_F - spm_F a constant offset (f_offset_is_constant)? Q2: is the posterior-mean divergence systematic (per-seed offdiag_free_params vs truth)? Absolute F across DIFFERENT models is NEVER compared (S3); ranking is the only cross-model statistic.",
+  "summary": {
+    "n_seeds_ok": 5,
+    "f_offset_mean": 269.894710963494,
+    "f_offset_std": 0.0,
+    "f_offset_cv": 0.0,
+    "f_offset_is_constant": true,
+    "ranking_agreement_all_seeds": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ranking_agreement_min": 1.0
+  },
+  "per_seed": [
+    {
+      "seed": 42,
+      "status": "ok",
+      "vl_F": 577.4416637289859,
+      "spm_F": 307.5469527654919,
+      "f_offset_vl_minus_spm": 269.894710963494,
+      "ranking_agreement_rate": 1.0,
+      "matched_f_relative_error": 0.8775723789053174,
+      "offdiag_free_params": {
+        "vl_offdiag": [
+          0.14848199083742686,
+          0.10130291182973494
+        ],
+        "spm_offdiag": [
+          0.12655579668983868,
+          0.1908476582166442
+        ],
+        "true_offdiag": [
+          0.15,
+          0.1
+        ],
+        "vl_vs_spm_rel_error": [
+          0.17325317939663093,
+          0.46919489200784903
+        ],
+        "vl_vs_true_rel_error": [
+          0.010120061083820908,
+          0.013029118297349374
+        ],
+        "spm_vs_true_rel_error": [
+          0.15629468873440874,
+          0.908476582166442
+        ],
+        "vl_vs_spm_max_rel_error": 0.46919489200784903
+      }
+    },
+    {
+      "seed": 43,
+      "status": "ok",
+      "vl_F": 577.4416637289859,
+      "spm_F": 307.5469527654919,
+      "f_offset_vl_minus_spm": 269.894710963494,
+      "ranking_agreement_rate": 1.0,
+      "matched_f_relative_error": 0.8775723789053174,
+      "offdiag_free_params": {
+        "vl_offdiag": [
+          0.14848199083742686,
+          0.10130291182973494
+        ],
+        "spm_offdiag": [
+          0.12655579668983868,
+          0.1908476582166442
+        ],
+        "true_offdiag": [
+          0.15,
+          0.1
+        ],
+        "vl_vs_spm_rel_error": [
+          0.17325317939663093,
+          0.46919489200784903
+        ],
+        "vl_vs_true_rel_error": [
+          0.010120061083820908,
+          0.013029118297349374
+        ],
+        "spm_vs_true_rel_error": [
+          0.15629468873440874,
+          0.908476582166442
+        ],
+        "vl_vs_spm_max_rel_error": 0.46919489200784903
+      }
+    },
+    {
+      "seed": 44,
+      "status": "ok",
+      "vl_F": 577.4416637289859,
+      "spm_F": 307.5469527654919,
+      "f_offset_vl_minus_spm": 269.894710963494,
+      "ranking_agreement_rate": 1.0,
+      "matched_f_relative_error": 0.8775723789053174,
+      "offdiag_free_params": {
+        "vl_offdiag": [
+          0.14848199083742686,
+          0.10130291182973494
+        ],
+        "spm_offdiag": [
+          0.12655579668983868,
+          0.1908476582166442
+        ],
+        "true_offdiag": [
+          0.15,
+          0.1
+        ],
+        "vl_vs_spm_rel_error": [
+          0.17325317939663093,
+          0.46919489200784903
+        ],
+        "vl_vs_true_rel_error": [
+          0.010120061083820908,
+          0.013029118297349374
+        ],
+        "spm_vs_true_rel_error": [
+          0.15629468873440874,
+          0.908476582166442
+        ],
+        "vl_vs_spm_max_rel_error": 0.46919489200784903
+      }
+    },
+    {
+      "seed": 45,
+      "status": "ok",
+      "vl_F": 577.4416637289859,
+      "spm_F": 307.5469527654919,
+      "f_offset_vl_minus_spm": 269.894710963494,
+      "ranking_agreement_rate": 1.0,
+      "matched_f_relative_error": 0.8775723789053174,
+      "offdiag_free_params": {
+        "vl_offdiag": [
+          0.14848199083742686,
+          0.10130291182973494
+        ],
+        "spm_offdiag": [
+          0.12655579668983868,
+          0.1908476582166442
+        ],
+        "true_offdiag": [
+          0.15,
+          0.1
+        ],
+        "vl_vs_spm_rel_error": [
+          0.17325317939663093,
+          0.46919489200784903
+        ],
+        "vl_vs_true_rel_error": [
+          0.010120061083820908,
+          0.013029118297349374
+        ],
+        "spm_vs_true_rel_error": [
+          0.15629468873440874,
+          0.908476582166442
+        ],
+        "vl_vs_spm_max_rel_error": 0.46919489200784903
+      }
+    },
+    {
+      "seed": 46,
+      "status": "ok",
+      "vl_F": 577.4416637289859,
+      "spm_F": 307.5469527654919,
+      "f_offset_vl_minus_spm": 269.894710963494,
+      "ranking_agreement_rate": 1.0,
+      "matched_f_relative_error": 0.8775723789053174,
+      "offdiag_free_params": {
+        "vl_offdiag": [
+          0.14848199083742686,
+          0.10130291182973494
+        ],
+        "spm_offdiag": [
+          0.12655579668983868,
+          0.1908476582166442
+        ],
+        "true_offdiag": [
+          0.15,
+          0.1
+        ],
+        "vl_vs_spm_rel_error": [
+          0.17325317939663093,
+          0.46919489200784903
+        ],
+        "vl_vs_true_rel_error": [
+          0.010120061083820908,
+          0.013029118297349374
+        ],
+        "spm_vs_true_rel_error": [
+          0.15629468873440874,
+          0.908476582166442
+        ],
+        "vl_vs_spm_max_rel_error": 0.46919489200784903
+      }
+    }
+  ]
+}
