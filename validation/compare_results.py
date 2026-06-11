@@ -272,3 +272,58 @@ def compute_free_param_comparison(
         Same structure as ``compare_posterior_means``.
     """
     return compare_posterior_means(pyro_A_free, spm_Ep_A, tolerance)
+
+
+def compare_free_energies(
+    vl_free_energy: float,
+    spm_F: float,
+    rel_tolerance: float = 0.05,
+) -> dict:
+    """Compare VL and SPM free energy on the SAME matched problem.
+
+    Computes the relative error between the Variational Laplace free energy
+    (``free_energy[-1]``) and the SPM12 free energy (``DCM.F``) and gates it
+    against a relative tolerance. The 5% default is a HARD pass/fail criterion.
+
+    VLSPM-02: relative tolerance on the SAME matched problem ONLY (same priors,
+    same data, same model). The 5% gate is a HARD pass/fail criterion (user
+    decision: strict-5%-F is pass/fail, not merely descriptive).
+
+    This function must NEVER be used to compare absolute F across DIFFERENT
+    models (pitfall S3). Cross-model comparison goes through
+    ``compare_model_ranking`` (relative ranking of free energies / ELBOs), not
+    through this element-wise absolute-F comparator.
+
+    Both VL ``free_energy[-1]`` and SPM ``DCM.F`` are lower bounds on the
+    log-evidence; the 5% target is only meaningful when both are evaluated on
+    the IDENTICAL CSD (same-CSD injection, Plan 32-01). Comparing F values
+    derived from different data or different models is not defensible here.
+
+    Parameters
+    ----------
+    vl_free_energy : float
+        Variational Laplace free energy on the matched problem, i.e. the final
+        value ``free_energy[-1]`` from the VL engine.
+    spm_F : float
+        SPM12 free energy ``DCM.F`` on the IDENTICAL matched problem.
+    rel_tolerance : float, optional
+        Relative-error pass/fail threshold. Default 0.05 (the strict 5% gate).
+
+    Returns
+    -------
+    dict
+        - ``'vl_free_energy'``: float, the VL free energy as passed in.
+        - ``'spm_F'``: float, the SPM free energy as passed in.
+        - ``'relative_error'``: float, ``|vl - spm| / max(|spm|, 1e-12)``.
+        - ``'within_tolerance'``: bool, True iff ``relative_error <
+          rel_tolerance``.
+        - ``'rel_tolerance'``: float, the tolerance used for the gate.
+    """
+    rel_err = abs(vl_free_energy - spm_F) / max(abs(spm_F), 1e-12)
+    return {
+        "vl_free_energy": float(vl_free_energy),
+        "spm_F": float(spm_F),
+        "relative_error": float(rel_err),
+        "within_tolerance": bool(rel_err < rel_tolerance),
+        "rel_tolerance": float(rel_tolerance),
+    }
