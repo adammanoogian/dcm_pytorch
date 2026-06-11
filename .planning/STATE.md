@@ -136,6 +136,7 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
 
 ## Decisions
 
+- **[31-02-D1] VLBMR-02 COMPLETE (2/2) — reciprocal-edge ground truth makes the brute-force VL-refit present>absent gate pass.** `tests/test_bmr_vs_vl_refit.py` (`@pytest.mark.vl`, commits bc0e33f Task 1, ac69897 Task 2; 1 passed ~35-41s laptop, ruff+mypy clean). The plan's prescribed SPARSE single-edge spectral ground truth was UNIDENTIFIABLE and the brute-force gate failed: (a) the **hemodynamic** spectral forward (`spectral_dcm_forward(hemodynamic=True)`, default) is insensitive to single off-diagonal A entries on a near-diagonal base (CSD diff ≈0; rel-diff 8e-32 vs 0.23 neural-only) → sparse/chain A → A_free collapses to 0, all ΔF degenerate (SAME phenomenon as 31-01-D1); (b) a denser non-reciprocal A fit is non-identifiable/rotated (true A[1,0]=0.4 recovers A_free[idx3]≈0; mass lands on A[1,2]/A[0,1]; overconfident posterior loads the "absent" edges) so the brute-force refit ranked absent>present (C1/S3 + 29-02-D1). **Fix (adopted 31-01-D1's identifiability pattern):** RECIPROCAL-edge ground truth (0↔1 + 1↔2 present at 0.3/0.25, 0↔2 absent). With it A is recoverable and BOTH methods rank present>absent with worst single-prune-model agreement and Spearman ρ=1.0 (BMR present -3.54e6 < absent -2.43e6; brute-force present -5.89 < absent -2.26). Worst-model gate restricted to the like-for-like single-prune subset (two-prune model reported but excluded — S3/C1 dimensionality confound). RANK-only, never absolute-ΔF equality. `test_bmr_vs_elbo.py` (SVI) untouched. Reciprocal-edge spectral ground truth is now the shared identifiability pattern across 31-01 + 31-02. **Carry-forward:** brute-force present>absent ordering is fragile on non-identifiable spectral ground truth; any task/latent cross-model confirmation must use identifiable topology + route to M3 (`@pytest.mark.slow`, >3-min laptop).
 - **[31-01-D1] A feed-forward chain is UNIDENTIFIABLE by spectral DCM; VLBMR-01 ground truth uses RECIPROCAL edges.** The plan's feed-forward chain (N=2 `[(1,0)]`, N=4 `[(1,0),(2,1),(3,2)]`) produces a stationary CSD bit-identical to the empty graph (`||csd_chain-csd_zero||/||csd_zero|| = 0.0`), so VL collapses A_free to exactly zero and every single-prune delta-F is 0.0 (the spurious top-K `[3,7,11]` is float sign-noise = the transpose of the true edges, NOT an index bug — the S4 round-trip guard held). Switched to reciprocal edges (N=2 `[(0,1),(1,0)]` K=2; N=4 reciprocal chain K=6); recovery is 5/5. Real spectral-DCM identifiability property, carried forward to 31-03. Builder, plumbing, gate semantics, and the never-absolute-delta-F contract unchanged.
 - **[31-01-D2] N=2 saturated-reciprocal has no absent prunable edge → `separation_after_rank==K` cut is degenerate, asserted conditionally.** With both off-diagonals present (`K == N*(N-1)`) there is no essential/non-essential boundary, so the cut lands at rank 1, not K. Gated that assertion on `has_absent_edges = K < N*(N-1)`; recovery + positive separation_gap asserted unconditionally. N=4 (K=6 < 12) exercises the full cut==K gate.
 - **[31-01-D3] BMR separation_gap magnitudes (1e4–1e6 nats) are RELATIVE-ranking signal only.** They reflect VL Laplace overconfidence (pitfall C1); correctly NOT gated as absolute thresholds. This is the overconfidence regime tempering (31-03) targets.
@@ -314,16 +315,27 @@ validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
 
 ## Session Continuity
 
-Last session: 2026-06-11 (executed Phase 31 Plan 01)
-Stopped at: Completed 31-01-PLAN.md — VLBMR-01 recovery harness (the PRIMARY defensible BMR result).
+Last session: 2026-06-11 (executed Phase 31 Plan 02)
+Stopped at: Completed 31-02-PLAN.md — VLBMR-02 BMR-vs-brute-force-VL-refit agreement. New
+  `tests/test_bmr_vs_vl_refit.py` (@pytest.mark.vl, 1 test, ~35-41s laptop, ruff+mypy clean): one
+  full-model spectral VL fit → analytic BMR ΔF for 3 single-prune reduced models → brute-force VL
+  refits (a_mask-zeroed) → RANK-only gate (present>absent on BOTH methods + worst single-prune-model
+  agreement) + Spearman ρ=1.0 report. KEY FINDING / DEVIATION (31-02-D1): plan's sparse single-edge
+  spectral ground truth is UNIDENTIFIABLE (hemodynamic forward insensitive to single off-diagonal A;
+  VL collapses A_free→0; denser non-reciprocal A is rotated/overconfident → brute-force ranks
+  absent>present, C1/S3). Fixed by adopting 31-01's RECIPROCAL-edge ground truth (0↔1+1↔2 present,
+  0↔2 absent) → both gates pass. Worst-model gate on single-prune subset only (two-prune excluded,
+  S3/C1 dim confound). test_bmr_vs_elbo.py (SVI) untouched. Commits bc0e33f (Task 1), ac69897 (Task 2).
+  **Next: 31-03 (tempering calibration) reuses benchmarks/bmr_recovery.py + reciprocal ground truth.**
+  Branch: gsd/phase-31-bmr-validation-tempering.
+Prior session: 2026-06-11 (executed Phase 31 Plan 01)
+  Completed 31-01-PLAN.md — VLBMR-01 recovery harness (the PRIMARY defensible BMR result).
   `benchmarks/bmr_recovery.py` (make_sparse_ground_truth_A + offdiag_indices + bmr_tensors_from_vl_result,
   full A_free cov slice sigma_post[:N*N,:N*N]) + `tests/test_bmr_vlbmr01_recovery.py` (@pytest.mark.vl,
   spectral N=2/N=4, 5 seeds, 5/5 recovery, 112.7s laptop). RELATIVE ranking + separation gap, never
   absolute delta-F (C1). KEY FINDING: feed-forward chain A is unidentifiable by spectral CSD (bit-identical
   to empty graph) → ground truth uses RECIPROCAL edges. ruff+mypy clean. Commits c081c5c, 766dd24.
-  31-02 (bc0e33f) full-model VL fit + analytic BMR already on branch. **Next: 31-03 (tempering calibration)
-  reuses benchmarks/bmr_recovery.py + reciprocal ground truth.** Branch: gsd/phase-31-bmr-validation-tempering.
-Prior session: 2026-06-10 (executed Phase 30 Plan 03)
+Earlier session: 2026-06-10 (executed Phase 30 Plan 03)
 Earlier-prior session: Completed 30-03-PLAN.md — POST-RESULTS harvest + classifier + report over the COMPLETE M3
   sweep (job 56346424). `benchmarks/recovery_matrix_thresholds.py` (classify_cell pass | identifiability_limit
   with evidence) + `cluster/scripts/recovery_matrix_aggregate.py` (matrix CSV/JSON + report + eig_clamp
