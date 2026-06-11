@@ -221,8 +221,8 @@ def export_spectral_dcm_for_spm(
                 [[f"stim{i + 1}" for i in range(M)]], dtype=object
             ),
         },
-        "n": np.array([[N]]),
-        "v": np.array([[v]]),
+        "n": np.array([[N]], dtype=np.float64),
+        "v": np.array([[v]], dtype=np.float64),
         "TE": np.array([[0.04]]),
         "delays": np.ones((1, N)) * TR / 2,
         "options": {
@@ -345,8 +345,8 @@ def export_spectral_dcm_csd_for_spm(
                 [[f"stim{i + 1}" for i in range(M)]], dtype=object
             ),
         },
-        "n": np.array([[N]]),
-        "v": np.array([[v]]),
+        "n": np.array([[N]], dtype=np.float64),
+        "v": np.array([[v]], dtype=np.float64),
         "TE": np.array([[0.04]]),
         "delays": np.ones((1, N)) * TR / 2,
         "options": {
@@ -424,8 +424,8 @@ def export_rdcm_for_tapas(
                 [[f"stim{i + 1}" for i in range(M)]], dtype=object
             ),
         },
-        "n": np.array([[N]]),
-        "v": np.array([[v]]),
+        "n": np.array([[N]], dtype=np.float64),
+        "v": np.array([[v]], dtype=np.float64),
         "TE": np.array([[0.04]]),
         "delays": np.ones((1, N)) * TR / 2,
         "options": {

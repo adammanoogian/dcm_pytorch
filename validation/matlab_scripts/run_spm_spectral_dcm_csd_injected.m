@@ -92,7 +92,7 @@ fprintf('Injected DCM.Y.csd (%d freqs) + DCM.Y.Hz; SPM CSD recompute bypassed.\n
 
 % --- Ensure required fields ---
 if ~isfield(DCM.Y, 'Q')
-    DCM.Y.Q = spm_Ce(ones(1, DCM.n) * DCM.v);
+    DCM.Y.Q = spm_Ce(ones(1, double(DCM.n)) * double(DCM.v));
     fprintf('Added DCM.Y.Q (error precision components).\n');
 end
 
