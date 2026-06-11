@@ -565,6 +565,13 @@ of an absolute-ΔF regime calibrated against the Phase 30 coverage output.
 posteriors + coverage curves for tempering calibration).
 **Requirements:** VLBMR-01, VLBMR-02, VLBMR-03
 
+**Plans:** 3 plans (2 waves)
+
+Plans:
+- [ ] 31-01-PLAN.md — VLBMR-01: relative-ranking recovery harness (spectral VL fit, top-K==true edges, separation gap) [Wave 1, laptop]
+- [ ] 31-02-PLAN.md — VLBMR-02: BMR vs brute-force VL-refit rank-agreement on a small model set [Wave 1, laptop]
+- [ ] 31-03-PLAN.md — VLBMR-03: exploratory tempering calibration vs Phase 30 coverage, PD-safe, side-by-side [Wave 2, laptop test + M3 task-N4 re-fit]
+
 **Success Criteria** (what must be TRUE):
 
   1. BMR **relative-evidence ranking** recovers the true circuit structure (top-K essential edges
