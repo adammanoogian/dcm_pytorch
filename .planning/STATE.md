@@ -10,7 +10,23 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 **Milestone:** v0.7.0 Variational Laplace Validation (VL-validation-led).
-**Phase 32 — SPM12 Cross-Validation: IN PROGRESS (wave-1).**
+**Phase 32 — SPM12 Cross-Validation: IN PROGRESS (wave-1) — the LAST v0.7.0 phase.**
+**32-01 DONE 2026-06-11 (the SAME-CSD injection bridge):** a Python analytic `(F,N,N)` complex CSD
+now injects element-identical into the SPM12 `DCM.Y.csd`/`DCM.Y.Hz` struct (C-order, NO transpose,
+S4-guarded), and a forked MATLAB batch makes `spm_dcm_fmri_csd` fit THAT injected CSD instead of
+recomputing it from BOLD via MAR — the precondition for the strict 5%-matched-nat free-energy gate
+(32-02's `compare_free_energies`) used in Plan 32-03. `export_spectral_dcm_csd_for_spm()` in
+`validation/export_to_mat.py` (casts complex128/float64; BOLD-only `export_spectral_dcm_for_spm`
+untouched) + `validation/matlab_scripts/run_spm_spectral_dcm_csd_injected.m` (verify+inject csd/Hz,
+conditional cell-wrap, bypass MAR `spm_dcm_fmri_csd_data`, print Ep.A(1,2) vs Ep.A(2,1), identical
+Ep_A/Cp/F save block as `run_spm_spectral_dcm.m`) + `tests/test_csd_injection_roundtrip.py`
+(2 @pytest.mark.vl, transpose guard `loaded[0,0,1] != loaded[0,1,0]`, freqs float64). Gate
+(`test_csd_corder_roundtrip`) confirmed GREEN BEFORE building; combined 4 vl tests pass (2.97s);
+ruff clean on both changed files. MATLAB script UNEXECUTED (R2022a installed but license checkout
+failed `-15,10032`; full estimation is 32-03 by design) — verified by grep (22 tokens present).
+Decisions 32-01-D1/D2/D3. Commits a4582a3 (Task 1), 158bc22 (Task 2), d72a514 (Task 3). NO file
+overlap with 32-02 (parallel wave). **Next: 32-03 strict-5%-matched-F cross-validation consumes
+this bridge + `compare_free_energies` under MATLAB+SPM12.**
 **32-02 DONE 2026-06-11 (VLSPM-02, strict-5% matched-F gate):** added
 `compare_free_energies(vl_free_energy, spm_F, rel_tolerance=0.05)` to `validation/compare_results.py`
 — a SINGLE-matched-problem relative-tolerance comparator returning
@@ -169,6 +185,10 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
 
 ## Decisions
 
+- **[32-01-D1] The injected `DCM.Y.csd` is cell-wrapped `{squeeze(csd)}` only if `~iscell` in the MATLAB script.** `scipy.io.savemat` writes a bare numeric `(Nf,n,n)` complex array, but `spm_dcm_fmri_csd` expects `DCM.Y.csd` as a one-element cell block; the conditional wrap is idempotent and the comment cites `spm_dcm_fmri_csd.m` (when `DCM.Y.csd` is populated, the internal `spm_dcm_fmri_csd_data` MAR estimation is skipped and the supplied CSD used directly). NO transpose on either side: `DCM.Y.csd(w,i,j)` 1-based == Python `observed_csd[w-1,i-1,j-1]`, guarded by `tests/test_csd_injection_roundtrip.py`.
+- **[32-01-D2] BOLD-less export synthesizes a `(len(freqs)*8, N)` float64 zeros `DCM.Y.y` placeholder.** Once `DCM.Y.csd` is injected the `y` values are unused, but `DCM.v`/`DCM.n` must stay valid; `v = len(freqs)*8` matches the spectral `order=8` so the struct is internally consistent. `bold_data` (optional) overrides only the `y` shape, never the injected csd.
+- **[32-01-D3] mypy `np.ndarray [type-arg]` + `scipy [import-untyped]` on the new function/test are PRE-EXISTING file conventions, not gated.** Every function in `export_to_mat.py` uses bare `np.ndarray` (15 baseline errors → 20 after, all the same `[type-arg]` class) and the repo ships no scipy stubs. Honored the existing style rather than diverging one function; ruff is clean on both changed files. The plan's `validation/` ruff sweep also surfaced pre-existing dirt in `run_rdcm_validation.py`/`run_validation.py` (untouched files) — not in scope (consistent with 30-01-D4 scoping).
+- **[32-01-D4] The MATLAB injection script is UNEXECUTED at 32-01.** MATLAB R2022a is installed locally but `matlab -batch` failed a license checkout (`-15,10032`), and full SPM estimation is Plan 32-03 by design (plan delivers script + sanity check only). Verified by grep (`DCM.Y.csd`, `DCM.Y.Hz`, `spm_dcm_fmri_csd`, `results.Ep_A/Cp/F`). CARRY-FORWARD to 32-03: confirm `DCM.Y.csd`-populated actually bypasses `spm_dcm_fmri_csd_data` in this SPM12 build, and that the `Ep.A(1,2)`/`Ep.A(2,1)` readout matches the injected asymmetric ground truth (0.15 / 0.10).
 - **[32-02-D1] Strict 5% relative-F is the HARD default gate for VL-vs-SPM matched-F (BINDING user decision).** `compare_free_energies(vl_free_energy, spm_F, rel_tolerance=0.05)` returns `within_tolerance = bool(rel_err < rel_tolerance)` with `rel_err = abs(vl-spm)/max(abs(spm),1e-12)` — a pass/fail gate, NOT a descriptive report (overrides the research's softer fallback). It is single-problem-only (same priors/data/model, same CSD); its docstring forbids S3 cross-model absolute-F use, and cross-model agreement stays `compare_model_ranking` (relative ranking), pinned by `test_cross_model_ranking_is_separate_path`. The 5% target is only meaningful when both F are on the IDENTICAL CSD (same-CSD injection, Plan 32-01). The `within_tolerance` key is a contract consumed by Plan 32-03 (`run_vl_validation.py`) — do not change the signature/return.
 - **[32-02-D2] No new mypy override; `compare_free_energies` returns bare `dict` to match every existing sibling comparator.** `compare_posterior_means`/`compare_model_ranking`/`compute_free_param_comparison` all annotate `-> dict:`; the new function follows the module's established pattern. mypy baseline 15→16 errors, the single delta being the same `[type-arg]` on bare `dict` the whole file already emits (no new error category; pre-existing scipy-stub + bare-generic noise). Scoped to the plan's files, consistent with 30-01-D4. The new test file introduces zero mypy errors of its own; ruff clean on both.
 - **[31-03-D1] `temper_vl_posterior` cannot break PD by positive scaling alone; the guard fires only on an already-indefinite input.** A positive scalar times a PD matrix stays PD, so an "over-large T" never breaks a clean posterior. The laptop PD-guard test (`tests/test_bmr_tempering_calibration.py`) therefore feeds a deliberately indefinite covariance (a symmetric matrix with one negative eigenvalue) so the Cholesky genuinely fails, asserting the message names the shape `(3,3)` and `tempering_factor=100.0`. The realistic PD break is captured on the cluster as the C2c cross-condition mode (T=2.0 calibrated on task-N4 breaks PD on task-N2). The plan's "over-large T that breaks PD" is realized exactly this way.
@@ -353,7 +373,21 @@ validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
 
 ## Session Continuity
 
-Last session: 2026-06-11 (executed Phase 32 Plan 02)
+Last session: 2026-06-11 (executed Phase 32 Plan 01)
+Stopped at: Completed 32-01-PLAN.md — the SAME-CSD injection bridge. `export_spectral_dcm_csd_for_spm()`
+  in `validation/export_to_mat.py` writes a Python `(F,N,N)` complex128 CSD + float64 `Hz` into
+  `DCM.Y.csd`/`DCM.Y.Hz` (C-order, NO transpose, S4-guarded; BOLD-only exporter untouched);
+  `validation/matlab_scripts/run_spm_spectral_dcm_csd_injected.m` forks `run_spm_spectral_dcm.m` to
+  verify+inject the CSD, conditionally cell-wrap, bypass the MAR `spm_dcm_fmri_csd_data` recompute,
+  print the `Ep.A(1,2)`/`Ep.A(2,1)` asymmetry, and save the identical `Ep_A/Cp/F` block;
+  `tests/test_csd_injection_roundtrip.py` (2 @pytest.mark.vl) proves `[w,i,j]` round-trips with the
+  transpose guard `loaded[0,0,1] != loaded[0,1,0]`. Gate (`test_csd_corder_roundtrip`) confirmed GREEN
+  before building; combined 4 vl tests pass (2.97s); ruff clean on both changed files. MATLAB script
+  UNEXECUTED (license `-15,10032`; full estimation is 32-03) — verified by grep. Decisions
+  32-01-D1..D4. Commits a4582a3, 158bc22, d72a514. Branch: gsd/phase-32-spm12-cross-validation.
+  **Next: Plan 32-03 (strict-5%-matched-F cross-validation) wires this bridge + `compare_free_energies`
+  under MATLAB+SPM12 — the LAST v0.7.0 plan.**
+Prior session: 2026-06-11 (executed Phase 32 Plan 02)
 Stopped at: Completed 32-02-PLAN.md — VLSPM-02 strict-5% matched free-energy comparator.
   Added `compare_free_energies(vl_free_energy, spm_F, rel_tolerance=0.05)` to
   `validation/compare_results.py` (single-matched-problem relative-tolerance comparator; returns
