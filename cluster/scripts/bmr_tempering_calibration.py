@@ -92,6 +92,7 @@ from pyro_dcm.inference import (  # type: ignore[import-untyped]  # noqa: E402
     run_variational_laplace_generic,
 )
 from pyro_dcm.model_selection.bmr import (  # type: ignore[import-untyped]  # noqa: E402
+    rank_connections,
     temper_vl_posterior,
 )
 from pyro_dcm.simulators.task_simulator import (  # type: ignore[import-untyped]  # noqa: E402
@@ -379,6 +380,11 @@ def main() -> None:
         tempered_block = cast("dict[str, Any]", ranking["tempered"])
 
         # --- Held-out cross-condition (same T) ----------------------------
+        # The chosen T is tuned on the N=4 stress cell; applying it UNCHANGED to
+        # the N=2 held-out posterior is the cross-condition probe (research
+        # Section C2a). If T pushes the held-out covariance non-PD, that is the
+        # EXPECTED C2c failure mode -- we RECORD it (do not abort), because the
+        # stress-cell calibration already succeeded.
         print(f"Re-fitting held-out task N=2 seed {seed}...")
         held_fit = _refit_task_seed(2, held_out_snr, seed, max_iter)
         held_result = held_fit["result"]
@@ -389,20 +395,51 @@ def main() -> None:
             held_result, N2, prior_variance=_A_PRIOR_VARIANCE_BOLD,
         )
         held_prunable = offdiag_indices(N2)
-        held_ranking = tempered_vs_untempered_ranking(
-            held_mean, held_cov, held_prior_mean, held_prior_cov,
-            held_prunable, chosen_t,
+        # Untempered ranking always succeeds (identity covariance).
+        held_untempered_block = rank_connections(
+            held_mean, held_cov, held_prior_mean, held_prior_cov, held_prunable,
         )
-        held_untempered_block = cast("dict[str, Any]", held_ranking["untempered"])
-        held_tempered_block = cast("dict[str, Any]", held_ranking["tempered"])
         k_held = len(held_prunable)
         held_untempered_topk = _topk_indices(held_untempered_block, k_held)
-        held_tempered_topk = _topk_indices(held_tempered_block, k_held)
-        held_topk_preserved = held_untempered_topk == held_tempered_topk
-        print(
-            f"  held-out top-K preserved under T={chosen_t}: "
-            f"{held_topk_preserved}"
-        )
+
+        held_out_block: dict[str, Any] = {
+            "variant": "task",
+            "n_regions": 2,
+            "snr": held_out_snr,
+            "phase30_coverage_95": held_out["coverage_95"],
+            "applied_tempering_factor": chosen_t,
+            "untempered_topk": held_untempered_topk,
+            "untempered_ranking": _rank_block_to_json(held_untempered_block),
+        }
+        try:
+            held_cov_tempered = temper_vl_posterior(held_cov, chosen_t)
+            held_tempered_block = rank_connections(
+                held_mean, held_cov_tempered, held_prior_mean,
+                held_prior_cov, held_prunable,
+            )
+            held_tempered_topk = _topk_indices(held_tempered_block, k_held)
+            held_topk_preserved = held_untempered_topk == held_tempered_topk
+            held_out_block["cross_condition_non_pd"] = False
+            held_out_block["tempered_topk"] = held_tempered_topk
+            held_out_block["topk_preserved"] = held_topk_preserved
+            held_out_block["tempered_ranking"] = _rank_block_to_json(
+                held_tempered_block,
+            )
+            print(
+                f"  held-out top-K preserved under T={chosen_t}: "
+                f"{held_topk_preserved}"
+            )
+        except ValueError as pd_err:
+            # Expected C2c: the stress-cell T is not PD-safe on this condition.
+            held_out_block["cross_condition_non_pd"] = True
+            held_out_block["tempered_topk"] = None
+            held_out_block["topk_preserved"] = False
+            held_out_block["tempered_ranking"] = None
+            held_out_block["non_pd_message"] = str(pd_err)
+            print(
+                f"  held-out C2c: T={chosen_t} broke PD on the N=2 posterior "
+                f"-> {pd_err}"
+            )
 
         entry = {
             "status": "ok",
@@ -427,20 +464,7 @@ def main() -> None:
                 "untempered_ranking": _rank_block_to_json(untempered_block),
                 "tempered_ranking": _rank_block_to_json(tempered_block),
             },
-            "held_out_cell": {
-                "variant": "task",
-                "n_regions": 2,
-                "snr": held_out_snr,
-                "phase30_coverage_95": held_out["coverage_95"],
-                "applied_tempering_factor": chosen_t,
-                "untempered_topk": held_untempered_topk,
-                "tempered_topk": held_tempered_topk,
-                "topk_preserved": held_topk_preserved,
-                "untempered_ranking": _rank_block_to_json(
-                    held_untempered_block,
-                ),
-                "tempered_ranking": _rank_block_to_json(held_tempered_block),
-            },
+            "held_out_cell": held_out_block,
         }
         print("  OK -- tempering calibration complete.")
     except Exception as e:  # noqa: BLE001 -- record any failure for triage
