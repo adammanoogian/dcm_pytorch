@@ -10,6 +10,7 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 **Milestone:** v0.7.0 Variational Laplace Validation (VL-validation-led).
+**Phase 31 — BMR Validation + Tempering: ✅ COMPLETE & VERIFIED PASSED 2026-06-11 (3/3 plans, 3/3 must-haves, 8 vl tests green on-machine).** VLBMR-01/02/03 all Complete. `31-VERIFICATION.md` status: **passed**. Tempering delivered strictly exploratory/PD-safe; absolute ΔF never gated anywhere. **Key identifiability finding (31-01-D1 / 31-02-D1):** spectral DCM cannot identify a lone off-diagonal A entry (CSD bit-identical to empty graph) — VLBMR-01/02 use RECIPROCAL-edge ground truth; the claim "relative ranking recovers TRUE structure" holds, the true structure is reciprocal. **Next: Phase 32 (SPM12 cross-validation, local/MATLAB) — the LAST v0.7.0 phase; `/gsd:plan-phase 32`. Needs MATLAB + SPM12.**
 **Phase 31 — BMR Validation + Tempering: 3/3 PLANS DONE (31-01, 31-02, 31-03).**
 **31-03 DONE 2026-06-11 (VLBMR-03, EXPLORATORY — NOT a headline claim):** posterior tempering,
 calibrated by coverage-matching against Phase 30 coverage_95 and routed ENTIRELY through the

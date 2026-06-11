@@ -568,9 +568,9 @@ posteriors + coverage curves for tempering calibration).
 **Plans:** 3 plans (2 waves)
 
 Plans:
-- [ ] 31-01-PLAN.md — VLBMR-01: relative-ranking recovery harness (spectral VL fit, top-K==true edges, separation gap) [Wave 1, laptop]
-- [ ] 31-02-PLAN.md — VLBMR-02: BMR vs brute-force VL-refit rank-agreement on a small model set [Wave 1, laptop]
-- [ ] 31-03-PLAN.md — VLBMR-03: exploratory tempering calibration vs Phase 30 coverage, PD-safe, side-by-side [Wave 2, laptop test + M3 task-N4 re-fit]
+- [x] 31-01-PLAN.md — VLBMR-01: relative-ranking recovery harness (spectral VL fit, top-K==true edges, separation gap) [Wave 1, laptop] ✅ 2026-06-11 (N=2/N=4 recover 5/5 seeds; reciprocal-edge ground truth — spectral DCM can't identify a lone off-diagonal A)
+- [x] 31-02-PLAN.md — VLBMR-02: BMR vs brute-force VL-refit rank-agreement on a small model set [Wave 1, laptop] ✅ 2026-06-11 (present>absent prune cost on both methods, worst-model agreement, ρ=1.0)
+- [x] 31-03-PLAN.md — VLBMR-03: exploratory tempering calibration vs Phase 30 coverage, PD-safe, side-by-side [Wave 2, laptop test + M3 task-N4 re-fit] ✅ 2026-06-11 (job 56397206; T=2.0 restores coverage 0.875→1.0, held-out C2c non-PD surfaced — no universal schedule)
 
 **Success Criteria** (what must be TRUE):
 
@@ -618,7 +618,7 @@ round-trip test). Independent of Phase 30; runs concurrently.
 |-------|----------------|--------|-----------|
 | 29. VL Validation Infrastructure & BMR Rank Functions | 5/5 | ✅ Complete (verified 6/6, 17/17 vl tests) | 2026-06-10 |
 | 30. Recovery Matrix Sweep (M3 Cluster) | 3/3 | ✅ Complete (verified passed 5/5); 10/10 cells classified, 0 errored: 6 PASS, 4 ident-limit. Spectral+latent+task N=2 VALIDATED; task N=4 documented ID-limit. jobs 56346424 + 56372816 | 2026-06-11 |
-| 31. BMR Validation & Posterior Tempering (Exploratory) | 0/? | Not started | -- |
+| 31. BMR Validation & Posterior Tempering (Exploratory) | 3/3 | ✅ Complete (verified passed 3/3; 8 vl tests green) — VLBMR-01/02/03; tempering exploratory, never gates absolute ΔF | 2026-06-11 |
 | 32. SPM12 Cross-Validation (Local / MATLAB) | 0/? | Not started | -- |
 
 ---
@@ -651,7 +651,7 @@ round-trip test). Independent of Phase 30; runs concurrently.
 | 28. Variational Laplace Inference Engine (retroactive) | v0.6.0 | n/a | ✅ Delivered (SPM12 spm_nlsi_GN + ForwardModel) | 2026-06-09 |
 | 29. VL Validation Infrastructure & BMR Rank Functions | v0.7.0 | 5/5 | ✅ Complete (verified 6/6) | 2026-06-10 |
 | 30. Recovery Matrix Sweep (M3 Cluster) | v0.7.0 | 3/3 | ✅ Complete 2026-06-11 (10/10 classified, 0 errored; 6 PASS / 4 ident-limit; task underflow fixed via rk4) | 2026-06-11 |
-| 31. BMR Validation & Posterior Tempering (Exploratory) | v0.7.0 | 0/? | Not started | -- |
+| 31. BMR Validation & Posterior Tempering (Exploratory) | v0.7.0 | 3/3 | ✅ Complete 2026-06-11 (VLBMR-01/02/03; 8 vl tests; tempering exploratory/PD-safe, never gates absolute ΔF) | 2026-06-11 |
 | 32. SPM12 Cross-Validation (Local / MATLAB) | v0.7.0 | 0/? | Not started | -- |
 
 ---

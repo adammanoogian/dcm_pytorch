@@ -255,9 +255,9 @@ numbering continues from 28; v0.7.0 phases are 29+. Mapped to phases during road
 
 ### BMR Validation (VLBMR)
 
-- [ ] **VLBMR-01**: BMR **relative-evidence ranking** recovers the true circuit structure (top-K essential edges = true edges) on synthetic ground truth, with separation gap reported — the primary, defensible model-comparison result.
-- [ ] **VLBMR-02**: BMR-on-VL agreement with brute-force ELBO model comparison on a small model set, validating the analytic approximation.
-- [ ] **VLBMR-03**: *(exploratory)* Posterior tempering restores a usable absolute-ΔF regime, calibrated against VLREC coverage output; PD-safe; documented as exploratory, not a headline claim.
+- [x] **VLBMR-01**: BMR **relative-evidence ranking** recovers the true circuit structure (top-K essential edges = true edges) on synthetic ground truth, with separation gap reported — the primary, defensible model-comparison result.
+- [x] **VLBMR-02**: BMR-on-VL agreement with brute-force ELBO model comparison on a small model set, validating the analytic approximation.
+- [x] **VLBMR-03**: *(exploratory)* Posterior tempering restores a usable absolute-ΔF regime, calibrated against VLREC coverage output; PD-safe; documented as exploratory, not a headline claim.
 
 ### SPM12 Cross-Validation (VLSPM)
 
@@ -301,9 +301,9 @@ Explicit anti-features for v0.7.0 (documented to prevent scope creep).
 | VLREC-03 | Phase 30 | Complete |
 | VLREC-04 | Phase 30 | Complete (10/10 cells classified, 0 errored; task underflow fixed via rk4, job 56372816) |
 | VLROBUST-03 | Phase 30 | Complete |
-| VLBMR-01 | Phase 31 | Pending |
-| VLBMR-02 | Phase 31 | Pending |
-| VLBMR-03 | Phase 31 | Pending |
+| VLBMR-01 | Phase 31 | Complete (spectral N=2/N=4 recover true structure 5/5 seeds, positive separation gap) |
+| VLBMR-02 | Phase 31 | Complete (BMR vs brute-force VL refit agree on rank + worst model; ρ=1.0) |
+| VLBMR-03 | Phase 31 | Complete (exploratory; T=2.0 restores task-N4 coverage 0.875→1.0, held-out C2c non-PD surfaced) |
 | VLSPM-01 | Phase 32 | Pending |
 | VLSPM-02 | Phase 32 | Pending |
 | VLSPM-03 | Phase 32 | Pending |
