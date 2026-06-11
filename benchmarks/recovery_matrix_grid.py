@@ -511,9 +511,15 @@ def _run_task_cell(
                 rest_duration=15.0,
                 n_inputs=M,
             )
+            # Fixed-step rk4 (not the default adaptive dopri5): on the M3 stack
+            # (torchdiffeq 0.2.5 / torch 2.10) dopri5 underflows ("dt 0.0") on
+            # this neural+hemodynamic ODE, killing every task cell. rk4 at
+            # dt=0.01 is deterministic, platform-independent, and matches the
+            # solver the VL forward (TaskDCMForward) already uses for the fit.
             sim = simulate_task_dcm(
                 A_true, C_true, stim,
-                duration=duration, dt=0.01, TR=_TR_TASK, SNR=task_snr, seed=seed_i,
+                duration=duration, dt=0.01, TR=_TR_TASK, SNR=task_snr,
+                seed=seed_i, solver="rk4",
             )
             bold = sim["bold"].to(torch.float64)
             a_mask = torch.ones(N, N, dtype=torch.float64)
@@ -563,7 +569,10 @@ def _run_task_cell(
             a_inferred_list.append(A_inferred.flatten().tolist())
             shrinkage_list.append(shrinkage)
 
-        except (RuntimeError, ValueError) as e:
+        except (RuntimeError, ValueError, AssertionError) as e:
+            # AssertionError covers torchdiffeq adaptive-solver underflow
+            # ("underflow in dt 0.0") so a single bad seed degrades to a
+            # skipped seed rather than aborting the whole cell.
             print(f"  task seed {seed_i} FAILED: {e}")
             n_failed += 1
 
