@@ -10,6 +10,22 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 **Milestone:** v0.7.0 Variational Laplace Validation (VL-validation-led).
+**Phase 32 — SPM12 Cross-Validation: IN PROGRESS (wave-1).**
+**32-02 DONE 2026-06-11 (VLSPM-02, strict-5% matched-F gate):** added
+`compare_free_energies(vl_free_energy, spm_F, rel_tolerance=0.05)` to `validation/compare_results.py`
+— a SINGLE-matched-problem relative-tolerance comparator returning
+`{vl_free_energy, spm_F, relative_error, within_tolerance, rel_tolerance}` with the 5% default as a
+HARD pass/fail gate (`rel_err < rel_tolerance`), per the BINDING user decision (overrides research's
+softer "report descriptively"). Docstring forbids S3 cross-model absolute-F use (cross-model path
+stays `compare_model_ranking`, relative ranking) and ties the 5% target to same-CSD injection
+(Plan 32-01). No existing function modified. `tests/test_compare_free_energies.py` (5
+`@pytest.mark.vl` tests, 1.48s laptop): within/outside-tol, custom tolerance, zero-`spm_F`
+div-by-zero guard, and a cross-model-ranking-is-separate-path test pinning the S3 boundary. The
+`within_tolerance` return key is the contract consumed by Plan 32-03 (`run_vl_validation.py`).
+ruff clean on both files; mypy delta 15→16 = the same bare-`dict` `[type-arg]` every sibling
+comparator emits (no new error category). Decisions 32-02-D1/D2. Commits 4e1ed26 (feat), 1a2a096
+(test). Branch: gsd/phase-32-spm12-cross-validation. **NOTE: Plan 32-01 (parallel wave, separate
+agent) edits `validation/export_to_mat.py` + MATLAB/test files; no file overlap with 32-02.**
 **Phase 31 — BMR Validation + Tempering: ✅ COMPLETE & VERIFIED PASSED 2026-06-11 (3/3 plans, 3/3 must-haves, 8 vl tests green on-machine).** VLBMR-01/02/03 all Complete. `31-VERIFICATION.md` status: **passed**. Tempering delivered strictly exploratory/PD-safe; absolute ΔF never gated anywhere. **Key identifiability finding (31-01-D1 / 31-02-D1):** spectral DCM cannot identify a lone off-diagonal A entry (CSD bit-identical to empty graph) — VLBMR-01/02 use RECIPROCAL-edge ground truth; the claim "relative ranking recovers TRUE structure" holds, the true structure is reciprocal. **Next: Phase 32 (SPM12 cross-validation, local/MATLAB) — the LAST v0.7.0 phase; `/gsd:plan-phase 32`. Needs MATLAB + SPM12.**
 **Phase 31 — BMR Validation + Tempering: 3/3 PLANS DONE (31-01, 31-02, 31-03).**
 **31-03 DONE 2026-06-11 (VLBMR-03, EXPLORATORY — NOT a headline claim):** posterior tempering,
@@ -153,6 +169,8 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
 
 ## Decisions
 
+- **[32-02-D1] Strict 5% relative-F is the HARD default gate for VL-vs-SPM matched-F (BINDING user decision).** `compare_free_energies(vl_free_energy, spm_F, rel_tolerance=0.05)` returns `within_tolerance = bool(rel_err < rel_tolerance)` with `rel_err = abs(vl-spm)/max(abs(spm),1e-12)` — a pass/fail gate, NOT a descriptive report (overrides the research's softer fallback). It is single-problem-only (same priors/data/model, same CSD); its docstring forbids S3 cross-model absolute-F use, and cross-model agreement stays `compare_model_ranking` (relative ranking), pinned by `test_cross_model_ranking_is_separate_path`. The 5% target is only meaningful when both F are on the IDENTICAL CSD (same-CSD injection, Plan 32-01). The `within_tolerance` key is a contract consumed by Plan 32-03 (`run_vl_validation.py`) — do not change the signature/return.
+- **[32-02-D2] No new mypy override; `compare_free_energies` returns bare `dict` to match every existing sibling comparator.** `compare_posterior_means`/`compare_model_ranking`/`compute_free_param_comparison` all annotate `-> dict:`; the new function follows the module's established pattern. mypy baseline 15→16 errors, the single delta being the same `[type-arg]` on bare `dict` the whole file already emits (no new error category; pre-existing scipy-stub + bare-generic noise). Scoped to the plan's files, consistent with 30-01-D4. The new test file introduces zero mypy errors of its own; ruff clean on both.
 - **[31-03-D1] `temper_vl_posterior` cannot break PD by positive scaling alone; the guard fires only on an already-indefinite input.** A positive scalar times a PD matrix stays PD, so an "over-large T" never breaks a clean posterior. The laptop PD-guard test (`tests/test_bmr_tempering_calibration.py`) therefore feeds a deliberately indefinite covariance (a symmetric matrix with one negative eigenvalue) so the Cholesky genuinely fails, asserting the message names the shape `(3,3)` and `tempering_factor=100.0`. The realistic PD break is captured on the cluster as the C2c cross-condition mode (T=2.0 calibrated on task-N4 breaks PD on task-N2). The plan's "over-large T that breaks PD" is realized exactly this way.
 - **[31-03-D2] Chosen T is the smallest coverage-RAISING candidate even when the coarse ladder overshoots the band (in_band=False).** On the task-N4 stress re-fit seed, the (1,2,5,10,20,50,100) ladder jumps from coverage 0.875 (T=1) straight to 1.0 (T=2), so no candidate lands inside [0.90,0.98]; `select_tempering_factor` returns the closest-to-target (T=2.0, coverage 1.0) with `in_band=False` and never raises. The band [0.90,0.98] is a documented EXPLORATORY choice (research Open Question 3), not a validated schedule; a finer ladder would be needed to hit it exactly. Reported, not gated. The tempered top-K is identical to the untempered ([12,11,3,14,7,13]) — mild tempering preserves the BMR structure.
 - **[31-03-D3] Cross-condition non-PD (C2c) is RECORDED as a structured result, not raised.** The first M3 run (job 56396691) aborted with status=error when T=2.0 broke PD on the held-out task-N2 posterior. Fixed (Rule 1, in the Task 2 cluster script): the held-out untempered ranking is computed unconditionally and only the tempered path is wrapped in a `ValueError` guard, recording `cross_condition_non_pd=true` / `topk_preserved=false` / `non_pd_message`, so the already-successful stress-cell calibration persists and the job finishes status=ok (job 56397206). The C2c is the scientifically interesting outcome (a T tuned on one condition is not PD-safe on another) — surfaced as data, never lost as a crash. Tempering remains EXPLORATORY; absolute delta-F never gated.
@@ -335,7 +353,22 @@ validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
 
 ## Session Continuity
 
-Last session: 2026-06-11 (executed Phase 31 Plan 03)
+Last session: 2026-06-11 (executed Phase 32 Plan 02)
+Stopped at: Completed 32-02-PLAN.md — VLSPM-02 strict-5% matched free-energy comparator.
+  Added `compare_free_energies(vl_free_energy, spm_F, rel_tolerance=0.05)` to
+  `validation/compare_results.py` (single-matched-problem relative-tolerance comparator; returns
+  `{vl_free_energy, spm_F, relative_error, within_tolerance, rel_tolerance}`; 5% HARD pass/fail gate
+  per binding user decision; docstring forbids S3 cross-model absolute-F, ties 5% to same-CSD
+  injection Plan 32-01; no existing function modified). `tests/test_compare_free_energies.py`
+  (5 @pytest.mark.vl tests, 1.48s laptop: within/outside-tol, custom tolerance, zero-F guard,
+  cross-model-ranking-is-separate-path pinning S3). Decisions 32-02-D1/D2. ruff clean both files;
+  mypy delta 15→16 = same pre-existing bare-`dict` `[type-arg]` pattern. Commits 4e1ed26 (feat),
+  1a2a096 (test). Branch: gsd/phase-32-spm12-cross-validation. **NOTE: Plan 32-01 (parallel wave,
+  separate agent) edits `validation/export_to_mat.py` + MATLAB/tests — no file overlap. Plan 32-03
+  consumes `compare_free_energies`'s `within_tolerance` contract.**
+  **Next: remaining Phase 32 plans (32-01 parallel wave-1, 32-03 wave-2 run_vl_validation), then
+  `/gsd:verify-phase 32` — the LAST v0.7.0 phase.**
+Prior session: 2026-06-11 (executed Phase 31 Plan 03)
 Stopped at: Completed 31-03-PLAN.md — VLBMR-03 EXPLORATORY posterior-tempering calibration.
   `benchmarks/bmr_recovery.py` + `select_tempering_factor` (smallest-T-in-band coverage matcher;
   closest-to-target surfaced if none in band, never raises) + `tempered_vs_untempered_ranking`
