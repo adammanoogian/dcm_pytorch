@@ -10,6 +10,18 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 **Milestone:** v0.7.0 Variational Laplace Validation (VL-validation-led).
+**Phase 31 — BMR Validation + Tempering: IN PROGRESS.**
+**31-01 DONE 2026-06-11 (VLBMR-01, the PRIMARY defensible result):** BMR relative-evidence ranking on a
+real spectral-DCM VL posterior recovers the true sparse circuit structure 5/5 across seeds for N=2 and
+N=4 (top-K essential off-diagonal edges == true present edges, positive separation_gap, cut at K), NEVER
+gating on absolute delta-F (pitfall C1). `benchmarks/bmr_recovery.py` (sparse ground-truth A builder +
+`bmr_tensors_from_vl_result` full A_free covariance slice `sigma_post[:N*N,:N*N]` + C-order `offdiag_indices`)
++ `tests/test_bmr_vlbmr01_recovery.py` (`@pytest.mark.vl`, 2 params x 5 seeds, 112.7s laptop). **KEY FINDING:
+a feed-forward chain A is UNIDENTIFIABLE by spectral DCM — its CSD is bit-identical to the empty graph
+(rel diff 0.0), collapsing A_free to zero; ground truth must use RECIPROCAL edges.** ruff+mypy clean.
+Commits c081c5c (helpers), 766dd24 (test). **Note: 31-02 (`bc0e33f test(31-02)`) full-model spectral VL
+fit + analytic BMR over reduced set also already present on this branch.** **Next: 31-03 (tempering
+calibration) reuses `benchmarks/bmr_recovery.py` + the reciprocal-edge ground truth.**
 **Phase 30 — Recovery Matrix Sweep: ✅ COMPLETE & VERIFIED PASSED 2026-06-11 (3/3 plans, 5/5 criteria).**
 **TASK GAP CLOSED 2026-06-11:** the 4 task cells that errored ("underflow in dt 0.0", torchdiffeq 0.2.5/
 torch 2.10 adaptive `dopri5` underflow in `simulate_task_dcm` ground-truth gen) were fixed by switching
@@ -124,6 +136,9 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
 
 ## Decisions
 
+- **[31-01-D1] A feed-forward chain is UNIDENTIFIABLE by spectral DCM; VLBMR-01 ground truth uses RECIPROCAL edges.** The plan's feed-forward chain (N=2 `[(1,0)]`, N=4 `[(1,0),(2,1),(3,2)]`) produces a stationary CSD bit-identical to the empty graph (`||csd_chain-csd_zero||/||csd_zero|| = 0.0`), so VL collapses A_free to exactly zero and every single-prune delta-F is 0.0 (the spurious top-K `[3,7,11]` is float sign-noise = the transpose of the true edges, NOT an index bug — the S4 round-trip guard held). Switched to reciprocal edges (N=2 `[(0,1),(1,0)]` K=2; N=4 reciprocal chain K=6); recovery is 5/5. Real spectral-DCM identifiability property, carried forward to 31-03. Builder, plumbing, gate semantics, and the never-absolute-delta-F contract unchanged.
+- **[31-01-D2] N=2 saturated-reciprocal has no absent prunable edge → `separation_after_rank==K` cut is degenerate, asserted conditionally.** With both off-diagonals present (`K == N*(N-1)`) there is no essential/non-essential boundary, so the cut lands at rank 1, not K. Gated that assertion on `has_absent_edges = K < N*(N-1)`; recovery + positive separation_gap asserted unconditionally. N=4 (K=6 < 12) exercises the full cut==K gate.
+- **[31-01-D3] BMR separation_gap magnitudes (1e4–1e6 nats) are RELATIVE-ranking signal only.** They reflect VL Laplace overconfidence (pitfall C1); correctly NOT gated as absolute thresholds. This is the overconfidence regime tempering (31-03) targets.
 - **[30-03-D1] `classify_cell` is pass-or-documented-limit, never silent (VLREC-04).** A cell PASSES iff every PRESENT check (RMSE_A <= 0.05, masked sign >= 0.80, coverage_95 >= 0.85) passes; a check whose metric is `None` is SKIPPED (`pass=None`), never auto-failed; a failing cell returns `status="identifiability_limit"` WITH an evidence block (shrinkage/coverage/RMSE IQR/convergence) — it NEVER raises. The classifier raises only on structurally malformed input (a contracted key absent). Thresholds are provisional documented defaults (no Fisher-info bound yet); SHRINKAGE_SOFT_TARGET 0.7 is informational evidence only (low shrinkage = expected Laplace overconfidence, job 55772525), never a gate.
 - **[30-03-D2] Boundary regime characterized from `raw.max_real_eig_list`, not an explicit field.** The per-cell JSON has NO `boundary_rejections` field; VLROBUST-03 characterization uses the accepted-draw max-real-eig distribution (proximity to the `[-0.05,0]` band; 0 accepted draws in-band → exclusion held) plus the shrinkage-below-soft-target overconfidence flag. The aggregator excludes `recovery_matrix_local_*.json` and parses the array index from the `_<idx>.json` suffix (cell 9 used the array PARENT job id 56346424, cells 0-8 used per-task ids 5634644X).
 - **[30-03-D3] Task-DCM cells (4-7) errored at the simulator, surfaced as errored cells.** All four task cells failed with torchdiffeq `underflow in dt 0.0` inside `simulate_task_dcm` (adaptive-step underflow) — consistent with the pre-existing task-path `dt_sim` fragility (29-05 note). VLREC-04 requires these be SURFACED (report + CSV `status=error`), not dropped; they are. Re-running task variant after fixing the simulator dt is a follow-up, NOT a 30-03 classifier defect. Spectral + latent_circuit coverage is available for Phase 31; task coverage is missing pending the simulator fix.
@@ -299,8 +314,17 @@ validation → v0.7.0. Plus **[vl-overconfidence-for-bmr]** → v0.7.0 Phase C.
 
 ## Session Continuity
 
-Last session: 2026-06-10 (executed Phase 30 Plan 03)
-Stopped at: Completed 30-03-PLAN.md — POST-RESULTS harvest + classifier + report over the COMPLETE M3
+Last session: 2026-06-11 (executed Phase 31 Plan 01)
+Stopped at: Completed 31-01-PLAN.md — VLBMR-01 recovery harness (the PRIMARY defensible BMR result).
+  `benchmarks/bmr_recovery.py` (make_sparse_ground_truth_A + offdiag_indices + bmr_tensors_from_vl_result,
+  full A_free cov slice sigma_post[:N*N,:N*N]) + `tests/test_bmr_vlbmr01_recovery.py` (@pytest.mark.vl,
+  spectral N=2/N=4, 5 seeds, 5/5 recovery, 112.7s laptop). RELATIVE ranking + separation gap, never
+  absolute delta-F (C1). KEY FINDING: feed-forward chain A is unidentifiable by spectral CSD (bit-identical
+  to empty graph) → ground truth uses RECIPROCAL edges. ruff+mypy clean. Commits c081c5c, 766dd24.
+  31-02 (bc0e33f) full-model VL fit + analytic BMR already on branch. **Next: 31-03 (tempering calibration)
+  reuses benchmarks/bmr_recovery.py + reciprocal ground truth.** Branch: gsd/phase-31-bmr-validation-tempering.
+Prior session: 2026-06-10 (executed Phase 30 Plan 03)
+Earlier-prior session: Completed 30-03-PLAN.md — POST-RESULTS harvest + classifier + report over the COMPLETE M3
   sweep (job 56346424). `benchmarks/recovery_matrix_thresholds.py` (classify_cell pass | identifiability_limit
   with evidence) + `cluster/scripts/recovery_matrix_aggregate.py` (matrix CSV/JSON + report + eig_clamp
   regime) + `tests/test_recovery_matrix_aggregate.py` (4 vl tests) + `30-RECOVERY-MATRIX-REPORT.md`.
