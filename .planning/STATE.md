@@ -9,8 +9,8 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 
 ## Current Position
 
-**Milestone:** v0.7.0 Variational Laplace Validation (VL-validation-led).
-**Phase 32 — SPM12 Cross-Validation: IN PROGRESS (wave-2 code-complete; M3 run PENDING) — the LAST v0.7.0 phase.**
+**Milestone:** v0.7.0 Variational Laplace Validation (VL-validation-led). **ALL 4 PHASES (29-32) ✅ COMPLETE & VERIFIED — milestone ready for `/gsd:complete-milestone` (or `/gsd:audit-milestone`).**
+**Phase 32 — SPM12 Cross-Validation: ✅ COMPLETE & VERIFIED PASSED 2026-06-12 (3/3 plans, 3/3 reqs, 8/8 truths; `32-VERIFICATION.md`: passed).** VLSPM-01/02/03 Complete. **Ran on M3** (local MATLAB FlexLM -15 unreachable; matlab r2022a + Carrick spm12 verified on comp partition — memory `reference-m3-matlab-spm12`); jobs 56407192 + 56407635 (seeds 42-46). **RESULTS (deterministic, identical all 5 seeds):** model-ranking agreement **1.0** (defensible criterion ✅); `vl_F − spm_F` = **EXACT constant 269.895 nats** (std=0) → engines' F identical up to a fixed normalization constant; strict-5%-absolute-F + 10%-Ep **not met but recorded as documented findings, not failures** (user decision) — the F gate is infeasible by convention (pitfall S3, proven), the Ep divergence is a real forward-model difference (**VL tracks ground truth closer than SPM**: off-diag 0.149/0.101 vs 0.127/0.191, true 0.15/0.10). **TWO same-CSD-bridge bugs fixed mid-run:** `DCM.n/v` int64→double (`spm_Ce`); the core one — `spm_dcm_fmri_csd` UNCONDITIONALLY recomputes CSD from BOLD (overwrote injection → RCOND=NaN), fixed by replicating SPM's setup + calling `spm_nlsi_GN` directly (`DCM.U.csd=zeros` constant input). Findings: `32-SPM-CROSSVAL-FINDINGS.md`. **Next: v0.7.0 milestone complete → `/gsd:complete-milestone` (or audit first).**
 **32-03 CODE-COMPLETE 2026-06-11 (VLSPM-03, the Phase 32 deliverable — M3 RUN PENDING orchestrator):**
 `run_vl_spectral_dcm_validation(seed=42, n_regions=2, max_iter=64)` in NEW `validation/run_vl_validation.py`
 fits the Phase 28 VL engine on a reciprocal-ASYMMETRIC N=2 spectral problem (A[0,1]=0.15/A[1,0]=0.10,
@@ -33,10 +33,10 @@ ONLY change to the 32-01 file). MATLAB_PATH from config (env-overridable); SPM12
 env — SAME orchestrator runs laptop + M3. ruff clean on all 3 changed Python files; mypy delta is only the
 pre-existing bare-dict [type-arg] + pyro_dcm [import-untyped] (no new class, 32-01-D3/32-02-D2). Decisions
 32-03-D1..D4. Commits fd88aea (Task1 orchestrator), 62555ae (.m SPM12_PATH), 6f5dcfb (Task2 SPM-gated test),
-4234502 (Task3 cluster harness). **HEADLINE matched-F relative_error: PENDING — orchestrator submits the
-sbatch + harvests the JSON.** **Next: orchestrator submits `cluster/sbatch/spm_cross_validation.sbatch`,
-harvests `cluster/results/spm_cross_validation_<jobid>.json`, populates the headline number in SUMMARY+STATE,
-then `/gsd:verify-phase 32` → v0.7.0 close-out.**
+4234502 (Task3 cluster harness). **HEADLINE (harvested from M3 job 56407192): matched-F relative_error =
+0.8776 (strict-5% NOT met — constant 269.895-nat offset); ranking agreement 1.0; Ep off-diag 17%/47%.**
+Post-run fixes: a27828b (int64→double), 3def091 (replicate SPM setup + inject — the convergence fix),
+plus the multiseed harness + findings commits. See the Phase 32 completion entry above for the full result.
 **Phase 32 — SPM12 Cross-Validation: IN PROGRESS (wave-1) — the LAST v0.7.0 phase.**
 **32-01 DONE 2026-06-11 (the SAME-CSD injection bridge):** a Python analytic `(F,N,N)` complex CSD
 now injects element-identical into the SPM12 `DCM.Y.csd`/`DCM.Y.Hz` struct (C-order, NO transpose,

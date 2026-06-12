@@ -304,9 +304,9 @@ Explicit anti-features for v0.7.0 (documented to prevent scope creep).
 | VLBMR-01 | Phase 31 | Complete (spectral N=2/N=4 recover true structure 5/5 seeds, positive separation gap) |
 | VLBMR-02 | Phase 31 | Complete (BMR vs brute-force VL refit agree on rank + worst model; ρ=1.0) |
 | VLBMR-03 | Phase 31 | Complete (exploratory; T=2.0 restores task-N4 coverage 0.875→1.0, held-out C2c non-PD surfaced) |
-| VLSPM-01 | Phase 32 | Pending |
-| VLSPM-02 | Phase 32 | Pending |
-| VLSPM-03 | Phase 32 | Pending |
+| VLSPM-01 | Phase 32 | Complete |
+| VLSPM-02 | Phase 32 | Complete (ranking agreement 1.0; absolute-F + Ep gates documented as cross-engine limits) |
+| VLSPM-03 | Phase 32 | Complete |
 
 **Coverage:** 19 v0.7.0 requirement IDs (VLINFRA-01..05, VLREC-01..05, VLBMR-01..03,
 VLSPM-01..03, VLROBUST-01..03); 19/19 mapped to exactly one phase; 0 unmapped, 0 duplicated.

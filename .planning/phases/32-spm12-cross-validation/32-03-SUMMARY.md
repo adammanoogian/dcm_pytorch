@@ -54,16 +54,34 @@ completed: 2026-06-11
 
 **One-liner:** `run_vl_spectral_dcm_validation()` fits the Phase 28 Variational-Laplace engine on a prior-matched reciprocal-ASYMMETRIC N=2 spectral DCM problem, injects the IDENTICAL Python-computed CSD into SPM12 via the Plan 32-01 bridge, runs `spm_nlsi_GN`, and cross-validates the two engines in free-parameter space (Ep ~10%, S1/S2), matched free energy (strict 5% on the identical CSD, the headline gate), and relative cross-model ranking (>=0.80, S3-safe) — with the real licensed-MATLAB run wired as an M3 sbatch job (local FlexLM unreachable).
 
-## M3 Cross-Validation Run — PENDING
+## M3 Cross-Validation Run — COMPLETE (jobs 56407192 + 56407635)
 
-**PENDING — orchestrator submits `cluster/sbatch/spm_cross_validation.sbatch` and harvests `cluster/results/spm_cross_validation_<jobid>.json`.** All code artifacts are committed and laptop-verified (ruff/mypy clean, SPM-gated test collects + skips cleanly). The actual `spm_nlsi_GN` cross-validation runs on M3 because the local MATLAB R2022a license server is unreachable (FlexLM -15); MATLAB R2022a + SPM12 are verified working on the comp partition. This executor did NOT submit to M3 or ssh anywhere (per plan instructions).
+**Ran on M3** (local FlexLM -15 unreachable): MATLAB R2022a + SPM12
+(`/home/aman0087/fc37/Carrick/spm12`), `comp` partition. Single-seed job
+`56407192` (exit 0) + multi-seed job `56407635` (seeds 42–46, all ok). Full
+analysis: **`.planning/phases/32-spm12-cross-validation/32-SPM-CROSSVAL-FINDINGS.md`**.
 
-**Headline matched-F relative_error: `<PENDING — populated from cluster/results/spm_cross_validation_<jobid>.json after the M3 run>`.**
+**Headline matched-F relative_error: `0.8776` (strict-5% NOT met) — but `vl_F − spm_F`
+is an EXACTLY CONSTANT `269.895`-nat offset across all 5 seeds (`f_offset_std = 0.0`).**
+The two engines compute free energy identically up to a fixed normalization
+constant; the strict-5%-*absolute*-F gate is infeasible by convention (research
+pitfall S3), while relative/ΔF agreement is exact.
 
-After harvest, the orchestrator records, from the JSON:
-- `matched_f_relative_error` (the headline cross-validation number) + `matched_f_within_tolerance` (strict 5% gate pass/fail).
-- `ep_comparison.{max,mean}_relative_error` + `within_tolerance` (free-space 10% gate).
-- `ranking_agreement_rate` (relative cross-model ranking, >=0.80).
+Real results (deterministic — identical across seeds 42–46):
+- `ranking_agreement_rate` = **1.0 (3/3, every seed)** — the defensible VLSPM-02 criterion ✅
+- `matched_f`: vl_F=577.44, spm_F=307.55, relative_error=0.8776, within_tolerance=False
+  (constant 270-nat offset, `f_offset_is_constant=true`)
+- `ep` off-diagonal (free space): VL 0.1485/0.1013 vs SPM 0.1266/0.1908 (true 0.15/0.10) —
+  17%/47%, within_tolerance=False. VL tracks ground truth closer than SPM on the injected
+  analytic CSD (a systematic, deterministic forward-model difference — not noise).
+- S4 asymmetry held (`Ep.A(1,2)≠Ep.A(2,1)`); no element-wise Cp, no absolute-F-across-models (S3).
+
+**Two same-CSD-bridge bugs fixed during the run (32-03-D5/D6):** (1) `DCM.n/v` int64→double
+(`spm_Ce` type error); (2) the core one — `spm_dcm_fmri_csd` calls `spm_dcm_fmri_csd_data`
+UNCONDITIONALLY (line ~213), recomputing CSD from the zeros-BOLD placeholder and overwriting
+the injected CSD → RCOND=NaN convergence failure. Fix: the `.m` now replicates SPM's model
+setup and calls `spm_nlsi_GN` directly, skipping the data step (`DCM.U.csd = zeros` for the
+constant resting-state input). SPM then converges cleanly (F=307.55, 13 EM iters).
 - `ep_asymmetry` = `(Ep.A[0,1], Ep.A[1,0])` (S4: must differ for the 0.15/0.10 asymmetric ground truth).
 - `all_gates_pass` (the conjunction). A recorded gate miss does NOT fail the job (record-don't-crash); the laptop SPM-gated test is where the strict 5% gate is HARD-asserted.
 
