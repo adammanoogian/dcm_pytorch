@@ -2,12 +2,21 @@ from __future__ import annotations
 
 from pyro_dcm.forward_models.balloon_model import BalloonWindkessel
 from pyro_dcm.forward_models.bold_signal import bold_signal
+from pyro_dcm.forward_models.cmc_neural_mass import (
+    cmc_f,
+    cmc_flatten,
+    cmc_sigmoid,
+    cmc_unflatten,
+    parameterize_cmc,
+)
+from pyro_dcm.forward_models.cmc_priors import cmc_prior_moments, cmc_steady_state
 from pyro_dcm.forward_models.coupled_system import CoupledDCMSystem
 from pyro_dcm.forward_models.csd_computation import (
     bold_to_csd_torch,
     compute_empirical_csd,
     default_welch_params,
 )
+from pyro_dcm.forward_models.erp_input import erp_gaussian_input
 from pyro_dcm.forward_models.latent_observation import direct_observation
 from pyro_dcm.forward_models.neural_state import (
     NeuralStateEquation,
@@ -46,6 +55,15 @@ from pyro_dcm.forward_models.spectral_transfer import (
 )
 
 __all__ = [
+    # Phase 33: CMC core dynamics, priors, and evoked input (v0.8.0 ERP)
+    "cmc_f",
+    "cmc_flatten",
+    "cmc_prior_moments",
+    "cmc_sigmoid",
+    "cmc_steady_state",
+    "cmc_unflatten",
+    "erp_gaussian_input",
+    "parameterize_cmc",
     # Phase 20: Latent-circuit direct observation
     "direct_observation",
     # Phase 1: Neural-hemodynamic forward model

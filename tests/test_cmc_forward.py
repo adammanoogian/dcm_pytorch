@@ -21,6 +21,8 @@ from pyro_dcm.forward_models.cmc_neural_mass import (
     cmc_unflatten,
     parameterize_cmc,
 )
+from pyro_dcm.forward_models.cmc_priors import cmc_steady_state
+from pyro_dcm.forward_models.erp_input import erp_gaussian_input
 
 _F64 = torch.float64
 
@@ -117,3 +119,25 @@ def test_column_major_flatten() -> None:
     assert torch.allclose(cmc_unflatten(x_flat, n=1), x)
     # At n=1 the flat vector is exactly the 8-state block in order.
     assert torch.allclose(x_flat, torch.arange(8, dtype=_F64))
+
+
+def test_erp_input_peak() -> None:
+    """Gaussian drive peaks at the onset with the 32-scaling (spm_erp_u.m)."""
+    t_s = torch.arange(0, 0.512, 0.004, dtype=_F64)  # 128 samples, 4 ms grid
+    p_r = torch.zeros(1, 2, dtype=_F64)
+    u = erp_gaussian_input(t_s, p_r, ons_ms=60.0, dur_ms=16.0)
+
+    assert u.dtype == _F64
+    assert u.shape == (t_s.shape[0], 1)
+    # Peak lands at t_ms ~ 60 (index 15 on a 4 ms grid) with value 32.
+    peak_idx = int(torch.argmax(u[:, 0]))
+    assert abs(t_s[peak_idx].item() * 1000.0 - 60.0) < 4.0
+    assert torch.allclose(u[:, 0].max(), torch.tensor(32.0, dtype=_F64))
+
+
+def test_steady_state_assert() -> None:
+    """``cmc_steady_state(1)`` is zeros(1, 8) float64 (M1)."""
+    x0 = cmc_steady_state(1)
+    assert x0.shape == (1, 8)
+    assert x0.dtype == _F64
+    assert torch.allclose(x0, torch.zeros(1, 8, dtype=_F64))
