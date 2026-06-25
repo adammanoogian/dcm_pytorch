@@ -433,3 +433,220 @@ def export_rdcm_for_tapas(
         },
     }
     scipy.io.savemat(output_path, {"DCM": DCM})
+
+
+# --- ERP / CMC single-source fixture export (Phase 33-02, additive) -----------
+# Frozen single-source reference locked by 33-01-SUMMARY.md ("Frozen single-source
+# reference"): the SAME (x_test, u_test) and integration grid that the pure-torch
+# CMC forward evaluates, so the Wave-3 parity gate is element-wise vs-SPM (V4).
+_ERP_NS = 128          # M.ns -- number of peristimulus time bins (512 ms window)
+_ERP_DT = 0.004        # U.dt in seconds (4 ms) -- spm_gen_erp.m:28-30 default
+_ERP_ONS = 60.0        # M.ons in ms -- spm_erp_u.m:46 default onset
+_ERP_DUR = 16.0        # M.dur in ms -- spm_erp_u.m:47 default dispersion (N3 explicit)
+_ERP_SUS = 0.0         # M.sus -- sustained-input proportion (0 -> pure Gaussian)
+_ERP_NSTATES = 8       # CMC states per source (spm_fx_cmc.m), column-major flat (1,8)
+
+
+def _erp_gaussian_u_grid(
+    R: np.ndarray,
+    ns: int,
+    dt: float,
+    ons: float,
+    dur: float,
+    sus: float,
+) -> np.ndarray:
+    """Build the frozen Gaussian evoked-input grid ``U.u`` (numpy port of spm_erp_u).
+
+    Transcribes ``spm_erp_u.m:42-64`` (David & Friston 2003 evoked drive): a
+    Gaussian bump in peristimulus time with the 32x scaling baked in. ``spm_int_L``
+    integrates ``DCM.U.u`` verbatim (it does NOT regenerate the input), so freezing
+    the grid here guarantees SPM and torch see the identical drive -- the precondition
+    for the ``y_states`` trajectory parity check. With ``sus = 0`` the sustained-mix
+    term vanishes and only the third ``R`` column (unused here) would gate it.
+
+    Parameters
+    ----------
+    R : np.ndarray
+        Input-timing log params, shape ``(m, 2)`` (onset shift, log-dispersion).
+        ``R = 0`` recovers the default onset/dispersion (peak value 32 at ``ons``).
+    ns : int
+        Number of peristimulus time bins.
+    dt : float
+        Time step in seconds.
+    ons : float
+        Default onset in milliseconds.
+    dur : float
+        Default dispersion (Gaussian sigma) in milliseconds.
+    sus : float
+        Sustained-input proportion (``M.sus``); 0 -> pure Gaussian.
+
+    Returns
+    -------
+    np.ndarray
+        Driving input grid, shape ``(ns, m)``, float64.
+
+    Notes
+    -----
+    SPM12 source: ``spm_erp_u.m:42-64``. ``t_ms = t * 1000`` (the seconds->ms
+    convert at ``:46``), ``delay = ons + 128 * R[i,0]``, ``scale = dur * exp(R[i,1])``.
+    """
+    m = R.shape[0]
+    t_ms = np.arange(ns, dtype=np.float64) * dt * 1000.0
+    u = np.zeros((ns, m), dtype=np.float64)
+    for i in range(m):
+        delay = ons + 128.0 * float(R[i, 0])
+        scale = dur * np.exp(float(R[i, 1]))
+        gaussian = np.exp(-((t_ms - delay) ** 2) / (2.0 * scale**2))
+        # sus = 0 -> prop = 0 -> the cumsum sustained-mix term drops out.
+        prop = sus  # exp(R[i,2]) would scale it, but R[:,2] is absent at sus=0.
+        gaussian = prop * np.cumsum(gaussian) / gaussian.sum() + gaussian * (
+            1.0 - prop
+        )
+        u[:, i] = 32.0 * gaussian
+    return u
+
+
+def export_erp_dcm(
+    P: dict[str, np.ndarray] | None = None,
+    M_meta: dict[str, float] | None = None,
+    output_path: str = "validation/data/erp_single_source_input.mat",
+) -> dict[str, object]:
+    """Export the single-source CMC-ERP DCM ``.mat`` input for SPM12 fixtures.
+
+    Writes the DCM struct that ``run_spm_erp_dcm.m`` loads via ``load(..., 'DCM')``
+    to generate the frozen Phase-33 parity fixtures (``f_field``, ``J0``, ``dtJ``,
+    ``Eexp``, ``Q_update``, ``y_states``). APPENDED to this module (the existing
+    task / spectral / rDCM exporters are byte-untouched), mirroring their savemat
+    conventions: scalars wrapped as ``np.array([[v]])``, string fields as
+    ``np.array([[...]], dtype=object)``, dimensions cast to float64 (the int64->double
+    ``spm_Ce`` footgun fixed in Phase 32, commit a27828b / decision 32-03 -- savemat
+    otherwise writes int64 which breaks SPM internals).
+
+    The defaults encode the frozen single-source reference locked in
+    ``33-01-SUMMARY.md``: ``P.T`` zeros(1,4), ``P.G`` zeros(1,4), ``P.C`` zeros(1,1),
+    ``P.S`` 0, ``P.R`` zeros(1,2); NO ``P.D`` field (delays stay off -- pitfall M2)
+    and NO ``P.A`` blocks (extrinsic coupling is identically zero at n=1). The
+    integration grid is ``M.ns = 128``, ``U.dt = 0.004`` s, ``M.ons = 60`` ms,
+    ``M.dur = 16`` ms EXPLICIT (pitfall N3); ``M.x = zeros(1,8)`` is the asserted
+    fixed point (x0 == 0, M1). The frozen ``f_field`` evaluation point
+    ``x_test = 0.1 * ones(1,8)`` and ``u_test = 32.0`` (peak Gaussian, ``P.R = 0``)
+    are stored in ``DCM.meta`` so MATLAB and torch evaluate ``cmc_f`` at the SAME
+    point.
+
+    Parameters
+    ----------
+    P : dict of str -> np.ndarray, optional
+        Frozen parameter struct. Keys ``T`` (1,4), ``G`` (1,4), ``C`` (1,1),
+        ``S`` (1,1), ``R`` (m,2). Defaults to the all-zeros log-scale prior mean
+        (the baseline fixture). NO ``D`` / ``A`` keys (pitfall M2 / n=1).
+    M_meta : dict of str -> float, optional
+        Integration-grid / timing overrides. Keys ``ns``, ``dt``, ``ons``, ``dur``,
+        ``sus``, ``n_inputs``. Defaults to the frozen ERP grid above.
+    output_path : str, optional
+        Path for the output DCM input ``.mat``.
+
+    Returns
+    -------
+    dict of str -> object
+        The provenance metadata actually written to ``DCM.meta`` (dt, ns, ons,
+        dur, sus, x_test, u_test, n_states, n_inputs, spm_id placeholder), for the
+        caller to log / assert against.
+
+    Notes
+    -----
+    SPM12 source: ``spm_cmc_priors.m:114-133`` (the single-source prior struct
+    shape), ``spm_erp_u.m:42-64`` (the evoked input), ``spm_int_L.m:112-169`` (the
+    integrator the fixtures pin). The ``$Id`` provenance string is filled by
+    ``run_spm_erp_dcm.m`` at run time (``spm('Ver')``); ``meta.spm_id`` is an empty
+    placeholder here.
+
+    See Also
+    --------
+    export_spectral_dcm_csd_for_spm : The Phase-32 injection bridge this mirrors.
+    """
+    if P is None:
+        P = {
+            "T": np.zeros((1, 4), dtype=np.float64),
+            "G": np.zeros((1, 4), dtype=np.float64),
+            "C": np.zeros((1, 1), dtype=np.float64),
+            "S": np.zeros((1, 1), dtype=np.float64),
+            "R": np.zeros((1, 2), dtype=np.float64),
+        }
+    if M_meta is None:
+        M_meta = {}
+
+    ns = int(M_meta.get("ns", _ERP_NS))
+    dt = float(M_meta.get("dt", _ERP_DT))
+    ons = float(M_meta.get("ons", _ERP_ONS))
+    dur = float(M_meta.get("dur", _ERP_DUR))
+    sus = float(M_meta.get("sus", _ERP_SUS))
+
+    R = np.asarray(P["R"], dtype=np.float64)
+    n_inputs = int(M_meta.get("n_inputs", R.shape[0]))
+
+    # Frozen Gaussian evoked drive (spm_int_L integrates this verbatim).
+    u_grid = _erp_gaussian_u_grid(R, ns, dt, ons, dur, sus)
+
+    # Frozen f-field evaluation point (Open Question 1, locked in 33-01-SUMMARY).
+    x_test = 0.1 * np.ones((1, _ERP_NSTATES), dtype=np.float64)
+    u_test = 32.0  # peak Gaussian value at onset with P.R = 0.
+
+    P_struct = {
+        "T": np.asarray(P["T"], dtype=np.float64),
+        "G": np.asarray(P["G"], dtype=np.float64),
+        "C": np.asarray(P["C"], dtype=np.float64),
+        "S": np.asarray(P["S"], dtype=np.float64),
+        "R": R,
+    }  # NO 'D', NO 'A' -- delays off (M2), extrinsic identically zero at n=1.
+
+    meta = {
+        "dt": np.array([[dt]]),
+        "ns": np.array([[ns]], dtype=np.float64),
+        "ons": np.array([[ons]]),
+        "dur": np.array([[dur]]),
+        "sus": np.array([[sus]]),
+        "x_test": x_test,
+        "u_test": np.array([[u_test]]),
+        "n_states": np.array([[_ERP_NSTATES]], dtype=np.float64),
+        "n_inputs": np.array([[n_inputs]], dtype=np.float64),
+        "D": np.array([[1.0]]),  # delay operator forced to identity (Fact 4).
+        "spm_id": np.array([[""]], dtype=object),  # filled by the .m at run time.
+    }
+
+    DCM = {
+        "P": P_struct,
+        "M": {
+            "f": np.array([["spm_fx_cmc_nodelay"]], dtype=object),
+            "x": np.zeros((1, _ERP_NSTATES), dtype=np.float64),
+            "n": np.array([[_ERP_NSTATES]], dtype=np.float64),
+            "m": np.array([[n_inputs]], dtype=np.float64),
+            "l": np.array([[1.0]]),
+            "ons": np.array([[ons]]),
+            "dur": np.array([[dur]]),
+            "sus": np.array([[sus]]),
+        },
+        "U": {
+            "u": u_grid,
+            "dt": np.array([[dt]]),
+            "name": np.array(
+                [[f"input{i + 1}" for i in range(n_inputs)]], dtype=object
+            ),
+        },
+        # Dimensions as float64 (int64 -> spm_Ce footgun, Phase 32 / a27828b).
+        "n": np.array([[1.0]], dtype=np.float64),
+        "v": np.array([[ns]], dtype=np.float64),
+        "meta": meta,
+    }
+    scipy.io.savemat(output_path, {"DCM": DCM})
+    return {
+        "dt": dt,
+        "ns": ns,
+        "ons": ons,
+        "dur": dur,
+        "sus": sus,
+        "x_test": x_test,
+        "u_test": u_test,
+        "n_states": _ERP_NSTATES,
+        "n_inputs": n_inputs,
+        "spm_id": "",
+    }
