@@ -318,9 +318,162 @@ VLSPM-01..03, VLROBUST-01..03); 19/19 mapped to exactly one phase; 0 unmapped, 0
 - Phase 31 (BMR Validation & Posterior Tempering): 3 reqs (VLBMR-01..03)
 - Phase 32 (SPM12 Cross-Validation, local/MATLAB): 3 reqs (VLSPM-01..03)
 
+## v0.8.0 Requirements
+
+Requirements for **DCM for Evoked Responses (EEG/MEG ERP)**. Adds a canonical-microcircuit
+(CMC) neural-mass → extrinsic coupling + evoked integration → single-dipole lead-field →
+scalp-ERP forward stack, SPM12-parity validated at every phase, reusing the v0.7.0 VL +
+amortized inference. **Forward + parity + synthetic only — no empirical ERP data fitting.**
+Phase numbering continues from 32; v0.8.0 = Phases 33-36. Seed:
+`.planning/v0.8.0-EEG-ERP-SCOPE.md` + `.planning/research/v0.8.0/`. Mapped to phases during
+roadmap creation.
+
+### Milestone Decisions (locked 2026-06-25)
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| E1 | **CMC only** (not Jansen-Rit/ERP 3-population) | CMC exposes superficial-pyramidal gain `G[:,6]` = precision; the downstream Adams/Ranlund psychosis-MMN use case needs exactly that parameter. |
+| E2 | **New `spm_int_L` exp-Euler integrator** (`utils/local_linearization.py`), NOT torchdiffeq rk4/dopri5 | SPM integrates ERPs with a frozen-Jacobian local linearisation; rk4 converges to the true ODE but NOT to the SPM solution at finite dt (default 4 ms) → fails parity. Central new component; fixture-verified first. |
+| E3 | **`ERPDCMForward` implements the existing `ForwardModel` protocol** | Reuses VL (`run_variational_laplace_generic`) + amortized packer with zero engine edits; `LatentCircuitForward` (v0.6.0) is the precedent. |
+| E4 | **Single-dipole lead-field, LFP-first** | Sufficient for forward MMN/P300 + difference wave; ECD gain precomputed in MATLAB and exported via the `validation/` bridge. |
+| E5 | **Additive-only / zero new deps** | Existing fMRI/spectral/rDCM/latent paths stay bit-exact; only `matrix_exp` + `linalg.solve` (present in torch ≥2.0) beyond the existing stack. |
+
+### Cross-cutting validation discipline (applies to every phase)
+
+- **Parity is vs-SPM, never vs-torch.** Every phase gate asserts against frozen MATLAB-exported
+  arrays (R2022a + Carrick spm12 on M3), following the Phase-32 bridge pattern. Self-referential
+  torch-vs-torch tests are not parity gates.
+- **Staged fixture ladder** (assert at each boundary in order so divergence localises):
+  `f(x,u,θ)` field → `J0` → `Q_update` → single-source trajectory → `spm_gen_Q` Q →
+  multi-source trajectory → `spm_lx_erp` L → scalp ERP → difference wave.
+- **Tolerance tiers** (measured, not assumed): `J0` ≤1e-10, `Q_update` ≤1e-9, single-source
+  trajectory ≤1e-8, scalp ERP ≤1e-7. Phase 33 measures the `matrix_exp` vs `spm_expm` floor.
+- **Forward parity only** this milestone — element-wise trajectory/ERP agreement. Do **not** gate
+  on absolute free energy (Phase-32 proved a constant ~270-nat offset); if any inference-vs-SPM
+  comparison is attempted, use ΔF / ranking, never absolute F or element-wise `Cp`.
+- **Delays off (D=1)** for the first parity pass; **float64** at the ForwardModel boundary;
+  compute >3 min routes to M3.
+
+### CMC Forward Model & Integrator (CMC) — Phase 33
+
+- [ ] **CMC-01**: `forward_models/cmc_neural_mass.py` implements the single-source CMC state
+  equations `f(x,u,θ)` — 4 populations (spiny-stellate, superficial-pyramidal, inhibitory
+  interneurons, deep-pyramidal), 8 states, second-order synaptic kernel, sigmoid
+  `S(V)=1/(1+exp(-Rx))−1/2` with `R=(2/3)·exp(P.S)` — citing `spm_fx_cmc.m`.
+- [ ] **CMC-02**: `parameterize_cmc` applies the SPM log/exp transforms with the intrinsic
+  permutation `j=[7 2 3 4 1 5 6 8 9 10]` (only 4 free `G`, 4 free `T`) and the `+exp(P.A)`
+  extrinsic convention (NOT the fMRI `−exp/2`); a unit test perturbs `P.G[:,0]` and asserts
+  `G[:,6]` (sp self-inhibition), not `G[:,0]`, changes — the permutation guard.
+- [ ] **CMC-03**: `utils/local_linearization.py` ports `spm_int_L` — frozen Jacobian at `x0=0`,
+  `Q=(matrix_exp(dt·D·J/N)−I)·inv(J)` via `torch.linalg.solve` (right-division, never `inverse`),
+  float64, `exp(-16)` Jacobian regulariser; CMC is NOT routed through `integrate_ode`/torchdiffeq.
+- [ ] **CMC-04**: `forward_models/cmc_priors.py` provides prior means/variances + transform tables
+  from `spm_cmc_priors.m`; CMC steady state asserted `x0 == zeros` (no Newton solve).
+- [ ] **CMC-05**: `forward_models/erp_input.py` provides the Gaussian-bump evoked drive `u(t)`
+  (onset, dispersion `P.R`, 32-scaling, ms timebase) porting `spm_erp_u.m`.
+- [ ] **CMC-06** *(PARITY GATE)*: single-source parity vs frozen MATLAB fixtures (D=1): `f(x,u,θ)`
+  field ≤1e-10, `J0` ≤1e-10, `Q_update` ≤1e-9 (this measures `matrix_exp` vs `spm_expm`), full
+  state trajectory `y_states` ≤1e-8 — written FIRST, before any extrinsic coupling exists.
+- [ ] **CMC-07**: float64 enforced at the ForwardModel boundary; the fMRI eigenvalue-clip rule is
+  NOT applied to the CMC Jacobian (only the `exp(-16)` shift) — guarded by a unit test.
+
+### Extrinsic Coupling & Evoked Integration (EVOK) — Phase 34
+
+- [ ] **EVOK-01**: `forward_models/erp_coupled_system.py` wires extrinsic `A` across a multi-source
+  network — forward (sp→ss/dp, +), backward (dp→sp/ii, −), lateral (reciprocal `1/(1+4L)`
+  reduction) — citing `spm_fx_cmc.m`.
+- [ ] **EVOK-02**: condition-specific modulation `B` applied additively in log-space to all
+  `A{1..4}` AND via `diag(B)→G(:,1)→G[:,6]` (the precision path), porting `spm_gen_Q.m`; omitting
+  the `diag→G` path is explicitly tested against (it destroys the MMN precision mechanism).
+- [ ] **EVOK-03**: input `C` drives spiny-stellate only; evoked integration over the peristimulus
+  window (default dt=4 ms, ns=128) via the Phase-33 integrator yields per-source per-condition LFP
+  (the `spm_gen_erp.m` analog).
+- [ ] **EVOK-04**: `simulators/erp_simulator.py` provides `simulate_erp_dcm(...)` returning a
+  per-condition source/scalp ERP dict + the deviant−standard difference-wave hook.
+- [ ] **EVOK-05** *(PARITY GATE)*: `spm_gen_Q` fixture — torch `Q.A{1..4}` and `Q.G[:,0]` match
+  exported MATLAB element-wise; multi-source evoked trajectory matches `spm_gen_erp` for the
+  5-source MMN reference A/B/C (delays off, D=1) within ≤1e-8.
+- [ ] **EVOK-06**: the delay operator is forced off (D=1) and asserted in the fixture-generation
+  MATLAB script; the full `spm_dcm_delay` path is deferred to a later milestone.
+
+### Lead-field & Scalp Observation (LEAD) — Phase 35
+
+- [ ] **LEAD-01**: `forward_models/erp_leadfield.py` builds `L_full = kron(P.J, L_spatial)` with a
+  column-major state-blocked flatten; LFP diagonal spatial model first; projection
+  `y = (x − x0) @ L_full.T`, citing `spm_lx_erp.m`/`spm_erp_L.m`.
+- [ ] **LEAD-02**: `P.J` default = state index 2 (superficial-pyramidal voltage) is asserted (not
+  index 6, deep-pyramidal); the kron column-major order is verified against an exported `L_full`
+  fixture.
+- [ ] **LEAD-03**: the deviant−standard difference wave is computed, asserted non-zero and
+  negative-going.
+- [ ] **LEAD-04**: `class ERPDCMForward` appended to `inference/forward_models.py` implements the
+  existing `ForwardModel` protocol (`residual_is_complex=False`; pack/unpack; `build_prior_cov`
+  from `cmc_priors`; identity precision v1; `predict → (Cnd, ns, Nc)`) with ERP-specific needs as
+  constructor args/context — zero edits to the protocol or VL engine.
+- [ ] **LEAD-05** *(PARITY GATE)*: scalp ERP matches `spm_gen_erp` + `spm_lx_erp` (LFP mode) on
+  frozen fixtures within ≤1e-7; the ECD gain (post `spm_cond_units`) is precomputed in MATLAB and
+  exported via the `validation/` `.mat` bridge (Python reproduces only `kron(P.J,L)` + projection).
+- [ ] **LEAD-06**: VL round-trip — `run_variational_laplace_generic(ERPDCMForward(), ...)` recovers
+  planted CMC params on synthetic ground truth (protocol confirmation; not a parity gate).
+
+### ERP-DCM Model, Inference & MMN Demo (ERPDCM) — Phase 36
+
+- [ ] **ERPDCM-01**: `models/erp_dcm_model.py` Pyro generative model — log-normal priors
+  (A,B,C,G,T,R), Gaussian likelihood on the scalp residual, B modulation — consistent with the
+  `spectral_dcm_model` idiom.
+- [ ] **ERPDCM-02**: amortized path — `ERPDCMPacker` (`guides/parameter_packing.py`) +
+  `amortized_erp_dcm_model` (`models/amortized_wrappers.py`) appended additively; the amortized
+  flow guide trains on `erp_simulator` draws without error.
+- [ ] **ERPDCM-03**: a 5-source auditory MMN network (A1 L/R, STG L/R, rIFG) with the
+  forward/backward/lateral connection graph, `C` into bilateral A1, and deviant-vs-standard `B`
+  modulation; MNI coords flagged for verification against the primary papers before hard-coding.
+- [ ] **ERPDCM-04**: `scripts/demo_mmn_precision_sweep.py` sweeps superficial-pyramidal
+  self-inhibition gain (`P.G[:,0] → G[:,6]`) at rIFG + bilateral A1 and emits a `gain → |MMN|`
+  transfer curve; asserts monotone attenuation and a frontal-dominant negative-going difference
+  wave (the Adams/Ranlund artifact).
+- [ ] **ERPDCM-05**: a consumer-facing adapter API maps
+  `(sp_inhibition_gain, a1_b_gain, rifg_b_gain, fwd_bwd_flag) → CMC params` for the
+  `actinf_physics` Phase-133 forward-only adapter.
+- [ ] **ERPDCM-06**: the MMN sweep figure is gated behind a green fixed-reference SPM forward-parity
+  check (LFP + difference wave reproduced from `spm_gen_erp` + `spm_lx_erp`) BEFORE any sweep
+  output is produced.
+
+## v0.8.0 Out of Scope
+
+Explicit anti-features for v0.8.0 (documented to prevent scope creep).
+
+| Feature | Reason |
+|---------|--------|
+| Empirical M/EEG ERP **data fitting** (real MMN recordings) | This milestone is the forward + parity capability; fitting follows once the forward is validated |
+| Full sensor montage / BEM head model / FieldTrip forward in Python | Single-dipole-per-source suffices for forward MMN/P300; full montage is heavy + adds a dependency |
+| Source localization / inverse problem | Out of scope; forward generative model only |
+| Group-level PEB / hierarchical between-subject modeling | Single-source toolbox scope, as for prior milestones |
+| Jansen-Rit / ERP 3-population model | CMC only — it exposes the precision parameter the downstream consumer needs (decision E1) |
+| CMC_2014 / thalamo-cortical / TFM neural-mass variants | Scope creep beyond the canonical CMC |
+| Full delay differential-equation operator (`spm_dcm_delay`) | Delays forced off (D=1) for the first parity pass; deferred |
+| Absolute free-energy or element-wise `Cp` comparison vs SPM | Not comparable across engines (Phase-32 constant-offset finding); forward element-wise parity only this milestone |
+
+## v0.8.0 Traceability
+
+*(Mapped to Phases 33-36 during roadmap creation.)*
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| CMC-01..07 | Phase 33 | Pending |
+| EVOK-01..06 | Phase 34 | Pending |
+| LEAD-01..06 | Phase 35 | Pending |
+| ERPDCM-01..06 | Phase 36 | Pending |
+
+**Coverage:** 25 v0.8.0 requirement IDs (CMC-01..07, EVOK-01..06, LEAD-01..06, ERPDCM-01..06);
+to be mapped to exactly one phase each by the roadmapper.
+
 ---
 *Requirements defined: 2026-04-17*
 *Last updated: 2026-06-10 — v0.7.0 Variational Laplace Validation requirements added (17 across
 VLINFRA/VLREC/VLBMR/VLSPM/VLROBUST). VL-validation-led; real-data + SBI deferred. v0.3.0 RECOV
 (Phase 16.1) remains pending; v0.4.0/v0.5.0 complete.*
 *Last updated: 2026-06-10 — v0.7.0 traceability mapped to Phases 29-32 by roadmapper (19 IDs; 100% coverage). 29=infra+BMR helpers+robustness guards, 30=recovery sweep (M3), 31=BMR validation+tempering, 32=SPM12 cross-validation (local).*
+*Last updated: 2026-06-25 — v0.8.0 DCM for Evoked Responses (EEG/MEG ERP) requirements added (25
+across CMC/EVOK/LEAD/ERPDCM; Phases 33-36). CMC-only, single-dipole, VL+amortized+MMN demo,
+forward/synthetic only. SPM12-parity gate per phase; spm_int_L exp-Euler integrator is the central
+new component. Research-grounded (.planning/research/v0.8.0/).*
