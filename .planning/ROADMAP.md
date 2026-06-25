@@ -9,6 +9,8 @@
 - **v0.5.0 MNE-Python Integration** - Phases 18-19 (in progress; started 2026-05-21)
 - ✅ **v0.6.0 Latent Circuit DCM** - Phases 20-28 (shipped 2026-06-10, scope-cut; real-data → v0.7.0)
 - 📋 **v0.7.0 Variational Laplace Validation** - Phases 29-32 (defined 2026-06-10; not yet started)
+- ✅ **v0.7.0 Variational Laplace Validation** - Phases 29-32 (complete; verified 2026-06-12)
+- 📋 **v0.8.0 DCM for Evoked Responses (EEG/MEG ERP)** - Phases 33-36 (defined 2026-06-25; not yet started)
 
 <details>
 <summary>v0.1.0 Foundation (Phases 1-8) - SHIPPED 2026-04-03</summary>
@@ -623,6 +625,243 @@ round-trip test). Independent of Phase 30; runs concurrently.
 
 ---
 
+## Current Milestone: v0.8.0 DCM for Evoked Responses (EEG/MEG ERP)
+
+**Status:** Defined 2026-06-25 (not yet started; ready to plan Phase 33).
+**Phases:** 33-36 (4 phases)
+**Requirements covered:** 25/25 v0.8.0 requirements (CMC-01..07, EVOK-01..06, LEAD-01..06,
+ERPDCM-01..06) mapped to exactly one phase each.
+
+### Overview
+
+v0.8.0 adds a complete **time-domain ERP forward stack** to Pyro-DCM: a canonical-microcircuit
+(CMC) neural-mass model -> extrinsic laminar coupling + condition modulation + evoked integration
+-> single-dipole lead-field -> scalp ERP, **SPM12-parity validated at every phase** and reusing the
+v0.7.0 Variational Laplace + amortized inference with zero engine edits (`ERPDCMForward` implements
+the existing `ForwardModel` protocol, the v0.6.0 `LatentCircuitForward` precedent). This is a
+**forward + parity + synthetic** milestone: no empirical M/EEG data fitting. Research (HIGH
+confidence, SPM12 source read line-by-line) identifies the single headline risk that shapes the
+whole milestone: **SPM does NOT integrate ERPs with Runge-Kutta.** `spm_gen_erp` calls `spm_int_L`,
+an exponential-Euler / frozen-Jacobian (Ozaki 1992) integrator; torchdiffeq rk4/dopri5 converges to
+the true ODE but NOT to the SPM solution at the default dt=4 ms, producing smooth, plausible, WRONG
+ERP traces that pass every NaN/shape test and fail parity by a growing drift insensitive to
+step-size reduction. The fix -- a new pure-torch `utils/local_linearization.py` porting `spm_int_L`
+(frozen Jacobian at `x0=0`, `Q=(matrix_exp(dt*D*J/N)-I)*inv(J)` via `torch.linalg.solve`
+right-division, float64, `exp(-16)` regulariser) -- is the central new component and **must exist and
+be fixture-verified before any other ERP work proceeds.** The stack needs **zero new dependencies**
+(`torch.matrix_exp` + `torch.linalg.solve`, both present in the existing torch >= 2.0 pin) and is
+**additive only** (new files or new symbols appended; existing fMRI/spectral/rDCM/latent paths stay
+bit-exact).
+
+The headline scientific deliverable is a **5-source auditory MMN network** (bilateral A1, bilateral
+STG, rIFG) that reproduces the canonical deviant-minus-standard difference wave and produces a
+quantitative **precision -> MMN-amplitude attenuation curve** by sweeping superficial-pyramidal
+self-inhibition gain (`P.G[:,0] -> G[:,6]` via the intrinsic permutation remap) -- the Adams 2013 /
+Ranlund 2016 aberrant-precision mechanism, handed off to the downstream `actinf_physics` Phase-133
+forward-only adapter.
+
+**Critical path is strictly linear: Phase 33 -> 34 -> 35 -> 36, with NO phase-level parallelism.**
+Each phase contributes exactly one tier of the staged fixture ladder (`f(x,u,theta)` field -> `J0`
+-> `Q_update` -> single-source trajectory -> `spm_gen_Q` Q -> multi-source trajectory ->
+`spm_lx_erp` L -> scalp ERP -> difference wave); divergence at any tier compounds silently into all
+downstream tiers (Phase-32 proved small forward differences compound). Unlike v0.7.0 (where Phase 32
+ran in parallel with Phase 30), **no v0.8.0 phase can start before its predecessor's parity gate is
+green.**
+
+**Milestone acceptance gate:** all four phases pass their SPM12 **forward-parity** gates on frozen
+MATLAB fixtures (R2022a + Carrick spm12 on M3) at the documented tolerance tiers (`J0` <= 1e-10,
+`Q_update` <= 1e-9, single-source trajectory <= 1e-8, scalp ERP <= 1e-7); AND the 5-source MMN demo
+reproduces a **monotone precision -> attenuation** transfer curve with a **frontal-dominant
+negative-going** difference wave, **gated behind a green fixed-reference SPM forward-parity check
+before any sweep output is produced.** **Forward element-wise parity only** -- never gate on
+absolute free energy (Phase-32 proved a constant ~270-nat offset); any inference-vs-SPM comparison
+uses deltaF / ranking, never absolute F or element-wise `Cp`.
+
+### Cross-cutting constraints (apply to every phase)
+
+- **Parity is vs-SPM, never vs-torch.** Every phase gate asserts against frozen MATLAB-exported
+  arrays following the Phase-32 `validation/` bridge pattern (Python exports `.mat` ->
+  MATLAB/SPM12 reference on M3 -> Python asserts in `tests/test_spm_erp_dcm_validation.py`).
+  Self-referential torch-vs-torch tests are NOT parity gates.
+- **Staged fixture ladder.** Assert at each boundary in order so divergence localises:
+  `f(x,u,theta)` field -> `J0` -> `Q_update` -> single-source trajectory -> `spm_gen_Q` Q ->
+  multi-source trajectory -> `spm_lx_erp` L -> scalp ERP -> difference wave.
+- **Tolerance tiers (MEASURED, not assumed).** `J0` <= 1e-10, `Q_update` <= 1e-9, single-source
+  trajectory <= 1e-8, scalp ERP <= 1e-7. Phase 33 MEASURES the `matrix_exp` vs `spm_expm` floor
+  (the `Q_update` tier) and records it -- it sets the tolerance floor for all downstream phases.
+- **Five mandatory guard tests (cannot be skipped):** (33) permutation guard -- perturb `P.G[:,0]`,
+  assert `G[:,6]` (sp self-inhibition) changes, NOT `G[:,0]`; (34) `spm_gen_Q` fixture -- torch
+  `Q.A{1..4}` and `Q.G[:,0]` match exported MATLAB element-wise; (35) `P.J` default guard -- assert
+  observed state is index 2 (sp voltage), not index 6 (dp voltage), + kron column-major order vs
+  exported `L_full`; (36) frozen-ref SPM forward parity green BEFORE the demo runs + monotone
+  `gain -> |MMN|` attenuation assertion.
+- **Additive-only / bit-exact.** Existing fMRI/spectral/rDCM/latent forward models, model classes,
+  `ode_integrator.py`, and the VL engine core are NEVER edited; verifiable by `git diff` showing
+  only insertions. **Zero new runtime dependencies** (`torch.matrix_exp` + `torch.linalg.solve`
+  only). **float64** at the ForwardModel boundary. **Delays forced off (D=1)** for the first parity
+  pass; full `spm_dcm_delay` deferred.
+- **Compute routing.** Fast single-source / integrator unit tests run on laptop; all MATLAB
+  fixture-generation jobs and any multi-source integration sweep projected > 3 min route to **M3**
+  (R2022a + Carrick spm12, comp partition; no `pip` in array jobs).
+- **Five research gaps carried forward into planning:** (1) `matrix_exp` vs `spm_expm` tolerance is
+  MEASURED empirically in **Phase 33** (do not assume 1e-12); (2) 5-source **MNI coordinates**
+  verified against the primary Garrido/Ranlund papers before hard-coding (Phase 34/36); (3) **delay
+  off** confirmed (`D=1`) in the fixture-generation MATLAB script before the first fixture run
+  (Phase 34); (4) **observation stacking layout** `(Cnd, ns, Nc)` locked in `predict` /
+  `build_precision` / `.mat` output in **Phase 35** before writing scalp-ERP assertions; (5)
+  **Zotero citations** REF-ERP-001..006 + REF-MMN-001..004 confirmed in Zotero before any `[REF-xxx]`
+  is added to `REFERENCES.md` or docstrings (never fabricate Better BibTeX keys).
+
+### Phases
+
+#### Phase 33: CMC Core Dynamics, spm_int_L Integrator & Single-Source Parity
+
+**Goal:** A verified single-source canonical-microcircuit forward (4 populations, 8 states) and a
+verified `spm_int_L` exponential-Euler integrator exist, with single-source SPM12 parity proven on
+frozen MATLAB fixtures -- catching the integration-scheme mismatch (the milestone headline risk) in
+isolation before any extrinsic coupling can compound it.
+
+**Branch:** `gsd/phase-33-cmc-core-and-integrator`
+**Depends on:** v0.7.0 frozen foundation (Phase 28 VL engine + `ForwardModel` protocol; the Phase-32
+`validation/` SPM bridge pattern: `export_to_mat` -> MATLAB batch on M3 -> Python assertion).
+**Requirements:** CMC-01, CMC-02, CMC-03, CMC-04, CMC-05, CMC-06, CMC-07
+**Success Criteria** (what must be TRUE):
+
+  1. **(SPM12 PARITY GATE -- written FIRST, before any extrinsic coupling exists.)** Single-source
+     `spm_fx_cmc` + `spm_int_L` parity vs frozen MATLAB fixtures (D=1): `f(x,u,theta)` derivative
+     field <= 1e-10, `J0` (frozen Jacobian at `x0=0`) <= 1e-10, `Q_update` <= 1e-9 (this MEASURES
+     the `matrix_exp` vs `spm_expm` floor -- recorded, not assumed), full state trajectory
+     `y_states (ns,8)` <= 1e-8. Fixture metadata header freezes SPM `$Id`, dt, ns, `M.ons`/dur, the
+     `D=1` assertion, and the `x0==0` check (CMC-06).
+  2. `utils/local_linearization.py` ports `spm_int_L`: frozen Jacobian at `x0=0`,
+     `Q=(matrix_exp(dt*D*J/N)-I)*inv(J)` computed via `torch.linalg.solve` right-division
+     (`solve(J.T,(E-I).T).T`, NEVER `torch.inverse`), float64 throughout, `exp(-16)` Jacobian
+     regulariser applied BEFORE forming Q; CMC is NOT routed through `integrate_ode`/torchdiffeq
+     (CMC-03).
+  3. **Permutation guard (mandatory).** `parameterize_cmc` applies the SPM log/exp transforms with
+     the intrinsic permutation `j=[7 2 3 4 1 5 6 8 9 10]` (only 4 free `G`, 4 free `T`) and the
+     `+exp(P.A)` extrinsic convention (NOT the fMRI `-exp/2`); a unit test perturbs `P.G[:,0]` and
+     asserts `G[:,6]` (sp self-inhibition = precision) changes, NOT `G[:,0]` (CMC-02).
+  4. `forward_models/cmc_neural_mass.py` implements the single-source CMC state equations -- 4
+     populations (ss/sp/ii/dp), 8 states, second-order synaptic kernel, sigmoid
+     `S(V)=1/(1+exp(-Rx))-1/2` with `R=(2/3)*exp(P.S)` -- citing `spm_fx_cmc.m`;
+     `forward_models/cmc_priors.py` provides prior means/variances + transform tables from
+     `spm_cmc_priors.m`; `forward_models/erp_input.py` provides the Gaussian-bump evoked drive
+     `u(t)` (onset, dispersion `P.R`, 32-scaling, ms timebase) porting `spm_erp_u.m` (CMC-01,
+     CMC-04, CMC-05).
+  5. float64 is enforced at the ForwardModel boundary; CMC steady state is asserted `x0 == zeros`
+     (no Newton solve); the fMRI eigenvalue-clip rule is NOT applied to the CMC Jacobian (only the
+     `exp(-16)` shift) -- guarded by a unit test (CMC-04, CMC-07).
+
+#### Phase 34: Extrinsic Coupling, Condition B & Multi-Source Evoked Integration
+
+**Goal:** The hierarchical CMC network -- extrinsic forward/backward/lateral coupling, condition-
+specific `B` modulation (including the `diag(B)->G` precision path), and `C`-driven evoked
+integration over the peristimulus window -- produces per-source per-condition LFPs that match
+`spm_gen_erp` on frozen multi-source fixtures (delays off, D=1).
+
+**Branch:** `gsd/phase-34-extrinsic-coupling-evoked`
+**Depends on:** Phase 33 (verified single-source CMC forward + verified `spm_int_L` integrator).
+**Requirements:** EVOK-01, EVOK-02, EVOK-03, EVOK-04, EVOK-05, EVOK-06
+**Success Criteria** (what must be TRUE):
+
+  1. **(SPM12 PARITY GATE.)** `spm_gen_Q` fixture: torch `Q.A{1..4}` and `Q.G[:,0]` match exported
+     MATLAB element-wise (the critical B-wiring guard); the multi-source evoked trajectory matches
+     `spm_gen_erp` for the 5-source MMN reference A/B/C (delays off, D=1) within <= 1e-8 (EVOK-05).
+  2. `forward_models/erp_coupled_system.py` wires extrinsic `A` across a multi-source network --
+     forward (sp->ss/dp, `+`), backward (dp->sp/ii, `-`), lateral (reciprocal `1/(1+4L)` reduction)
+     -- citing `spm_fx_cmc.m` (EVOK-01).
+  3. Condition-specific modulation `B` is applied additively in log-space to all `A{1..4}` AND via
+     `diag(B)->G(:,1)->G[:,6]` (the precision path), porting `spm_gen_Q.m`; omitting the `diag->G`
+     path is explicitly tested against (it destroys the MMN precision mechanism) (EVOK-02).
+  4. Input `C` drives spiny-stellate only; evoked integration over the peristimulus window (default
+     dt=4 ms, ns=128) via the Phase-33 integrator yields per-source per-condition LFP (the
+     `spm_gen_erp` analog); `simulators/erp_simulator.py` provides `simulate_erp_dcm(...)` returning
+     a per-condition source/scalp ERP dict + the deviant-minus-standard difference-wave hook
+     (EVOK-03, EVOK-04).
+  5. The delay operator is forced off (D=1) and asserted in the fixture-generation MATLAB script;
+     the full `spm_dcm_delay` path is deferred to a later milestone (EVOK-06).
+
+#### Phase 35: Single-Dipole Lead-Field, Scalp Projection & ERPDCMForward
+
+**Goal:** Per-source LFPs become the observed scalp ERP via a single-dipole lead-field
+(`kron(P.J, L_spatial)`, LFP-first), the deviant-minus-standard difference wave is produced, and
+`ERPDCMForward` (implementing the existing `ForwardModel` protocol) gives VL inference as free
+reuse -- with scalp-ERP parity proven vs `spm_lx_erp` on frozen fixtures.
+
+**Branch:** `gsd/phase-35-leadfield-scalp-projection`
+**Depends on:** Phase 34 (verified multi-source evoked trajectories).
+**Requirements:** LEAD-01, LEAD-02, LEAD-03, LEAD-04, LEAD-05, LEAD-06
+**Success Criteria** (what must be TRUE):
+
+  1. **(SPM12 PARITY GATE.)** Scalp ERP matches `spm_gen_erp` + `spm_lx_erp` (LFP mode) on frozen
+     fixtures within <= 1e-7; the ECD gain (post `spm_cond_units`) is precomputed in MATLAB and
+     exported via the `validation/` `.mat` bridge (Python reproduces only `kron(P.J,L)` +
+     projection). The observation stacking layout `(Cnd, ns, Nc)` is locked across `predict` /
+     `build_precision` / `.mat` output BEFORE these assertions are written (LEAD-05).
+  2. `forward_models/erp_leadfield.py` builds `L_full = kron(P.J, L_spatial)` with a column-major
+     state-blocked flatten; LFP diagonal spatial model first; projection `y = (x - x0) @ L_full.T`,
+     citing `spm_lx_erp.m`/`spm_erp_L.m` (LEAD-01).
+  3. **P.J default guard (mandatory).** `P.J` default = state index 2 (superficial-pyramidal
+     voltage) is asserted (NOT index 6, deep-pyramidal); the kron column-major order is verified
+     against an exported `L_full` fixture (LEAD-02).
+  4. The deviant-minus-standard difference wave is computed, asserted non-zero and negative-going
+     (LEAD-03).
+  5. `class ERPDCMForward` appended to `inference/forward_models.py` implements the existing
+     `ForwardModel` protocol (`residual_is_complex=False`; pack/unpack; `build_prior_cov` from
+     `cmc_priors`; identity precision v1; `predict -> (Cnd, ns, Nc)`) with ERP-specific needs as
+     constructor args/context -- zero edits to the protocol or the VL engine (LEAD-04).
+  6. VL round-trip -- `run_variational_laplace_generic(ERPDCMForward(), ...)` recovers planted CMC
+     params on synthetic ground truth (protocol confirmation; not a parity gate) (LEAD-06).
+
+#### Phase 36: ERP-DCM Pyro Model, Amortized Wiring & MMN Precision-Sweep Demo
+
+**Goal:** The milestone completes with a Pyro generative ERP-DCM model, amortized inference wiring,
+and the headline 5-source MMN precision-sweep demo -- the `actinf_physics` hand-off artifact --
+gated behind a green fixed-reference SPM forward-parity check.
+
+**Branch:** `gsd/phase-36-erp-dcm-model-mmn-demo`
+**Depends on:** Phase 35 (`ERPDCMForward` + scalp-ERP parity + difference wave).
+**Requirements:** ERPDCM-01, ERPDCM-02, ERPDCM-03, ERPDCM-04, ERPDCM-05, ERPDCM-06
+**Success Criteria** (what must be TRUE):
+
+  1. **(SPM12 PARITY GATE.)** The MMN sweep figure is gated behind a GREEN fixed-reference SPM
+     forward-parity check (LFP + difference wave reproduced from `spm_gen_erp` + `spm_lx_erp` at
+     fixed reference params, within Phase-35 tolerances on frozen fixtures) BEFORE any sweep output
+     is produced (ERPDCM-06).
+  2. `models/erp_dcm_model.py` Pyro generative model -- log-normal priors (A,B,C,G,T,R), Gaussian
+     likelihood on the scalp residual, B modulation -- consistent with the `spectral_dcm_model`
+     idiom (ERPDCM-01).
+  3. Amortized path -- `ERPDCMPacker` (`guides/parameter_packing.py`) + `amortized_erp_dcm_model`
+     (`models/amortized_wrappers.py`) appended additively; the amortized flow guide trains on
+     `erp_simulator` draws without error (ERPDCM-02).
+  4. A 5-source auditory MMN network (A1 L/R, STG L/R, rIFG) with the forward/backward/lateral
+     connection graph, `C` into bilateral A1, and deviant-vs-standard `B` modulation; MNI coords
+     flagged for verification against the primary papers before hard-coding (ERPDCM-03).
+  5. `scripts/demo_mmn_precision_sweep.py` sweeps superficial-pyramidal self-inhibition gain
+     (`P.G[:,0] -> G[:,6]`) at rIFG + bilateral A1 and emits a `gain -> |MMN|` transfer curve;
+     asserts monotone attenuation and a frontal-dominant negative-going difference wave (the
+     Adams/Ranlund artifact), reusing the Phase-33 permutation guard (`P.G[:,0]` perturbation
+     changes `G[:,6]`) (ERPDCM-04).
+  6. A consumer-facing adapter API maps
+     `(sp_inhibition_gain, a1_b_gain, rifg_b_gain, fwd_bwd_flag) -> CMC params` for the
+     `actinf_physics` Phase-133 forward-only adapter (ERPDCM-05).
+
+### Progress
+
+**Execution Order:** 33 -> 34 -> 35 -> 36 (strictly linear; NO phase-level parallelism -- each phase
+contributes one tier of the staged fixture ladder and cannot start before its predecessor's SPM12
+parity gate is green).
+
+| Phase | SPM12 reference | Tolerances | Plans Complete | Status | Completed |
+|-------|-----------------|------------|----------------|--------|-----------|
+| 33. CMC Core Dynamics, spm_int_L Integrator & Single-Source Parity | `spm_fx_cmc` + `spm_int_L` (single source, D=1) | J0 <=1e-10, Q <=1e-9, traj <=1e-8 | 0/? | Not started | -- |
+| 34. Extrinsic Coupling, Condition B & Multi-Source Evoked Integration | `spm_gen_Q` + `spm_gen_erp` (5-source, D=1) | Q.A/Q.G element-wise, traj <=1e-8 | 0/? | Not started | -- |
+| 35. Single-Dipole Lead-Field, Scalp Projection & ERPDCMForward | `spm_lx_erp` (LFP mode) | scalp ERP <=1e-7 | 0/? | Not started | -- |
+| 36. ERP-DCM Pyro Model, Amortized Wiring & MMN Precision-Sweep Demo | full pipeline at fixed-ref params (LFP) | same as Phase 35 + monotone curve | 0/? | Not started | -- |
+
+---
+
 ## Cumulative Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -653,9 +892,14 @@ round-trip test). Independent of Phase 30; runs concurrently.
 | 30. Recovery Matrix Sweep (M3 Cluster) | v0.7.0 | 3/3 | ✅ Complete 2026-06-11 (10/10 classified, 0 errored; 6 PASS / 4 ident-limit; task underflow fixed via rk4) | 2026-06-11 |
 | 31. BMR Validation & Posterior Tempering (Exploratory) | v0.7.0 | 3/3 | ✅ Complete 2026-06-11 (VLBMR-01/02/03; 8 vl tests; tempering exploratory/PD-safe, never gates absolute ΔF) | 2026-06-11 |
 | 32. SPM12 Cross-Validation (Local / MATLAB) | v0.7.0 | 3/3 | ✅ Complete 2026-06-12 (VLSPM-01/02/03; ran on M3; ranking 1.0, constant 270-nat F offset, forward-model divergence documented) | 2026-06-12 |
+| 33. CMC Core Dynamics, spm_int_L Integrator & Single-Source Parity | v0.8.0 | 0/? | Not started | -- |
+| 34. Extrinsic Coupling, Condition B & Multi-Source Evoked Integration | v0.8.0 | 0/? | Not started | -- |
+| 35. Single-Dipole Lead-Field, Scalp Projection & ERPDCMForward | v0.8.0 | 0/? | Not started | -- |
+| 36. ERP-DCM Pyro Model, Amortized Wiring & MMN Precision-Sweep Demo | v0.8.0 | 0/? | Not started | -- |
 
 ---
 *Roadmap created: 2026-04-07*
+*Last updated: 2026-06-25 -- v0.8.0 DCM for Evoked Responses (EEG/MEG ERP) added (Phases 33-36; 25 reqs across CMC/EVOK/LEAD/ERPDCM). Strictly linear critical path 33->34->35->36 (NO phase parallelism); each phase carries an explicit SPM12 forward-parity gate on frozen MATLAB fixtures (J0 <=1e-10, Q <=1e-9, traj <=1e-8, scalp ERP <=1e-7). spm_int_L exp-Euler integrator (utils/local_linearization.py) is the central new component, fixture-verified first. CMC-only, single-dipole (LFP-first), VL+amortized reuse, 5-source MMN precision-sweep demo; forward/synthetic only. Research-grounded (.planning/research/v0.8.0/).*
 *Last updated: 2026-06-10 -- v0.7.0 Variational Laplace Validation added (Phases 29-32; 19 reqs across VLINFRA/VLREC/VLBMR/VLSPM/VLROBUST). Critical path 29->30->31; 32 parallel to 30. Validation-led; real-data + SBI deferred to v0.8.0+.*
 *Last updated: 2026-06-10 -- v0.6.0 audited + scope-cut. All 34 plans executed; goal-backward
 audit (`.planning/v0.6.0-AUDIT.md`) found real-data claims (Phase 22/24/26) undelivered →

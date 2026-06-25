@@ -455,17 +455,44 @@ Explicit anti-features for v0.8.0 (documented to prevent scope creep).
 
 ## v0.8.0 Traceability
 
-*(Mapped to Phases 33-36 during roadmap creation.)*
+*(Mapped to Phases 33-36 by the roadmapper 2026-06-25; 25 IDs, 100% coverage, 0 unmapped, 0 duplicated.)*
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CMC-01..07 | Phase 33 | Pending |
-| EVOK-01..06 | Phase 34 | Pending |
-| LEAD-01..06 | Phase 35 | Pending |
-| ERPDCM-01..06 | Phase 36 | Pending |
+| CMC-01 | Phase 33 | Pending |
+| CMC-02 | Phase 33 | Pending |
+| CMC-03 | Phase 33 | Pending |
+| CMC-04 | Phase 33 | Pending |
+| CMC-05 | Phase 33 | Pending |
+| CMC-06 | Phase 33 | Pending |
+| CMC-07 | Phase 33 | Pending |
+| EVOK-01 | Phase 34 | Pending |
+| EVOK-02 | Phase 34 | Pending |
+| EVOK-03 | Phase 34 | Pending |
+| EVOK-04 | Phase 34 | Pending |
+| EVOK-05 | Phase 34 | Pending |
+| EVOK-06 | Phase 34 | Pending |
+| LEAD-01 | Phase 35 | Pending |
+| LEAD-02 | Phase 35 | Pending |
+| LEAD-03 | Phase 35 | Pending |
+| LEAD-04 | Phase 35 | Pending |
+| LEAD-05 | Phase 35 | Pending |
+| LEAD-06 | Phase 35 | Pending |
+| ERPDCM-01 | Phase 36 | Pending |
+| ERPDCM-02 | Phase 36 | Pending |
+| ERPDCM-03 | Phase 36 | Pending |
+| ERPDCM-04 | Phase 36 | Pending |
+| ERPDCM-05 | Phase 36 | Pending |
+| ERPDCM-06 | Phase 36 | Pending |
 
 **Coverage:** 25 v0.8.0 requirement IDs (CMC-01..07, EVOK-01..06, LEAD-01..06, ERPDCM-01..06);
-to be mapped to exactly one phase each by the roadmapper.
+25/25 mapped to exactly one phase each; 0 unmapped, 0 duplicated.
+
+**Per-phase distribution:**
+- Phase 33 (CMC Core Dynamics, spm_int_L Integrator & Single-Source Parity): 7 reqs (CMC-01..07)
+- Phase 34 (Extrinsic Coupling, Condition B & Multi-Source Evoked Integration): 6 reqs (EVOK-01..06)
+- Phase 35 (Single-Dipole Lead-Field, Scalp Projection & ERPDCMForward): 6 reqs (LEAD-01..06)
+- Phase 36 (ERP-DCM Pyro Model, Amortized Wiring & MMN Precision-Sweep Demo): 6 reqs (ERPDCM-01..06)
 
 ---
 *Requirements defined: 2026-04-17*
