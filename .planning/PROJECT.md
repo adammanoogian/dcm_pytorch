@@ -17,14 +17,17 @@ point estimate. This is the scientific meaning that must be preserved above all 
 
 ## Current State
 
-**Shipped v0.6.0 (2026-06-10, scope-cut).** The framework now does DCM-based interpretability
-of deep-learning models trained on neural data, with an SPM12-grade **Variational Laplace**
-engine (`spm_nlsi_GN`: Gauss-Newton E-step, ReML M-step, SVD reduction, full posterior
-covariance) as the default inference, generalized across spectral/task/latent-circuit DCM via a
-`ForwardModel` protocol. Synthetic parameter recovery, Bayesian Model Reduction, and hybrid
-VAE-DCM are validated; real-data application (real Cam-CAN M/EEG, real foundation-model runs,
-SBI calibration) is built-but-un-run and **deferred to v0.7.0**. See
-`.planning/MILESTONES.md` and `milestones/v0.6.0-MILESTONE-AUDIT.md`.
+**v0.7.0 Variational Laplace Validation complete (2026-06-12).** The VL engine is now
+validated across an N×SNR recovery matrix (spectral/task/latent-circuit), BMR relative-ranking
+recovers true circuit structure (vs brute-force ELBO), and VL was cross-validated against MATLAB
+SPM12 `spm_nlsi_GN` (model-ranking agreement 1.0; free energy equal up to a constant ~270-nat
+offset — a documented forward-model divergence, not an engine bug). All four phases (29-32)
+passed verification. The framework remains an **fMRI / spectral DCM**; it has no time-domain
+evoked-response (EEG/MEG ERP) capability yet — that is the v0.8.0 milestone.
+
+**Prior: shipped v0.6.0 (2026-06-10, scope-cut).** SPM12-grade **Variational Laplace** engine
+(`spm_nlsi_GN`) generalized across forward models via a `ForwardModel` protocol; synthetic
+recovery, BMR, and hybrid VAE-DCM validated. See `.planning/MILESTONES.md`.
 
 ## Requirements
 
@@ -63,6 +66,10 @@ SBI calibration) is built-but-un-run and **deferred to v0.7.0**. See
 - Hybrid VAE-DCM amortized inference (A-RMSE 0.076, masked sign recovery 0.77, 0.76 ms) — v0.6.0
 - CT-RNN training + PCA latent-extraction baseline — v0.6.0
 - Real foundation-model extractors (TRIBE v2 / LaBraM / BrainOmni) + real Schaefer parcellation *(infra; un-run)* — v0.6.0
+- VL N×SNR synthetic recovery matrix (spectral/task/latent-circuit; per-region R², masked sign, CI coverage, shrinkage) — v0.7.0
+- BMR relative-evidence ranking recovers true circuit structure + agrees with brute-force ELBO (ρ=1.0) — v0.7.0
+- VL cross-validated vs MATLAB SPM12 `spm_nlsi_GN` (ranking agreement 1.0; F equal up to constant offset) — v0.7.0
+- VL numerical-robustness guards (convergence/determinism, dt≥0.1 precision-intractability guard, C-order CSD round-trip) — v0.7.0
 
 ### Active
 
@@ -93,38 +100,44 @@ Pyro generative model + priors, simulator, and recovery benchmark.
 - SPM12 cross-validation of bilinear DCM (requires MATLAB; v0.4+ candidate)
 - NumPyro backends, regularization study, semi-amortized pipeline, amortized calibration (deferred to v0.4.0+)
 
-## Current Milestone: v0.7.0 — Variational Laplace Validation (VL-validation-led)
+## Current Milestone: v0.8.0 — DCM for Evoked Responses (EEG/MEG ERP)
 
-**Goal:** Prove the Variational Laplace engine works *completely* on synthetic / known-ground-truth
-problems before any real data. Establish a systematic validation matrix, cross-validate against
-SPM12 `spm_nlsi_GN`, standardize VL+BMR model comparison, and harden numerical robustness. No
-real data this milestone. Seed: `.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md` + v0.6.0 audit.
+**Goal:** Add the first time-domain evoked-response capability — a canonical-microcircuit (CMC)
+neural-mass → extrinsic coupling + evoked integration → single-dipole lead-field → scalp-ERP
+forward stack — generating MMN/P300 waveforms, SPM12-parity validated at every phase, reusing the
+v0.7.0 VL + amortized inference. Forward + parity + synthetic only; no empirical ERP fitting.
+Seed: `.planning/v0.8.0-EEG-ERP-SCOPE.md` + `.planning/research/v0.8.0/`.
 
 **Target features (confirmed scope):**
 
-- **Synthetic recovery matrix (N × SNR)** — systematic parameter recovery across network sizes
-  and noise, for spectral / task / latent-circuit forward models. CI coverage reported as a
-  standard recovery metric (calibration rides along; not a separate SBC phase).
-- **SPM12 cross-validation** — numeric agreement of VL output vs MATLAB `spm_nlsi_GN` on identical
-  problems (prior-matched). Builds on the v0.1.0 SPM12 `.mat` export + MATLAB batch infrastructure.
-- **VL + BMR model comparison** — standardize BMR-on-VL (relative-evidence ranking + separation
-  gap); fix the absolute-ΔF Laplace-overconfidence via posterior tempering (todo
-  `vl-overconfidence-for-bmr`).
-- **Numerical robustness / edge cases** — convergence, the dt/precision-matrix intractability
-  (Phase 28 note), stability-boundary handling, multi-restart determinism.
+- **CMC neural-mass forward model (single source)** — 4 laminar populations / 8 states, He/τ
+  synaptic kernels, sigmoid firing, SPM `-exp` parameter transforms; parity vs `spm_fx_cmc.m`.
+- **Exponential-Euler integrator** — a pure-torch port of SPM's `spm_int_L` (frozen-Jacobian
+  local linearisation), the central new component; rk4/dopri5 will NOT match SPM for finite dt.
+- **Extrinsic coupling + evoked integration (multi-source)** — forward/backward/lateral A,
+  condition modulation B (incl. `diag(B)→G` precision path), input C; parity vs `spm_gen_erp.m`.
+- **Single-dipole lead-field → scalp ERP** — `kron(P.J, L)` projection + deviant−standard
+  difference wave; parity vs `spm_lx_erp.m` (LFP mode first, ECD via MATLAB-exported gain).
+- **ERP-DCM model class + inference + MMN demo** — `erp_dcm_model.py` wired to VL + amortized
+  via the `ForwardModel` protocol; 5-source auditory MMN network; precision-sweep (sp
+  self-inhibition gain) → attenuated-MMN transfer curve (the Adams/Ranlund artifact).
 
-**Explicitly deferred (NOT v0.7.0 — gated on VL being proven first):**
+**Decisions locked (milestone init 2026-06-25):**
+- **CMC only** (not Jansen-Rit/ERP) — exposes superficial-pyramidal gain = precision, required by
+  the downstream consumer.
+- **Single-dipole-per-source** lead-field (not full montage/BEM).
+- **VL + amortized + MMN demo** inference scope — synthetic/forward only.
 
-- All real-data application — real Cam-CAN M/EEG (Phase 22 gates), real foundation-model runs
-  (Phase 24), real-M/EEG demos. → v0.8.0+ once VL is validated.
-- SBI reconciliation / SBC structural fix — SBI is a separate (uncalibrated) inference path,
-  not VL. → later milestone.
-- Posterior calibration/coverage as a standalone SBC dimension (light CI-coverage only, within
-  the recovery matrix).
-- Neural ODE extension; learned `C_obs`; nn4psych actor-critic networks.
+**Explicitly deferred / out of scope:**
 
-**Infra prerequisite:** fix the Mutagen `models/` ignore (recreate session with anchored ignores)
-before any M3 run touching `src/pyro_dcm/models/` — todo `mutagen-models-ignore`.
+- Empirical M/EEG ERP **data fitting** — forward + parity capability first; fitting follows once
+  validated.
+- Full sensor montage / BEM head model, source localization / inverse, group PEB.
+- Jansen-Rit/ERP and CMC_2014/TFM neural-mass variants.
+- Full delay-operator path — delays forced off (D=1) for the first parity pass.
+
+**Downstream consumer:** `actinf_physics` (Phase 133 / NEURO2-04) imports this model forward-only
+to reproduce precision-attenuated MMN; keep this milestone domain-agnostic (general DCM-ERP).
 
 ### Out of Scope
 
@@ -170,9 +183,14 @@ before any M3 run touching `src/pyro_dcm/models/` — todo `mutagen-models-ignor
 | Neural data prediction RNN (not behavioral) | RNN trained to predict neural activity, not behavioral choices; DCM then distills learned neural dynamics | — Pending — pipeline synthetic-validated; real-data → v0.7.0 |
 | Variational Laplace as default inference (SPM12 `spm_nlsi_GN`) | Full posterior covariance / structured posterior closes the B-collapse mean-field SVI couldn't; no AutoLowRankMVN/AutoIAF guide needed | ✓ Good — closed Phase 20-05 (v0.6.0) |
 | Scope-cut v0.6.0 at completion | Ship synthetic methodology + VL engine; defer real-data application rather than block on data/compute access | ✓ Good — honest milestone close (v0.6.0) |
+| CMC (not Jansen-Rit/ERP) for v0.8.0 ERP | CMC exposes superficial-pyramidal gain = precision; the downstream Adams/Ranlund psychosis-MMN use case needs exactly that parameter | — Pending (v0.8.0) |
+| New `spm_int_L` exp-Euler integrator (not torchdiffeq) for ERP | SPM integrates ERPs via frozen-Jacobian local linearisation; rk4/dopri5 converges to the true ODE but NOT to the SPM solution at finite dt → fails parity | — Pending (v0.8.0) |
+| ERP forward implements existing `ForwardModel` protocol | Reuses VL + amortized inference with zero engine edits; LatentCircuitForward (v0.6.0) is the precedent | — Pending (v0.8.0) |
+| Single-dipole lead-field; LFP-first parity | Sufficient for forward MMN/P300 + difference wave; ECD gain precomputed in MATLAB and exported via the validation/ bridge | — Pending (v0.8.0) |
 
 ---
-*Last updated: 2026-06-10 — started milestone v0.7.0 (Variational Laplace Validation,
-VL-validation-led; no real data). Confirmed scope: synthetic recovery matrix (N×SNR), SPM12
-cross-validation, VL+BMR comparison, numerical robustness. Real-data + SBI deferred to v0.8.0+.
-v0.3.0 relabeled Paused (Phase 16.1 incomplete).*
+*Last updated: 2026-06-25 — v0.7.0 (Variational Laplace Validation) verified complete (Phases
+29-32). Started milestone v0.8.0 (DCM for Evoked Responses, EEG/MEG ERP; Phases 33-36). Confirmed
+scope: CMC neural-mass forward + spm_int_L integrator + extrinsic/evoked + single-dipole
+lead-field + ERP-DCM model class + MMN precision-sweep demo. SPM12-parity at every phase;
+forward + synthetic only (empirical fitting deferred). Research: .planning/research/v0.8.0/.*

@@ -2,14 +2,21 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-10)
+See: .planning/PROJECT.md (updated 2026-06-25)
 
 **Core value:** A matrix (effective connectivity) remains explicit and interpretable with full posterior uncertainty
-**Current focus:** Planning v0.7.0 — VL validation matrix + deferred real-data application (real Cam-CAN M/EEG, real foundation-model runs, SBI calibration). Seed: `.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md`.
+**Current focus:** v0.8.0 DCM for Evoked Responses (EEG/MEG ERP) — defining requirements → roadmap (Phases 33-36). CMC neural-mass → evoked → single-dipole lead-field → scalp-ERP forward stack, SPM12-parity at every phase, reusing VL + amortized; forward + synthetic only. Seed: `.planning/v0.8.0-EEG-ERP-SCOPE.md` + `.planning/research/v0.8.0/`.
 
 ## Current Position
 
-**Milestone:** v0.7.0 Variational Laplace Validation (VL-validation-led). **ALL 4 PHASES (29-32) ✅ COMPLETE & VERIFIED — milestone ready for `/gsd:complete-milestone` (or `/gsd:audit-milestone`).**
+**Milestone:** v0.8.0 DCM for Evoked Responses (EEG/MEG ERP). **NOT STARTED — defining requirements → roadmap (Phases 33-36).**
+**Status:** Milestone initialized 2026-06-25 via `/gsd:new-milestone`. Decisions locked: CMC only · single-dipole lead-field (LFP-first) · VL + amortized + MMN demo · forward/synthetic only (no empirical fitting). Research complete (4 dimensions + SUMMARY, HIGH confidence, SPM12 source read line-by-line) in `.planning/research/v0.8.0/`. **Headline finding:** SPM integrates ERPs via `spm_int_L` (exp-Euler, frozen Jacobian) NOT rk4 — a new `utils/local_linearization.py` is the central new component and must be fixture-verified first. Zero new deps; additive-only; `ERPDCMForward` implements the existing `ForwardModel` protocol → VL/amortized reuse. **Next:** roadmapper maps requirements → Phases 33-36, then `/gsd:plan-phase 33`.
+
+---
+
+### v0.7.0 history (COMPLETE & VERIFIED 2026-06-12 — retained below)
+
+**Milestone:** v0.7.0 Variational Laplace Validation (VL-validation-led). **ALL 4 PHASES (29-32) ✅ COMPLETE & VERIFIED — ready for `/gsd:complete-milestone` (or `/gsd:audit-milestone`).**
 **Phase 32 — SPM12 Cross-Validation: ✅ COMPLETE & VERIFIED PASSED 2026-06-12 (3/3 plans, 3/3 reqs, 8/8 truths; `32-VERIFICATION.md`: passed).** VLSPM-01/02/03 Complete. **Ran on M3** (local MATLAB FlexLM -15 unreachable; matlab r2022a + Carrick spm12 verified on comp partition — memory `reference-m3-matlab-spm12`); jobs 56407192 + 56407635 (seeds 42-46). **RESULTS (deterministic, identical all 5 seeds):** model-ranking agreement **1.0** (defensible criterion ✅); `vl_F − spm_F` = **EXACT constant 269.895 nats** (std=0) → engines' F identical up to a fixed normalization constant; strict-5%-absolute-F + 10%-Ep **not met but recorded as documented findings, not failures** (user decision) — the F gate is infeasible by convention (pitfall S3, proven), the Ep divergence is a real forward-model difference (**VL tracks ground truth closer than SPM**: off-diag 0.149/0.101 vs 0.127/0.191, true 0.15/0.10). **TWO same-CSD-bridge bugs fixed mid-run:** `DCM.n/v` int64→double (`spm_Ce`); the core one — `spm_dcm_fmri_csd` UNCONDITIONALLY recomputes CSD from BOLD (overwrote injection → RCOND=NaN), fixed by replicating SPM's setup + calling `spm_nlsi_GN` directly (`DCM.U.csd=zeros` constant input). Findings: `32-SPM-CROSSVAL-FINDINGS.md`. **Next: v0.7.0 milestone complete → `/gsd:complete-milestone` (or audit first).**
 **32-03 CODE-COMPLETE 2026-06-11 (VLSPM-03, the Phase 32 deliverable — M3 RUN PENDING orchestrator):**
 `run_vl_spectral_dcm_validation(seed=42, n_regions=2, max_iter=64)` in NEW `validation/run_vl_validation.py`
