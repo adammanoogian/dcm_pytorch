@@ -725,6 +725,11 @@ isolation before any extrinsic coupling can compound it.
 **Depends on:** v0.7.0 frozen foundation (Phase 28 VL engine + `ForwardModel` protocol; the Phase-32
 `validation/` SPM bridge pattern: `export_to_mat` -> MATLAB batch on M3 -> Python assertion).
 **Requirements:** CMC-01, CMC-02, CMC-03, CMC-04, CMC-05, CMC-06, CMC-07
+**Plans:** 3 plans (3 waves)
+Plans:
+- [ ] 33-01-PLAN.md — Pure-torch CMC core: spm_int_L integrator (local_linearization.py), cmc_neural_mass.py (cmc_f/sigmoid/parameterize_cmc + permutation guard), cmc_priors.py, erp_input.py; C1-isolation + permutation-guard tests first (CMC-01..05, CMC-07; LAPTOP)
+- [ ] 33-02-PLAN.md — MATLAB fixture generation on M3: export_erp_dcm append, run_spm_erp_dcm.m + spm_fx_cmc_nodelay.m (force D=1), cluster harness; produces erp_single_source_fixtures.mat (CMC-06 fixtures; M3/MATLAB, ssh-gated)
+- [ ] 33-03-PLAN.md — SPM12 parity gate: V5 staged ladder (f_field→J0→matrix_exp measured→Q_update→y_states) + measured matrix_exp floor; real run on M3, auto-skip on laptop (CMC-06; M3/MATLAB, ssh-gated)
 **Success Criteria** (what must be TRUE):
 
   1. **(SPM12 PARITY GATE -- written FIRST, before any extrinsic coupling exists.)** Single-source
