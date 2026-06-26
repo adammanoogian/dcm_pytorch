@@ -650,3 +650,293 @@ def export_erp_dcm(
         "n_inputs": n_inputs,
         "spm_id": "",
     }
+
+
+# =============================================================================
+# Multi-source CMC-ERP export (Phase 34-02, EVOK-05/06) -- APPENDED, additive.
+# The single-source export_erp_dcm above is byte-untouched.
+# =============================================================================
+
+# The canonical 5-source auditory-MMN reference TOPOLOGY (NO MNI coords -- those
+# are Phase 36). Sources, 0-indexed: A1L, A1R, STGL, STGR, rIFG.
+_MS_SOURCE_NAMES = ("A1L", "A1R", "STGL", "STGR", "rIFG")
+_MS_N = 5
+_A1L, _A1R, _STGL, _STGR, _RIFG = 0, 1, 2, 3, 4
+
+# Extrinsic edges as [to, from] (the cmc_network_f / spm_fx_cmc convention:
+# A[i] @ S routes firing from column `from` into row `to`). Forward blocks A{1}
+# (sp->ss) and A{2} (sp->dp) carry the bottom-up edges; backward blocks A{3}
+# (dp->sp) and A{4} (dp->ii) carry the top-down edges (spm_fx_cmc.m:171-198).
+_MS_FORWARD_EDGES = (
+    (_STGL, _A1L),   # A1L  -> STGL
+    (_STGR, _A1R),   # A1R  -> STGR
+    (_RIFG, _STGL),  # STGL -> rIFG
+    (_RIFG, _STGR),  # STGR -> rIFG
+)
+# Lateral RECIPROCAL pair STGL<->STGR -- both directions live in the forward
+# blocks so the (1+4L) lateral reduction fires (spm_fx_cmc.m:79-82;
+# erp_coupled_system.parameterize_cmc_network detects recip = a>exp(-8) &
+# a.T>exp(-8)). A clean reciprocal test pair (34-RESEARCH Open Q3).
+_MS_LATERAL_EDGES = (
+    (_STGR, _STGL),  # STGL <-> STGR
+    (_STGL, _STGR),
+)
+_MS_BACKWARD_EDGES = (
+    (_STGL, _RIFG),  # rIFG -> STGL
+    (_STGR, _RIFG),  # rIFG -> STGR
+    (_A1L, _STGL),   # STGL -> A1L
+    (_A1R, _STGR),   # STGR -> A1R
+)
+# Auditory input drives bilateral A1 only (the cortical input recipients).
+_MS_INPUT_SOURCES = (_A1L, _A1R)
+# Precision (self-inhibition) nodes whose diag(B) modulates G[:,0] (the MMN knob).
+_MS_PRECISION_NODES = (_RIFG, _A1L, _A1R)
+
+# Modest, deterministic free-log-space values (mask*32-32 convention, 34-01-D3:
+# exp(-32)*E0 << exp(-8) is "off"; the live log-value is "on"). B differs from A
+# so the Wave-3 ladder has folding teeth (Q.A = A + X*B element-wise checkable).
+_MS_A_LIVE = 0.0       # exp(0)*E0 = E0 (fully on)
+_MS_A_DEAD = -32.0     # exp(-32)*E0 ~ 2.5e-12 (off)
+_MS_B_EDGE = 0.3       # B on every extrinsic edge (folded into all 4 A blocks)
+_MS_B_DIAG = 0.5       # diag(B) at the precision nodes -> Q.G[:,0] (EVOK-02)
+
+
+def _ms_log_block(edges: tuple[tuple[int, int], ...]) -> np.ndarray:
+    """Build a ``(5,5)`` free-log-space extrinsic block from a ``[to, from]`` list.
+
+    Live edges get ``_MS_A_LIVE`` (``exp(0)*E0`` on); every other entry gets
+    ``_MS_A_DEAD`` (``exp(-32)*E0`` off, the ``mask*32-32`` convention,
+    34-01-D3).
+
+    Parameters
+    ----------
+    edges : tuple of (int, int)
+        ``(to, from)`` index pairs that are live in this block.
+
+    Returns
+    -------
+    np.ndarray
+        Free-log-space block, shape ``(5, 5)``, float64.
+    """
+    block = np.full((_MS_N, _MS_N), _MS_A_DEAD, dtype=np.float64)
+    for to_i, from_i in edges:
+        block[to_i, from_i] = _MS_A_LIVE
+    return block
+
+
+def export_erp_dcm_multisource(
+    P: dict[str, np.ndarray] | None = None,
+    M_meta: dict[str, float] | None = None,
+    output_path: str = "validation/data/erp_multisource_input.mat",
+) -> dict[str, object]:
+    """Export the 5-source CMC-ERP DCM ``.mat`` input for SPM12 MMN fixtures.
+
+    Writes the multi-source DCM struct that ``run_spm_erp_dcm_multisource.m``
+    loads to generate the frozen Wave-3 parity fixtures (per-condition
+    ``spm_gen_Q`` ``QA``/``QG``, per-condition frozen ``J0``/``Qupd``, and the
+    ``spm_gen_erp`` multi-source trajectory ``y``). APPENDED to this module (the
+    single-source :func:`export_erp_dcm` and all other exporters are
+    byte-untouched), mirroring their savemat conventions: scalars wrapped as
+    ``np.array([[v]])``, string fields as ``np.array([[...]], dtype=object)``,
+    and ALL dimensions cast to float64 (the int64->double ``spm_Ce`` footgun
+    fixed in Phase 32, commit a27828b / decision 32-03).
+
+    The defaults LOCK the canonical 5-source auditory-MMN reference TOPOLOGY
+    (sources A1L, A1R, STGL, STGR, rIFG; NO MNI coordinates -- those are Phase
+    36) as explicit ``(5,5)`` extrinsic masks (34-RESEARCH Open Q3):
+
+    * Forward ``A{1}`` (sp->ss) & ``A{2}`` (sp->dp): A1L->STGL, A1R->STGR,
+      STGL->rIFG, STGR->rIFG.
+    * Backward ``A{3}`` (dp->sp) & ``A{4}`` (dp->ii): rIFG->STGL, rIFG->STGR,
+      STGL->A1L, STGR->A1R.
+    * Lateral reciprocal STGL<->STGR (added to the forward blocks; triggers the
+      ``(1+4L)`` reduction, ``spm_fx_cmc.m:79-82``).
+    * Input ``C`` drives A1L and A1R only (bilateral auditory recipients).
+    * Condition ``B{1}`` modulates every extrinsic edge AND carries a non-zero
+      ``diag(B)`` at rIFG + bilateral A1 (the precision nodes), with design
+      ``X = [[0],[1]]`` (standard vs deviant, ``Cnd=2``, ``n_effects=1``).
+
+    The free-log-space ``P`` is built from those masks (``_MS_A_LIVE`` on,
+    ``_MS_A_DEAD`` off; ``B`` distinct from ``A`` so the Wave-3 folding check has
+    teeth). ``P.A``/``P.B`` are encoded as MATLAB CELL arrays
+    (``np.empty((1,k), dtype=object)``); ``U.X`` is ``(Cnd, n_effects)`` double;
+    ``M.x = zeros(5,8)``, ``M.n = 40``, ``M.f = 'spm_fx_cmc_nodelay'`` (D=1).
+
+    Parameters
+    ----------
+    P : dict of str -> np.ndarray, optional
+        Free-parameter struct. Keys ``A`` (length-4 list of ``(5,5)``), ``B``
+        (length-``n_effects`` list of ``(5,5)``), ``T`` ``(5,4)``, ``G``
+        ``(5,4)``, ``C`` ``(5,n_inp)``, ``S`` ``(5,1)``, ``R`` ``(n_inp,2)`` and
+        ``X`` ``(Cnd,n_effects)``. Defaults to the locked MMN reference above.
+    M_meta : dict of str -> float, optional
+        Integration-grid / timing overrides (``ns``, ``dt``, ``ons``, ``dur``,
+        ``sus``). Defaults to the frozen ERP grid (ns=128, dt=0.004, ons=60,
+        dur=16).
+    output_path : str, optional
+        Path for the output DCM input ``.mat``.
+
+    Returns
+    -------
+    dict of str -> object
+        Provenance metadata (N, edge lists, X, dt/ns/ons/dur, n_inputs), for the
+        caller to log / assert against.
+
+    Notes
+    -----
+    SPM12 source: ``spm_fx_cmc.m:68-82,171-198`` (the extrinsic blocks + lateral
+    reduction + the four routes), ``spm_gen_Q.m:24-67`` (the ``B``->all-``A`` +
+    ``diag(B)``->``G(:,1)`` folding), ``spm_gen_erp.m:69-86`` (the per-condition
+    evoked loop), ``spm_erp_u.m:42-64`` (the Gaussian drive). The ``$Id``
+    provenance strings are captured by ``run_spm_erp_dcm_multisource.m`` at run
+    time.
+
+    See Also
+    --------
+    export_erp_dcm : The single-source bridge this mirrors additively.
+    """
+    if M_meta is None:
+        M_meta = {}
+
+    ns = int(M_meta.get("ns", _ERP_NS))
+    dt = float(M_meta.get("dt", _ERP_DT))
+    ons = float(M_meta.get("ons", _ERP_ONS))
+    dur = float(M_meta.get("dur", _ERP_DUR))
+    sus = float(M_meta.get("sus", _ERP_SUS))
+
+    n = _MS_N
+
+    if P is None:
+        # --- Lock the 5-source reference free-log-space P from the masks. ---
+        a_blocks = [
+            _ms_log_block(_MS_FORWARD_EDGES + _MS_LATERAL_EDGES),  # A{1} sp->ss
+            _ms_log_block(_MS_FORWARD_EDGES + _MS_LATERAL_EDGES),  # A{2} sp->dp
+            _ms_log_block(_MS_BACKWARD_EDGES),                     # A{3} dp->sp
+            _ms_log_block(_MS_BACKWARD_EDGES),                     # A{4} dp->ii
+        ]
+        # Condition B{1}: every extrinsic edge + diag at the precision nodes.
+        b1 = np.zeros((n, n), dtype=np.float64)
+        for to_i, from_i in (
+            _MS_FORWARD_EDGES + _MS_LATERAL_EDGES + _MS_BACKWARD_EDGES
+        ):
+            b1[to_i, from_i] = _MS_B_EDGE
+        for node in _MS_PRECISION_NODES:
+            b1[node, node] = _MS_B_DIAG
+        b_list = [b1]
+        # Input C: drive A1L/A1R only (mask*32-32 -> exp(P.C) ~ 0 elsewhere).
+        c = np.full((n, 1), _MS_A_DEAD, dtype=np.float64)
+        for src in _MS_INPUT_SOURCES:
+            c[src, 0] = _MS_A_LIVE
+        t = np.zeros((n, 4), dtype=np.float64)
+        g = np.zeros((n, 4), dtype=np.float64)
+        s = np.zeros((n, 1), dtype=np.float64)
+        r = np.zeros((1, 2), dtype=np.float64)
+        x_design = np.array([[0.0], [1.0]], dtype=np.float64)  # std / deviant
+    else:
+        a_blocks = [np.asarray(P["A"][i], dtype=np.float64) for i in range(4)]
+        b_list = [np.asarray(b, dtype=np.float64) for b in P["B"]]
+        c = np.asarray(P["C"], dtype=np.float64)
+        t = np.asarray(P["T"], dtype=np.float64)
+        g = np.asarray(P["G"], dtype=np.float64)
+        s = np.asarray(P["S"], dtype=np.float64)
+        r = np.asarray(P["R"], dtype=np.float64)
+        x_design = np.asarray(P["X"], dtype=np.float64)
+
+    n_inputs = int(c.shape[1])
+    n_effects = int(x_design.shape[1])
+
+    # Frozen Gaussian evoked drive (shared across sources; spm_int_L integrates
+    # U.u verbatim, so freezing it pins the trajectory parity, pitfall V1).
+    u_grid = _erp_gaussian_u_grid(r, ns, dt, ons, dur, sus)
+
+    # P.A / P.B as MATLAB cell arrays (object ndarray); U.X as double.
+    a_cell = np.empty((1, 4), dtype=object)
+    for i in range(4):
+        a_cell[0, i] = a_blocks[i]
+    b_cell = np.empty((1, n_effects), dtype=object)
+    for i in range(n_effects):
+        b_cell[0, i] = b_list[i]
+
+    P_struct = {
+        "A": a_cell,
+        "B": b_cell,
+        "T": t,
+        "G": g,
+        "C": c,
+        "S": s,
+        "R": r,
+    }  # NO 'D' -- delays forced off via M.f = spm_fx_cmc_nodelay (Fact 4, M2).
+
+    edges_forward = np.asarray(_MS_FORWARD_EDGES, dtype=np.float64)
+    edges_lateral = np.asarray(_MS_LATERAL_EDGES, dtype=np.float64)
+    edges_backward = np.asarray(_MS_BACKWARD_EDGES, dtype=np.float64)
+    input_sources = np.asarray(_MS_INPUT_SOURCES, dtype=np.float64).reshape(1, -1)
+    precision_nodes = np.asarray(
+        _MS_PRECISION_NODES, dtype=np.float64
+    ).reshape(1, -1)
+
+    meta = {
+        "N": np.array([[n]], dtype=np.float64),
+        "D": np.array([[1.0]]),  # delay operator forced to identity (Fact 4).
+        "source_names": np.array([list(_MS_SOURCE_NAMES)], dtype=object),
+        "edges_forward": edges_forward,    # [to, from], 0-indexed
+        "edges_lateral": edges_lateral,
+        "edges_backward": edges_backward,
+        "input_sources": input_sources,
+        "precision_nodes": precision_nodes,
+        "X": x_design,
+        "dt": np.array([[dt]]),
+        "ns": np.array([[ns]], dtype=np.float64),
+        "ons": np.array([[ons]]),
+        "dur": np.array([[dur]]),
+        "sus": np.array([[sus]]),
+        "n_states": np.array([[_ERP_NSTATES]], dtype=np.float64),
+        "n_inputs": np.array([[n_inputs]], dtype=np.float64),
+        "n_effects": np.array([[n_effects]], dtype=np.float64),
+        "spm_id": np.array([[""]], dtype=object),  # filled by the .m at run time.
+    }
+
+    DCM = {
+        "P": P_struct,
+        "M": {
+            "f": np.array([["spm_fx_cmc_nodelay"]], dtype=object),
+            "x": np.zeros((n, _ERP_NSTATES), dtype=np.float64),
+            "n": np.array([[n * _ERP_NSTATES]], dtype=np.float64),
+            "m": np.array([[n_inputs]], dtype=np.float64),
+            "l": np.array([[n]], dtype=np.float64),
+            "ons": np.array([[ons]]),
+            "dur": np.array([[dur]]),
+            "sus": np.array([[sus]]),
+        },
+        "U": {
+            "u": u_grid,
+            "dt": np.array([[dt]]),
+            "X": x_design,
+            "name": np.array(
+                [[f"input{i + 1}" for i in range(n_inputs)]], dtype=object
+            ),
+        },
+        # Dimensions as float64 (int64 -> spm_Ce footgun, Phase 32 / a27828b).
+        "n": np.array([[float(n)]], dtype=np.float64),
+        "v": np.array([[ns]], dtype=np.float64),
+        "meta": meta,
+    }
+    scipy.io.savemat(output_path, {"DCM": DCM})
+    return {
+        "N": n,
+        "dt": dt,
+        "ns": ns,
+        "ons": ons,
+        "dur": dur,
+        "sus": sus,
+        "n_inputs": n_inputs,
+        "n_effects": n_effects,
+        "source_names": list(_MS_SOURCE_NAMES),
+        "edges_forward": _MS_FORWARD_EDGES,
+        "edges_lateral": _MS_LATERAL_EDGES,
+        "edges_backward": _MS_BACKWARD_EDGES,
+        "input_sources": _MS_INPUT_SOURCES,
+        "precision_nodes": _MS_PRECISION_NODES,
+        "X": x_design.tolist(),
+        "spm_id": "",
+    }
