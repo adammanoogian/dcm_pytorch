@@ -426,6 +426,188 @@ class SpectralDCMPacker:
         return z_std * self.std_ + self.mean_
 
 
+class ERPDCMPacker:
+    """Pack/unpack DCM-for-evoked-responses (CMC) parameters to/from vectors.
+
+    Mirrors the FROZEN :class:`ERPDCMForward` parameter ordering for the
+    amortized scalp-ERP path, so a packed latent and a VL ``theta`` are
+    interchangeable element-for-element::
+
+        A_free (4*N*N) | C_free (N*M) | T (4*N) | G (4*N) | S (N) | R (2*M)
+
+    with unpack shapes ``A_free (4, N, N)``, ``C_free (N, M)``, ``T (N, 4)``,
+    ``G (N, 4)``, ``S (N, 1)``, ``R (M, 2)``. The between-trial ``B`` is
+    EXCLUDED (held FIXED in the amortized path, mirroring ``ERPDCMForward`` +
+    the v0.3.0-D5 "amortized defers B" precedent).
+
+    LOG-SPACE CONTRACT
+    ------------------
+    Unlike :class:`TaskDCMPacker` / :class:`SpectralDCMPacker` (which ``log()``
+    a positive-constrained noise scalar), EVERY CMC free parameter is ALREADY
+    unconstrained (``P.*`` free log-params). ``pack``/``unpack`` are therefore
+    pure IDENTITY reshapes: there is NO ``.exp()`` at unpack and NO
+    positive-constrained scalar. The packed vector is a verbatim
+    ``ERPDCMForward.pack_params`` flattening.
+
+    Parameters
+    ----------
+    N : int
+        Number of sources (regions).
+    M : int
+        Number of driving inputs (columns of ``c_mask``).
+
+    Attributes
+    ----------
+    n_features : int
+        Total number of features in the packed vector
+        (``4*N*N + N*M + 4*N + 4*N + N + 2*M``).
+    mean_ : torch.Tensor or None
+        Per-element mean from ``fit_standardization`` (fitted attribute).
+    std_ : torch.Tensor or None
+        Per-element standard deviation from ``fit_standardization``.
+    """
+
+    def __init__(self, N: int, M: int) -> None:
+        self.n_regions = N
+        self.n_inputs = M
+        self.n_features = (
+            4 * N * N  # A_free (4 routing blocks)
+            + N * M  # C_free
+            + 4 * N  # T
+            + 4 * N  # G
+            + N  # S
+            + 2 * M  # R
+        )
+
+        # Standardization stats (fitted attributes)
+        self.mean_: torch.Tensor | None = None
+        self.std_: torch.Tensor | None = None
+
+    def pack(self, params: dict[str, torch.Tensor]) -> torch.Tensor:
+        """Pack named CMC parameters into a flat vector (identity reshape).
+
+        Parameters
+        ----------
+        params : dict
+            Dictionary with keys ``"A_free"`` (4, N, N), ``"C_free"`` (N, M),
+            ``"T"`` (N, 4), ``"G"`` (N, 4), ``"S"`` (N, 1), ``"R"`` (M, 2).
+
+        Returns
+        -------
+        torch.Tensor
+            Flat vector of shape ``(n_features,)``. No ``.log()`` is applied --
+            every CMC free param is already unconstrained.
+        """
+        return torch.cat(
+            [
+                params["A_free"].flatten(),
+                params["C_free"].flatten(),
+                params["T"].flatten(),
+                params["G"].flatten(),
+                params["S"].flatten(),
+                params["R"].flatten(),
+            ]
+        )
+
+    def unpack(self, z: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Unpack flat vector into named CMC parameters (identity reshape).
+
+        Parameters
+        ----------
+        z : torch.Tensor
+            Flat vector of shape ``(..., n_features)``. Supports arbitrary
+            batch dimensions.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys ``"A_free"`` (4, N, N), ``"C_free"`` (N, M),
+            ``"T"`` (N, 4), ``"G"`` (N, 4), ``"S"`` (N, 1), ``"R"`` (M, 2).
+            No ``.exp()`` is applied -- the values stay in free log-space.
+        """
+        N, M = self.n_regions, self.n_inputs
+        batch_shape = z.shape[:-1]
+        idx = 0
+
+        a_free = z[..., idx : idx + 4 * N * N].reshape(*batch_shape, 4, N, N)
+        idx += 4 * N * N
+
+        c_free = z[..., idx : idx + N * M].reshape(*batch_shape, N, M)
+        idx += N * M
+
+        t = z[..., idx : idx + 4 * N].reshape(*batch_shape, N, 4)
+        idx += 4 * N
+
+        g = z[..., idx : idx + 4 * N].reshape(*batch_shape, N, 4)
+        idx += 4 * N
+
+        s = z[..., idx : idx + N].reshape(*batch_shape, N, 1)
+        idx += N
+
+        r = z[..., idx : idx + 2 * M].reshape(*batch_shape, M, 2)
+
+        return {
+            "A_free": a_free,
+            "C_free": c_free,
+            "T": t,
+            "G": g,
+            "S": s,
+            "R": r,
+        }
+
+    def fit_standardization(
+        self,
+        dataset: list[dict[str, torch.Tensor]],
+    ) -> None:
+        """Compute per-element mean and std from training data.
+
+        Parameters
+        ----------
+        dataset : list of dict
+            List of parameter dicts with the CMC site names. All values are
+            already unconstrained free log-params (no transform applied).
+
+        Notes
+        -----
+        Standardization is critical for the NSF spline domain ``[-5, 5]``.
+        """
+        packed = torch.stack([self.pack(d) for d in dataset])
+        self.mean_ = packed.mean(dim=0)
+        self.std_ = packed.std(dim=0).clamp(min=1e-6)
+
+    def standardize(self, z: torch.Tensor) -> torch.Tensor:
+        """Standardize packed vector to zero mean, unit variance.
+
+        Parameters
+        ----------
+        z : torch.Tensor
+            Packed parameter vector(s).
+
+        Returns
+        -------
+        torch.Tensor
+            Standardized vector: ``(z - mean) / std``.
+        """
+        assert self.mean_ is not None, "Call fit_standardization first"
+        return (z - self.mean_) / self.std_
+
+    def unstandardize(self, z_std: torch.Tensor) -> torch.Tensor:
+        """Reverse standardization.
+
+        Parameters
+        ----------
+        z_std : torch.Tensor
+            Standardized vector(s).
+
+        Returns
+        -------
+        torch.Tensor
+            Original-scale packed vector: ``z_std * std + mean``.
+        """
+        assert self.mean_ is not None, "Call fit_standardization first"
+        return z_std * self.std_ + self.mean_
+
+
 class LatentCircuitDCMPacker:
     """Pack/unpack DCM parameters for hybrid VAE-DCM.
 

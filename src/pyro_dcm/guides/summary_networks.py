@@ -142,6 +142,109 @@ class BoldSummaryNet(nn.Module):
         return x
 
 
+class ErpSummaryNet(nn.Module):
+    """MLP summary network for scalp evoked-response (ERP) tensors.
+
+    Compresses a ``(Cnd, ns, Nc)`` scalp ERP tensor into a fixed-dimensional
+    embedding vector by flattening the condition x time x channel axes and
+    passing through a 3-layer MLP. The flattened scalp ERP is already a compact
+    time-domain summary, so no convolutional front-end is needed (mirrors
+    :class:`CsdSummaryNet`).
+
+    Handles both single-observation and batched inputs. The flow guide
+    ``AmortizedFlowGuide(ErpSummaryNet(...), packer.n_features, packer=packer)``
+    then needs ZERO changes.
+
+    Parameters
+    ----------
+    n_cond : int
+        Number of between-trial conditions (Cnd).
+    ns : int
+        Number of peristimulus samples.
+    n_channels : int
+        Number of scalp channels (Nc).
+    embed_dim : int, optional
+        Dimension of the output embedding vector. Default 128.
+
+    Notes
+    -----
+    Architecture (input dim ``Cnd * ns * Nc``):
+
+    - Linear(Cnd*ns*Nc, 512) + ReLU
+    - Linear(512, 256) + ReLU
+    - Linear(256, embed_dim)
+
+    All parameters use float64 (project convention).
+
+    Examples
+    --------
+    >>> net = ErpSummaryNet(n_cond=2, ns=128, n_channels=5, embed_dim=128)
+    >>> scalp = torch.randn(2, 128, 5, dtype=torch.float64)
+    >>> embedding = net(scalp)
+    >>> embedding.shape  # (128,)
+    """
+
+    def __init__(
+        self,
+        n_cond: int,
+        ns: int,
+        n_channels: int,
+        embed_dim: int = 128,
+    ) -> None:
+        super().__init__()
+        self.n_cond = n_cond
+        self.ns = ns
+        self.n_channels = n_channels
+        self.embed_dim = embed_dim
+
+        input_dim = n_cond * ns * n_channels
+
+        self.mlp = nn.Sequential(
+            nn.Linear(input_dim, 512),
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, embed_dim),
+        )
+
+        # Convert all parameters to float64
+        self.double()
+
+    def forward(self, scalp: torch.Tensor) -> torch.Tensor:
+        """Compress a scalp ERP tensor to a fixed-dim embedding.
+
+        Parameters
+        ----------
+        scalp : torch.Tensor
+            Scalp ERP. Shape ``(Cnd, ns, Nc)`` for a single observation or
+            ``(batch, Cnd, ns, Nc)`` for a batch. dtype must be float64.
+
+        Returns
+        -------
+        torch.Tensor
+            Embedding vector. Shape ``(embed_dim,)`` if input was unbatched,
+            or ``(batch, embed_dim)`` if batched.
+        """
+        # Handle unbatched input: (Cnd, ns, Nc) -> (1, Cnd, ns, Nc)
+        unbatched = scalp.dim() == 3
+        if unbatched:
+            scalp = scalp.unsqueeze(0)
+
+        batch_size = scalp.shape[0]
+
+        # Flatten condition x time x channel axes: (batch, Cnd*ns*Nc)
+        x = scalp.reshape(batch_size, -1).to(torch.float64)
+
+        # Pass through MLP
+        x = self.mlp(x)  # shape: (batch, embed_dim)
+
+        # Remove batch dim if input was unbatched
+        if unbatched:
+            x = x.squeeze(0)  # shape: (embed_dim,)
+
+        return x
+
+
 class CsdSummaryNet(nn.Module):
     """MLP summary network for cross-spectral density matrices.
 

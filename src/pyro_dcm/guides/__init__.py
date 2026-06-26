@@ -21,17 +21,24 @@ from __future__ import annotations
 from pyro_dcm.guides.amortized_flow import AmortizedFlowGuide
 from pyro_dcm.guides.dcm_encoder_net import DCMEncoderNet
 from pyro_dcm.guides.parameter_packing import (
+    ERPDCMPacker,
     LatentCircuitDCMPacker,
     SpectralDCMPacker,
     TaskDCMPacker,
 )
-from pyro_dcm.guides.summary_networks import BoldSummaryNet, CsdSummaryNet
+from pyro_dcm.guides.summary_networks import (
+    BoldSummaryNet,
+    CsdSummaryNet,
+    ErpSummaryNet,
+)
 
 __all__ = [
     "AmortizedFlowGuide",
     "BoldSummaryNet",
     "CsdSummaryNet",
+    "ErpSummaryNet",
     "DCMEncoderNet",
+    "ERPDCMPacker",
     "LatentCircuitDCMPacker",
     "SpectralDCMPacker",
     "TaskDCMPacker",
