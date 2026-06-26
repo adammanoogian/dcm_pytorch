@@ -30,6 +30,10 @@ from pyro_dcm.forward_models.erp_leadfield import (
     project_to_scalp,
 )
 from pyro_dcm.forward_models.latent_observation import direct_observation
+from pyro_dcm.forward_models.mmn_reference import (
+    build_mmn_5source_network,
+    mmn_cmc_params,
+)
 from pyro_dcm.forward_models.neural_state import (
     NeuralStateEquation,
     compute_effective_A,
@@ -86,6 +90,9 @@ __all__ = [
     "ecd_spatial",
     "lfp_spatial",
     "project_to_scalp",
+    # Phase 36: public 5-source MMN network + actinf_physics CMC adapter (v0.8.0 ERP)
+    "build_mmn_5source_network",
+    "mmn_cmc_params",
     # Phase 20: Latent-circuit direct observation
     "direct_observation",
     # Phase 1: Neural-hemodynamic forward model
