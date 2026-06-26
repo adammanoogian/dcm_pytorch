@@ -944,3 +944,247 @@ def export_erp_dcm_multisource(
         "X": x_design.tolist(),
         "spm_id": "",
     }
+
+
+# =============================================================================
+# Single-dipole LFP lead-field + scalp-ERP export (Phase 35-02, LEAD-05) --
+# APPENDED, additive. The single-source export_erp_dcm and the multi-source
+# export_erp_dcm_multisource above are byte-untouched.
+# =============================================================================
+
+# CMC default contributing-state index (0-indexed): superficial-pyramidal
+# VOLTAGE (sp_V) = MATLAB column 3 (spm_L_priors.m:108 pE.J = sparse(1,3,1,1,8)).
+_LF_PJ_STATE = 2
+
+
+def export_erp_dcm_leadfield(
+    P: dict[str, np.ndarray] | None = None,
+    M_meta: dict[str, float] | None = None,
+    output_path: str = "validation/data/erp_leadfield_input.mat",
+) -> dict[str, object]:
+    """Export the 5-source CMC-ERP DCM ``.mat`` input for SPM12 LFP lead-field.
+
+    Writes the multi-source DCM struct that ``run_spm_erp_dcm_leadfield.m`` loads
+    to generate the frozen Phase-35 LFP lead-field + scalp-ERP fixtures: the
+    full per-state lead field ``L_full = kron(P.J, L_spatial)`` (``spm_lx_erp.m``),
+    the per-condition scalp ERP ``y_scalp{c} = ysrc * L_full'`` (where ``ysrc`` is
+    the ``spm_gen_erp`` source trajectory, Phase-34 verified), and the
+    deviant - standard difference wave.
+
+    APPENDED to this module (the single-source :func:`export_erp_dcm` and the
+    multi-source :func:`export_erp_dcm_multisource` are byte-untouched). Reuses
+    the locked 5-source auditory-MMN reference TOPOLOGY (``_MS_*`` edges; sources
+    A1L, A1R, STGL, STGR, rIFG) and ADDS the LFP spatial spec:
+
+    * ``P.L = ones(1, 5)`` (``spm_L_priors.m:84``) -> the LFP spatial lead field
+      ``L = sparse(1:m, 1:m, P.L, m, n)`` (``spm_erp_L.m:112``) is the identity
+      (``Nc == m == n == 5``), the cleanest head-model-free parity target.
+    * ``P.J = sparse(1, 3, 1, 1, 8)`` (``spm_L_priors.m:108``): a ``(1, 8)`` row
+      with ``1.0`` at index 2 (0-indexed sp-voltage, MATLAB column 3).
+    * ``dipfit.type = 'LFP'``, ``dipfit.Ns = 5``, ``dipfit.Nc = 5`` -- carried on
+      ``DCM.dipfit`` (and ``DCM.meta``) so the ``.m`` can verify the LFP scope.
+
+    All dimensions cast to float64 (the int64->double ``spm_Ce`` footgun fixed in
+    Phase 32, commit a27828b). The ECD path (sensor montage + MNI coords) is
+    deferred to Phase 36 (35-01-D1); LFP is the only Phase-35 gate.
+
+    Parameters
+    ----------
+    P : dict of str -> np.ndarray, optional
+        Free-parameter struct. Keys ``A`` (length-4 list of ``(5,5)``), ``B``
+        (length-``n_effects`` list of ``(5,5)``), ``T`` ``(5,4)``, ``G``
+        ``(5,4)``, ``C`` ``(5,n_inp)``, ``S`` ``(1,1)``, ``R`` ``(n_inp,2)``,
+        ``L`` ``(1,5)``, ``J`` ``(1,8)`` and ``X`` ``(Cnd,n_effects)``. Defaults
+        to the locked MMN reference + the LFP identity spatial spec.
+    M_meta : dict of str -> float, optional
+        Integration-grid / timing overrides (``ns``, ``dt``, ``ons``, ``dur``,
+        ``sus``). Defaults to the frozen ERP grid (ns=128, dt=0.004, ons=60,
+        dur=16).
+    output_path : str, optional
+        Path for the output DCM input ``.mat``.
+
+    Returns
+    -------
+    dict of str -> object
+        Provenance metadata (N, Nc, dipfit_type, P_J/P_L, edge lists, X,
+        dt/ns/ons/dur, n_inputs), for the caller to log / assert against.
+
+    Notes
+    -----
+    SPM12 source: ``spm_lx_erp.m:31-33`` (``L = spm_erp_L(P,dipfit)`` then
+    ``L = kron(P.J, L)``), ``spm_erp_L.m:105-118`` (the LFP diagonal branch),
+    ``spm_L_priors.m:84,106-109`` (``pE.L = ones(1,m)``, ``pE.J =
+    sparse(1,3,1,1,8)``), ``spm_gen_Q.m:24-67`` / ``spm_gen_erp.m:69-86``
+    (the per-condition evoked loop reused for the source trajectory). The ``$Id``
+    provenance strings are captured by ``run_spm_erp_dcm_leadfield.m`` at run time.
+
+    See Also
+    --------
+    export_erp_dcm_multisource : The multi-source bridge whose topology + P this
+        reuses additively (lead field deferred there, computed here).
+    """
+    if M_meta is None:
+        M_meta = {}
+
+    ns = int(M_meta.get("ns", _ERP_NS))
+    dt = float(M_meta.get("dt", _ERP_DT))
+    ons = float(M_meta.get("ons", _ERP_ONS))
+    dur = float(M_meta.get("dur", _ERP_DUR))
+    sus = float(M_meta.get("sus", _ERP_SUS))
+
+    n = _MS_N
+
+    if P is None:
+        # --- Lock the 5-source reference free-log-space P from the masks. ---
+        a_blocks = [
+            _ms_log_block(_MS_FORWARD_EDGES + _MS_LATERAL_EDGES),  # A{1} sp->ss
+            _ms_log_block(_MS_FORWARD_EDGES + _MS_LATERAL_EDGES),  # A{2} sp->dp
+            _ms_log_block(_MS_BACKWARD_EDGES),                     # A{3} dp->sp
+            _ms_log_block(_MS_BACKWARD_EDGES),                     # A{4} dp->ii
+        ]
+        b1 = np.zeros((n, n), dtype=np.float64)
+        for to_i, from_i in (
+            _MS_FORWARD_EDGES + _MS_LATERAL_EDGES + _MS_BACKWARD_EDGES
+        ):
+            b1[to_i, from_i] = _MS_B_EDGE
+        for node in _MS_PRECISION_NODES:
+            b1[node, node] = _MS_B_DIAG
+        b_list = [b1]
+        c = np.full((n, 1), _MS_A_DEAD, dtype=np.float64)
+        for src in _MS_INPUT_SOURCES:
+            c[src, 0] = _MS_A_LIVE
+        t = np.zeros((n, 4), dtype=np.float64)
+        g = np.zeros((n, 4), dtype=np.float64)
+        s = np.zeros((1, 1), dtype=np.float64)
+        r = np.zeros((1, 2), dtype=np.float64)
+        x_design = np.array([[0.0], [1.0]], dtype=np.float64)  # std / deviant
+        # LFP spatial spec: identity diagonal (P.L = ones), sp-voltage P.J.
+        p_l = np.ones((1, n), dtype=np.float64)            # spm_L_priors.m:84
+        p_j = np.zeros((1, _ERP_NSTATES), dtype=np.float64)  # (1,8) one-hot
+        p_j[0, _LF_PJ_STATE] = 1.0                         # spm_L_priors.m:108
+    else:
+        a_blocks = [np.asarray(P["A"][i], dtype=np.float64) for i in range(4)]
+        b_list = [np.asarray(b, dtype=np.float64) for b in P["B"]]
+        c = np.asarray(P["C"], dtype=np.float64)
+        t = np.asarray(P["T"], dtype=np.float64)
+        g = np.asarray(P["G"], dtype=np.float64)
+        s = np.asarray(P["S"], dtype=np.float64)
+        r = np.asarray(P["R"], dtype=np.float64)
+        x_design = np.asarray(P["X"], dtype=np.float64)
+        p_l = np.asarray(P["L"], dtype=np.float64)
+        p_j = np.asarray(P["J"], dtype=np.float64)
+
+    n_inputs = int(c.shape[1])
+    n_effects = int(x_design.shape[1])
+
+    # Frozen Gaussian evoked drive (shared across sources; spm_int_L integrates
+    # U.u verbatim, so freezing it pins the trajectory parity, pitfall V1).
+    u_grid = _erp_gaussian_u_grid(r, ns, dt, ons, dur, sus)
+
+    # P.A / P.B as MATLAB cell arrays (object ndarray); U.X as double.
+    a_cell = np.empty((1, 4), dtype=object)
+    for i in range(4):
+        a_cell[0, i] = a_blocks[i]
+    b_cell = np.empty((1, n_effects), dtype=object)
+    for i in range(n_effects):
+        b_cell[0, i] = b_list[i]
+
+    P_struct = {
+        "A": a_cell,
+        "B": b_cell,
+        "T": t,
+        "G": g,
+        "C": c,
+        "S": s,
+        "R": r,
+        "L": p_l,  # LFP channel gains (1,m) -- spm_erp_L.m:112 diag
+        "J": p_j,  # contributing-state vector (1,8) -- spm_lx_erp.m:33 kron
+    }  # NO 'D' -- delays forced off via M.f = spm_fx_cmc_nodelay (Fact 4, M2).
+
+    edges_forward = np.asarray(_MS_FORWARD_EDGES, dtype=np.float64)
+    edges_lateral = np.asarray(_MS_LATERAL_EDGES, dtype=np.float64)
+    edges_backward = np.asarray(_MS_BACKWARD_EDGES, dtype=np.float64)
+    input_sources = np.asarray(_MS_INPUT_SOURCES, dtype=np.float64).reshape(1, -1)
+    precision_nodes = np.asarray(
+        _MS_PRECISION_NODES, dtype=np.float64
+    ).reshape(1, -1)
+
+    # LFP single-dipole spatial spec (Nc == m == n; head-model-free, no coords).
+    dipfit = {
+        "type": np.array([["LFP"]], dtype=object),
+        "Ns": np.array([[n]], dtype=np.float64),
+        "Nc": np.array([[n]], dtype=np.float64),
+    }
+
+    meta = {
+        "N": np.array([[n]], dtype=np.float64),
+        "Nc": np.array([[n]], dtype=np.float64),
+        "D": np.array([[1.0]]),  # delay operator forced to identity (Fact 4).
+        "dipfit_type": np.array([["LFP"]], dtype=object),
+        "P_J": p_j,
+        "P_L": p_l,
+        "source_names": np.array([list(_MS_SOURCE_NAMES)], dtype=object),
+        "edges_forward": edges_forward,    # [to, from], 0-indexed
+        "edges_lateral": edges_lateral,
+        "edges_backward": edges_backward,
+        "input_sources": input_sources,
+        "precision_nodes": precision_nodes,
+        "X": x_design,
+        "dt": np.array([[dt]]),
+        "ns": np.array([[ns]], dtype=np.float64),
+        "ons": np.array([[ons]]),
+        "dur": np.array([[dur]]),
+        "sus": np.array([[sus]]),
+        "n_states": np.array([[_ERP_NSTATES]], dtype=np.float64),
+        "n_inputs": np.array([[n_inputs]], dtype=np.float64),
+        "n_effects": np.array([[n_effects]], dtype=np.float64),
+        "spm_id": np.array([[""]], dtype=object),  # filled by the .m at run time.
+    }
+
+    DCM = {
+        "P": P_struct,
+        "dipfit": dipfit,
+        "M": {
+            "f": np.array([["spm_fx_cmc_nodelay"]], dtype=object),
+            "x": np.zeros((n, _ERP_NSTATES), dtype=np.float64),
+            "n": np.array([[n * _ERP_NSTATES]], dtype=np.float64),
+            "m": np.array([[n_inputs]], dtype=np.float64),
+            "l": np.array([[n]], dtype=np.float64),
+            "ons": np.array([[ons]]),
+            "dur": np.array([[dur]]),
+            "sus": np.array([[sus]]),
+        },
+        "U": {
+            "u": u_grid,
+            "dt": np.array([[dt]]),
+            "X": x_design,
+            "name": np.array(
+                [[f"input{i + 1}" for i in range(n_inputs)]], dtype=object
+            ),
+        },
+        # Dimensions as float64 (int64 -> spm_Ce footgun, Phase 32 / a27828b).
+        "n": np.array([[float(n)]], dtype=np.float64),
+        "v": np.array([[ns]], dtype=np.float64),
+        "meta": meta,
+    }
+    scipy.io.savemat(output_path, {"DCM": DCM})
+    return {
+        "N": n,
+        "Nc": n,
+        "dipfit_type": "LFP",
+        "P_J": p_j.tolist(),
+        "P_L": p_l.tolist(),
+        "dt": dt,
+        "ns": ns,
+        "ons": ons,
+        "dur": dur,
+        "sus": sus,
+        "n_inputs": n_inputs,
+        "n_effects": n_effects,
+        "source_names": list(_MS_SOURCE_NAMES),
+        "edges_forward": _MS_FORWARD_EDGES,
+        "edges_lateral": _MS_LATERAL_EDGES,
+        "edges_backward": _MS_BACKWARD_EDGES,
+        "X": x_design.tolist(),
+        "spm_id": "",
+    }
