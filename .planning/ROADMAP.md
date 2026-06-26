@@ -787,6 +787,13 @@ integration over the peristimulus window -- produces per-source per-condition LF
   5. The delay operator is forced off (D=1) and asserted in the fixture-generation MATLAB script;
      the full `spm_dcm_delay` path is deferred to a later milestone (EVOK-06).
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 34-01-PLAN.md — Pure-torch network core (cmc_network_f extrinsic A + apply_condition_modulation spm_gen_Q port + erp_simulator) + the C4 diag->G guard & negative test (Wave 1, laptop)
+- [ ] 34-02-PLAN.md — Multi-source MATLAB fixtures on M3: locked 5-source A/B/C/X export + run_spm_erp_dcm_multisource.m (spm_gen_Q QA/QG, per-cond J0/Qupd, spm_gen_erp trajectory; D=1) (Wave 2, M3)
+- [ ] 34-03-PLAN.md — Multi-source parity ladder vs frozen fixtures: spm_gen_Q algebra + diag->G negative + network J0/Q_update + trajectory (scheme/FD-Jacobian/measured-jacrev) (Wave 3, laptop)
+
 #### Phase 35: Single-Dipole Lead-Field, Scalp Projection & ERPDCMForward
 
 **Goal:** Per-source LFPs become the observed scalp ERP via a single-dipole lead-field
