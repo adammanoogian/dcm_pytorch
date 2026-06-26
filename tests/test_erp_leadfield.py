@@ -27,6 +27,9 @@ The CMC 8-state column layout (``cmc_neural_mass.py:20-33``), 0-indexed:
 
 from __future__ import annotations
 
+import time
+
+import pytest
 import torch
 
 from pyro_dcm.forward_models.erp_leadfield import (
@@ -379,3 +382,151 @@ def test_simulate_erp_dcm_no_lead_field_unchanged() -> None:
     assert "scalp" not in out
     assert "difference_wave_scalp" not in out
     assert out["states"].shape == (2, ns, n, 8)
+
+
+# --------------------------------------------------------------------------- #
+# Task 3: LEAD-06 VL round-trip (PROTOCOL CONFIRMATION, not a parity gate)     #
+# --------------------------------------------------------------------------- #
+
+
+def _r_squared(pred: torch.Tensor, target: torch.Tensor) -> float:
+    """Pooled coefficient of determination ``1 - SS_res / SS_tot``."""
+    ss_res = ((target - pred) ** 2).sum()
+    ss_tot = ((target - target.mean()) ** 2).sum()
+    return float(1.0 - ss_res / ss_tot)
+
+
+@pytest.mark.vl
+@pytest.mark.slow
+def test_lead06_vl_roundtrip_protocol_confirmation() -> None:
+    """LEAD-06: ``run_variational_laplace_generic(ERPDCMForward(...))`` round-trip.
+
+    PROTOCOL CONFIRMATION, NOT a parity gate. Plants a small (n=2) CMC net with a
+    RECIPROCAL A graph (identifiable), a driven input, a non-trivial deviant ``B``,
+    and a perturbed precision knob ``G[:,0]``; simulates the scalp ERP through the
+    identity LFP lead field; adds light Gaussian noise; and fits ``ERPDCMForward``
+    via the model-agnostic VL engine. Confirms the full chain runs end-to-end
+    (param_count -> build_prior_cov -> _spm_svd -> predict -> ReML -> build_result)
+    and recovers the planted dynamics within a LOOSE tolerance. The laptop
+    wall-time is MEASURED and printed (CLAUDE.md >3 min rule: a single-seed n=2
+    fit must stay < ~3 min on laptop, else escalate a multi-seed sweep to M3).
+    """
+    from pyro_dcm.forward_models.erp_coupled_system import parameterize_cmc_network
+    from pyro_dcm.inference.variational_laplace import (
+        run_variational_laplace_generic,
+    )
+
+    n = 2
+    ns = 32
+    torch.manual_seed(7)
+
+    # Planted free params: reciprocal forward edge (0<->1) in A[0], driven input on
+    # source 0, deviant B (edge + precision diag), and a perturbed precision knob.
+    a0 = _edge_block(n, [(0, 1), (1, 0)])  # reciprocal forward sp->ss (identifiable)
+    a_planted = torch.stack(
+        [a0, _edge_block(n, []), _edge_block(n, []), _edge_block(n, [])], dim=0
+    )
+    g_planted = torch.zeros(n, 4, dtype=_F64)
+    g_planted[:, 0] = 0.3  # the precision knob (drives G[:,6] sp self-inhibition)
+    c_planted = torch.zeros(n, 1, dtype=_F64)
+    c_planted[0, 0] = 0.6  # driven-source input gain exp(0.6)~1.8x (free, recoverable)
+    b0 = torch.tensor([[0.0, 0.0], [0.0, 0.4]], dtype=_F64)  # deviant precision diag
+    planted = {
+        "T": torch.zeros(n, 4, dtype=_F64),
+        "G": g_planted,
+        "C": c_planted,
+        "S": torch.zeros(n, 1, dtype=_F64),
+        "R": torch.zeros(1, 2, dtype=_F64),
+        "A": a_planted,
+        "B": [b0],
+    }
+
+    a_masks = [
+        (a0 >= 0.0).double(),  # reciprocal edges live
+        torch.zeros(n, n, dtype=_F64),
+        torch.zeros(n, n, dtype=_F64),
+        torch.zeros(n, n, dtype=_F64),
+    ]
+    c_mask = torch.zeros(n, 1, dtype=_F64)
+    c_mask[0, 0] = 1.0  # input drives source 0
+    l_full = build_lead_field(cmc_default_pj(), lfp_spatial(torch.ones(n), n))
+    x_design = torch.tensor([[0.0], [1.0]], dtype=_F64)
+
+    sim = simulate_erp_dcm(planted, x_design, n, ns=ns, l_full=l_full)
+    scalp_clean = sim["scalp"]  # (Cnd, ns, Nc)
+    noise = 0.02 * scalp_clean.abs().mean() * torch.randn_like(scalp_clean)
+    scalp_obs = scalp_clean + noise
+
+    fwd = ERPDCMForward(
+        l_full=l_full,
+        x_design=x_design,
+        a_masks=a_masks,
+        b_masks=[b0],
+        c_mask=c_mask,
+        dt=0.004,
+        ns=ns,
+    )
+    union_a_mask = (a0 >= 0.0).double()  # the live extrinsic graph (compat no-op)
+
+    t0 = time.perf_counter()
+    result = run_variational_laplace_generic(
+        fwd,
+        scalp_obs,
+        a_mask=union_a_mask,
+        n_regions=n,
+        max_iter=24,
+    )
+    walltime_s = time.perf_counter() - t0
+    print(
+        f"\n[LEAD-06] VL round-trip wall-time: {walltime_s:.1f} s "
+        f"(n={n}, ns={ns}, max_iter=24, iters_run={result.n_iterations})"
+    )
+
+    # --- chain ran end-to-end -------------------------------------------------
+    assert result.n_iterations >= 1
+    for key in ("A", "C", "G", "T", "S", "R"):
+        assert key in result.theta_post
+        assert torch.isfinite(result.theta_post[key]).all()
+    assert result.predicted_output is not None
+    assert result.predicted_output.shape == (2, ns, n)
+    assert torch.isfinite(result.predicted_output).all()
+
+    # --- optimiser improved the fit ------------------------------------------
+    assert len(result.free_energy) >= 1
+    assert max(result.free_energy) >= result.free_energy[0]
+
+    # --- recovery in observation space (LOOSE protocol confirmation) ----------
+    # The tight CMC priors regularise the fit toward the default circuit, so the
+    # confirmation is that the fitted scalp moves TOWARD the planted data relative
+    # to the prior-mean (zero-param) prediction -- the end-to-end gradient chain
+    # (predict -> FD-Jacobian -> ReML) is exercised. NOT a parity gate.
+    np_full = fwd.param_count(n)
+    baseline_pred = fwd.predict(
+        torch.zeros(np_full, dtype=_F64), scalp_obs, n, a_mask=union_a_mask
+    ).reshape(2, ns, n)
+    r2_fit = _r_squared(result.predicted_output, scalp_clean)
+    r2_base = _r_squared(baseline_pred, scalp_clean)
+    print(
+        f"[LEAD-06] scalp R^2: prior-mean baseline={r2_base:.4f} -> VL fit={r2_fit:.4f}"
+    )
+    assert r2_fit > r2_base, (
+        f"VL fit should improve on the prior-mean prediction; "
+        f"fit R^2={r2_fit:.4f} <= baseline R^2={r2_base:.4f}"
+    )
+    assert r2_fit > 0.3, f"VL fit should positively recover the scalp; R^2={r2_fit:.4f}"
+
+    # --- recovery in parameter space (LOOSE) ----------------------------------
+    # Live extrinsic A stays a live edge (parameterised strength well above the
+    # dead exp(-32)*E0 floor) -- the masked-free dead-edge handling round-trips.
+    a_rec = result.theta_post["A"][0]
+    a_planted_param = parameterize_cmc_network({"A": a_planted}, n)["A"][0]
+    live = union_a_mask > 0
+    assert (a_rec[live] > 1.0).all(), "recovered live A edge collapsed to dead"
+    rel = (a_rec[live] - a_planted_param[live]).abs() / a_planted_param[live]
+    assert (rel < 5.0).all(), f"live A recovery wildly off: rel={rel}"
+
+    # Wall-time guard: a single-seed n=2 fit must stay laptop-tractable.
+    assert walltime_s < 180.0, (
+        f"VL round-trip took {walltime_s:.1f}s (> 3 min) -- escalate to M3 "
+        "for any multi-seed recovery sweep (CLAUDE.md >3 min rule)"
+    )
