@@ -427,10 +427,16 @@ roadmap creation.
 - [ ] **ERPDCM-03**: a 5-source auditory MMN network (A1 L/R, STG L/R, rIFG) with the
   forward/backward/lateral connection graph, `C` into bilateral A1, and deviant-vs-standard `B`
   modulation; MNI coords flagged for verification against the primary papers before hard-coding.
-- [ ] **ERPDCM-04**: `scripts/demo_mmn_precision_sweep.py` sweeps superficial-pyramidal
-  self-inhibition gain (`P.G[:,0] → G[:,6]`) at rIFG + bilateral A1 and emits a `gain → |MMN|`
-  transfer curve; asserts monotone attenuation and a frontal-dominant negative-going difference
-  wave (the Adams/Ranlund artifact).
+- [x] **ERPDCM-04** *(amended 2026-06-26, user-approved)*: `scripts/demo_mmn_precision_sweep.py`
+  sweeps superficial-pyramidal self-inhibition gain (`P.G[:,0] → G[:,6]`) at rIFG + bilateral A1
+  and emits a `gain → |MMN|` transfer curve; asserts **monotone attenuation** AND a **windowed
+  (~90–120 ms) negative-going MMN deflection** that attenuates with gain (the Adams/Ranlund
+  precision mechanism — both delivered + machine-asserted). **Amendment:** the literal
+  *frontal-dominant scalp* criterion was reclassified — frontal scalp dominance is structurally an
+  **ECD dipole-orientation phenomenon** (in LFP-identity readout the A1 input node dominates raw
+  sp-voltage by ≥16×; 189 forward-only tunings confirmed it is not LFP-recoverable). The honest
+  rIFG/A1 ratio is recorded; true frontal scalp topography is **deferred to Phase 37 (ECD
+  lead-field)**, per the locked Phase-35 LFP-first / ECD-deferred decision.
 - [ ] **ERPDCM-05**: a consumer-facing adapter API maps
   `(sp_inhibition_gain, a1_b_gain, rifg_b_gain, fwd_bwd_flag) → CMC params` for the
   `actinf_physics` Phase-133 forward-only adapter.
@@ -478,12 +484,12 @@ Explicit anti-features for v0.8.0 (documented to prevent scope creep).
 | LEAD-04 | Phase 35 | Complete |
 | LEAD-05 | Phase 35 | Complete |
 | LEAD-06 | Phase 35 | Complete |
-| ERPDCM-01 | Phase 36 | Pending |
-| ERPDCM-02 | Phase 36 | Pending |
-| ERPDCM-03 | Phase 36 | Pending |
-| ERPDCM-04 | Phase 36 | Pending |
-| ERPDCM-05 | Phase 36 | Pending |
-| ERPDCM-06 | Phase 36 | Pending |
+| ERPDCM-01 | Phase 36 | Complete |
+| ERPDCM-02 | Phase 36 | Complete |
+| ERPDCM-03 | Phase 36 | Complete |
+| ERPDCM-04 | Phase 36 | Complete |
+| ERPDCM-05 | Phase 36 | Complete |
+| ERPDCM-06 | Phase 36 | Complete |
 
 **Coverage:** 25 v0.8.0 requirement IDs (CMC-01..07, EVOK-01..06, LEAD-01..06, ERPDCM-01..06);
 25/25 mapped to exactly one phase each; 0 unmapped, 0 duplicated.

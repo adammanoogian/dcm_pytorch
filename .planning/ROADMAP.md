@@ -881,7 +881,7 @@ parity gate is green).
 | 33. CMC Core Dynamics, spm_int_L Integrator & Single-Source Parity | `spm_fx_cmc` + `spm_int_L` (single source, D=1) | J0 <=1e-10, Q <=1e-9, traj <=1e-8 | 3/3 | ✅ Complete (verified 7/7; parity ladder GREEN vs M3 fixtures job 57884677; measured matrix_exp floor 8.6e-11) | 2026-06-26 |
 | 34. Extrinsic Coupling, Condition B & Multi-Source Evoked Integration | `spm_gen_Q` + `spm_gen_erp` (5-source, D=1) | Q.A/Q.G element-wise, traj <=1e-8 | 3/3 | ✅ Complete (verified 6/6; 8-rung ladder GREEN vs 5-source fixtures job 57896525; Q.A/Q.G 0.0, traj FD-Jac 1.3e-10; precision diag→G confirmed) | 2026-06-26 |
 | 35. Single-Dipole Lead-Field, Scalp Projection & ERPDCMForward | `spm_lx_erp` (LFP mode) | scalp ERP <=1e-7 | 3/3 | ✅ Complete (verified 6/6; M3 job 57900055 fixtures; L_full bit-exact 0.0, scalp parity 1.4e-13, production jacrev gated ≤1e-7 @ 6.4e-11; ERPDCMForward VL reuse confirmed) | 2026-06-26 |
-| 36. ERP-DCM Pyro Model, Amortized Wiring & MMN Precision-Sweep Demo | full pipeline at fixed-ref params (LFP) | same as Phase 35 + monotone curve | 0/3 | Planned (3 plans, 2 waves; ERPDCM-01..06) | -- |
+| 36. ERP-DCM Pyro Model, Amortized Wiring & MMN Precision-Sweep Demo | full pipeline at fixed-ref params (LFP) | same as Phase 35 + monotone curve | 3/3 | ✅ Complete (verified 6/6; parity gate green 6.4e-11; monotone gain→\|MMN\| + windowed-MMN delivered; ERPDCM-04 frontal-topography amended→Phase 37 ECD; 79 ERP tests pass M3 job 57904695) | 2026-06-26 |
 
 ---
 
@@ -918,7 +918,7 @@ parity gate is green).
 | 33. CMC Core Dynamics, spm_int_L Integrator & Single-Source Parity | v0.8.0 | 3/3 | ✅ Complete 2026-06-26 (CMC-01..07; 25 tests; parity ladder GREEN vs SPM12 fixtures, measured matrix_exp floor 8.6e-11; spm_int_L≡rk4-risk retired in isolation) | 2026-06-26 |
 | 34. Extrinsic Coupling, Condition B & Multi-Source Evoked Integration | v0.8.0 | 3/3 | ✅ Complete 2026-06-26 (EVOK-01..06; 44 tests; multi-source parity GREEN vs spm_gen_Q+spm_gen_erp; cmc_network_f≡spm_fx_cmc at N=5; MMN precision diag→G mechanism verified) | 2026-06-26 |
 | 35. Single-Dipole Lead-Field, Scalp Projection & ERPDCMForward | v0.8.0 | 3/3 | ✅ Complete 2026-06-26 (LEAD-01..06; 65 ERP tests pass on M3; scalp source→sensor parity vs spm_lx_erp; ERPDCMForward = 4th ForwardModel impl, VL reuse confirmed) | 2026-06-26 |
-| 36. ERP-DCM Pyro Model, Amortized Wiring & MMN Precision-Sweep Demo | v0.8.0 | 0/3 | Planned (3 plans, 2 waves) | -- |
+| 36. ERP-DCM Pyro Model, Amortized Wiring & MMN Precision-Sweep Demo | v0.8.0 | 3/3 | ✅ Complete 2026-06-26 (ERPDCM-01..06; ERP-DCM Pyro model + amortized + MMN precision-sweep demo; precision→MMN attenuation mechanism shipped; frontal scalp topography → Phase 37 ECD) | 2026-06-26 |
 
 ---
 *Roadmap created: 2026-04-07*
