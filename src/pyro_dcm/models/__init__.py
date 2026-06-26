@@ -4,6 +4,7 @@ from pyro_dcm.models.amortized_wrappers import (
     amortized_spectral_dcm_model,
     amortized_task_dcm_model,
 )
+from pyro_dcm.models.erp_dcm_model import B_PRIOR_VARIANCE, erp_dcm_model
 from pyro_dcm.models.guides import (
     ELBO_REGISTRY,
     GUIDE_REGISTRY,
@@ -33,6 +34,8 @@ from pyro_dcm.models.task_dcm_model import task_dcm_model
 __all__ = [
     "amortized_spectral_dcm_model",
     "amortized_task_dcm_model",
+    "erp_dcm_model",
+    "B_PRIOR_VARIANCE",
     "HybridVAEDCMGuide",
     "generate_synthetic_vae_dataset",
     "hybrid_vae_dcm_model",
