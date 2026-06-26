@@ -498,8 +498,102 @@ def run_precision_sweep() -> dict[str, Any]:
     }
 
 
+_FIGURE_DIR = _PROJECT_ROOT / "figures"
+_FIGURE_STEM = "mmn_precision_sweep"
+
+
+def make_figure(sweep: dict[str, Any], out_dir: Path = _FIGURE_DIR) -> list[Path]:
+    """Emit the publication-quality MMN precision-sweep figure (PNG + PDF).
+
+    Panel A: the ``gain -> |MMN|`` transfer curve at rIFG (the function the
+    ``actinf_physics`` consumer imports, D3). Panel B: the rIFG deviant-standard
+    difference wave at low / baseline / high swept gain, with the ~100 ms MMN
+    latency window shaded. Captioned explicitly as an LFP source-space readout
+    (frontal scalp topography is the deferred ECD phase).
+
+    Follows scientific-figure conventions: labelled axes with units, readable
+    fonts, a clear legend, ``tight_layout``, and a true vector PDF.
+
+    Parameters
+    ----------
+    sweep : dict
+        The :func:`run_precision_sweep` return.
+    out_dir : pathlib.Path, optional
+        Output directory. Default ``figures/``.
+
+    Returns
+    -------
+    list of pathlib.Path
+        The written ``.png`` and ``.pdf`` paths.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")  # non-interactive backend before any pyplot call
+    import matplotlib.pyplot as plt
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    gains = sweep["gains"].numpy()
+    mmn = sweep["mmn_peak"].numpy()
+    pst = sweep["pst_ms"].numpy()
+    lo, hi = _MMN_WINDOW_MS
+
+    plt.rcParams.update({"font.size": 10, "axes.linewidth": 0.8})
+    fig, (ax_a, ax_b) = plt.subplots(1, 2, figsize=(9.0, 3.6))
+
+    # Panel A: the gain -> |MMN| transfer curve.
+    ax_a.plot(gains, mmn, "o-", color="#1f77b4", lw=1.8, ms=5)
+    ax_a.set_xlabel("sp self-inhibition gain  $P.G[:,0]\\!\\to\\!G[:,6]$  [a.u.]")
+    ax_a.set_ylabel("rIFG |MMN| peak  [source voltage, a.u.]")
+    ax_a.set_title("A  Precision -> MMN transfer curve", loc="left", fontsize=11)
+    ax_a.set_yscale("log")
+    ax_a.grid(True, which="both", ls=":", lw=0.5, alpha=0.6)
+
+    # Panel B: rIFG difference-wave overlay at low / baseline / high gain.
+    series = [
+        ("diff_low", "idx_low", "#2ca02c"),
+        ("diff_base", "idx_base", "#ff7f0e"),
+        ("diff_high", "idx_high", "#d62728"),
+    ]
+    for key, idx_key, color in series:
+        g = float(sweep["gains"][sweep[idx_key]].item())
+        ax_b.plot(
+            pst,
+            sweep[key][:, _RIFG].numpy(),
+            color=color,
+            lw=1.5,
+            label=f"gain = {g:.2f}",
+        )
+    ax_b.axvspan(
+        lo, hi, color="0.85", alpha=0.6, label=f"MMN window {lo:.0f}-{hi:.0f} ms"
+    )
+    ax_b.axhline(0.0, color="0.4", lw=0.7)
+    ax_b.set_xlabel("peristimulus time  [ms]")
+    ax_b.set_ylabel("rIFG deviant - standard  [source voltage, a.u.]")
+    ax_b.set_title("B  rIFG difference wave", loc="left", fontsize=11)
+    ax_b.set_xlim(float(pst.min()), 250.0)
+    ax_b.legend(frameon=False, fontsize=8, loc="upper right")
+    ax_b.grid(True, ls=":", lw=0.5, alpha=0.6)
+
+    fig.suptitle(
+        "5-source auditory MMN precision sweep (LFP source-space; SPM12-parity-"
+        "gated forward).  Frontal scalp topography -> deferred ECD phase.",
+        fontsize=9,
+        y=1.02,
+    )
+    fig.tight_layout()
+
+    paths: list[Path] = []
+    for ext in ("png", "pdf"):
+        path = out_dir / f"{_FIGURE_STEM}.{ext}"
+        fig.savefig(path, dpi=200 if ext == "png" else None, bbox_inches="tight")
+        paths.append(path)
+    plt.close(fig)
+    print(f"[FIGURE] wrote {paths[0]}  and  {paths[1]}")
+    return paths
+
+
 def main() -> None:
-    """Gate -> permutation guard -> precision sweep -> assertions (Tasks 1-2)."""
+    """Gate -> permutation guard -> precision sweep -> assertions -> figure."""
     run_parity_gate()
     assert_permutation_guard()
     sweep = run_precision_sweep()
@@ -518,6 +612,8 @@ def main() -> None:
         "frontal SCALP dominance is an ECD dipole-orientation effect, deferred to "
         "a follow-up phase (35-01-D1 / Fact 6) -- recorded, not asserted."
     )
+    # Figure ONLY after the gate + permutation guard + acceptance asserts pass.
+    make_figure(sweep)
 
 
 if __name__ == "__main__":
