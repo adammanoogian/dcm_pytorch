@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pyro_dcm.simulators.erp_simulator import simulate_erp_dcm
 from pyro_dcm.simulators.latent_circuit_simulator import (
     make_stable_latent_circuit_A,
     simulate_latent_circuit,
@@ -29,8 +30,8 @@ from pyro_dcm.simulators.task_simulator import (
 __all__ = [
     # Phase 1: Task-based DCM simulator
     "make_block_stimulus",
-    "make_event_stimulus",        # Phase 14 (SIM-01)
-    "make_epoch_stimulus",        # Phase 14 (SIM-02)
+    "make_event_stimulus",  # Phase 14 (SIM-01)
+    "make_epoch_stimulus",  # Phase 14 (SIM-02)
     "make_random_stable_A",
     "simulate_task_dcm",
     # Phase 2: Spectral DCM simulator
@@ -47,4 +48,6 @@ __all__ = [
     "generate_meg_dataset",
     "make_sensorimotor_A",
     "simulate_meg_timeseries",
+    # Phase 34: Multi-source evoked-response simulator (v0.8.0 ERP)
+    "simulate_erp_dcm",
 ]

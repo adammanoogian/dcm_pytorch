@@ -28,11 +28,6 @@ from __future__ import annotations
 
 import pytest
 import torch
-from pyro_dcm.forward_models.erp_coupled_system import (
-    apply_condition_modulation,
-    cmc_network_f,
-    parameterize_cmc_network,
-)
 
 from pyro_dcm.forward_models.cmc_neural_mass import (
     cmc_f,
@@ -40,6 +35,12 @@ from pyro_dcm.forward_models.cmc_neural_mass import (
     cmc_sigmoid,
     cmc_unflatten,
 )
+from pyro_dcm.forward_models.erp_coupled_system import (
+    apply_condition_modulation,
+    cmc_network_f,
+    parameterize_cmc_network,
+)
+from pyro_dcm.simulators.erp_simulator import simulate_erp_dcm
 
 _F64 = torch.float64
 
@@ -254,3 +255,74 @@ def test_float64_guard() -> None:
     x32 = cmc_flatten(0.1 * torch.ones(1, 8, dtype=torch.float32))
     with pytest.raises(TypeError):
         cmc_network_f(x32, torch.tensor([1.0], dtype=_F64), p, 1)
+
+
+def _edge_block(n: int, edges: list[tuple[int, int]]) -> torch.Tensor:
+    """``(n,n)`` free log-param block: ``-32`` (no edge) except ``0`` at ``edges``.
+
+    A free param of ``-32`` gives ``exp(-32)*E0`` (sub-``exp(-8)``, no edge); ``0``
+    gives ``exp(0)*E0`` (a live edge), mirroring the SPM mask ``mask*32-32``.
+    """
+    a = torch.full((n, n), -32.0, dtype=_F64)
+    for r, c in edges:
+        a[r, c] = 0.0
+    return a
+
+
+def _sim_p(n: int, b_wired: bool) -> dict[str, object]:
+    """Build the reference 2-source ERP free-param dict for the smoke test.
+
+    One forward edge (source 0 -> source 1) in ``A[0]``. ``B[0]`` carries a
+    forward-edge modulation plus a non-zero diagonal (the precision path) when
+    ``b_wired``; an all-zero ``B[0]`` otherwise (the control).
+    """
+    b0 = (
+        torch.tensor([[0.3, 0.0], [0.2, 0.5]], dtype=_F64)
+        if b_wired
+        else torch.zeros(n, n, dtype=_F64)
+    )
+    return {
+        "T": torch.zeros(n, 4, dtype=_F64),
+        "G": torch.zeros(n, 4, dtype=_F64),
+        "C": torch.zeros(n, 1, dtype=_F64),
+        "S": torch.zeros(n, 1, dtype=_F64),
+        "R": torch.zeros(1, 2, dtype=_F64),
+        "A": torch.stack(
+            [
+                _edge_block(n, [(1, 0)]),  # A[0] forward sp->ss, edge 0->1
+                _edge_block(n, []),
+                _edge_block(n, []),
+                _edge_block(n, []),
+            ],
+            dim=0,
+        ),
+        "B": [b0],
+    }
+
+
+def test_simulate_erp_dcm_smoke() -> None:
+    """``simulate_erp_dcm`` 2-source / 2-condition loop is finite; B is load-bearing.
+
+    Shapes match ``(Cnd, ns, n, 8)`` / ``(ns,)`` / ``(ns, n_inp)``; the full
+    peristimulus trajectory is finite (CLAUDE.md numerical-stability rule); and
+    the ``sp``-voltage (col 2) difference wave is NON-zero when ``B`` is wired,
+    but EXACTLY zero when ``B`` is all-zeros (the control) -- proving the
+    condition difference is driven entirely by ``B`` (EVOK-03/04).
+    """
+    n = 2
+    ns = 64
+    x_design = torch.tensor([[0.0], [1.0]], dtype=_F64)  # standard, deviant
+
+    out = simulate_erp_dcm(_sim_p(n, b_wired=True), x_design, n, ns=ns)
+    assert out["states"].shape == (2, ns, n, 8)
+    assert out["pst"].shape == (ns,)
+    assert out["inputs"].shape == (ns, 1)
+    assert torch.isfinite(out["states"]).all()
+    dw = out["difference_wave"]
+    assert dw is not None
+    assert torch.any(dw[:, :, 2] != 0.0)  # sp-voltage difference non-zero
+
+    out0 = simulate_erp_dcm(_sim_p(n, b_wired=False), x_design, n, ns=ns)
+    dw0 = out0["difference_wave"]
+    assert dw0 is not None
+    assert torch.equal(dw0, torch.zeros_like(dw0))  # B off -> no difference
