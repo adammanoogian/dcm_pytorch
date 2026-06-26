@@ -13,6 +13,7 @@ All tests are pure-torch and sub-second (laptop tier); the MATLAB
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import pytest
 import torch
@@ -23,6 +24,15 @@ from pyro_dcm.utils.local_linearization import (
 )
 
 _F64 = torch.float64
+
+# The frozen SPM12 ground truth from Plan 33-02 (committed; validation/data/ is
+# mutagen-ignored). The matrix_exp-vs-spm_expm MEASUREMENT below rides on it.
+_FIXTURE_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "validation"
+    / "data"
+    / "erp_single_source_fixtures.mat"
+)
 
 
 def _asymmetric_jacobian() -> torch.Tensor:
@@ -155,3 +165,39 @@ def test_linear_ode_matches_closed_form() -> None:
     assert traj.dtype == _F64
     assert torch.isfinite(traj).all()
     assert torch.allclose(traj[0], expected, atol=1e-8)
+
+
+@pytest.mark.spm
+@pytest.mark.slow
+@pytest.mark.skipif(
+    not _FIXTURE_PATH.exists(),
+    reason=f"frozen SPM12 fixtures absent: {_FIXTURE_PATH}",
+)
+def test_matrix_exp_vs_spm_expm_floor() -> None:
+    """MEASURED ``torch.matrix_exp(dtJ)`` vs SPM ``spm_expm`` ``Eexp`` floor (V3).
+
+    The Wave-1 tests above check the operator orientation / regulariser ordering
+    against an in-test reference; this Wave-3 test pins the matrix-exponential
+    BACKEND floor against SPM's own ``spm_expm`` on the byte-frozen ``dtJ`` /
+    ``Eexp`` from Plan 33-02. The floor is MEASURED + recorded, never assumed
+    (the MEDIUM-confidence ~1e-12 from research is measured here -- pitfall V3);
+    it sets the small-multiple ceilings the ``Q_update`` / ``y_states`` parity
+    rungs (``tests/test_spm_erp_dcm_validation.py``) ride on.
+
+    Keyed on FIXTURE availability (the ``.mat`` is committed), so it RUNS on the
+    laptop; the ``@pytest.mark.spm`` / ``slow`` markers let the M3 sbatch
+    (``cluster/sbatch/erp_parity_test.sbatch``) also run it under
+    ``-m "spm and slow"``.
+    """
+    import scipy.io as sio
+
+    mat = sio.loadmat(str(_FIXTURE_PATH))
+    dt_j = torch.as_tensor(mat["dtJ"], dtype=_F64)
+    eexp = torch.as_tensor(mat["Eexp"], dtype=_F64)
+
+    floor = (torch.matrix_exp(dt_j) - eexp).abs().max().item()
+    print(f"\nmatrix_exp(dtJ) vs spm_expm floor = {floor:.3e}  (measured, < 1e-9)")
+    assert floor < 1e-9, (
+        f"matrix_exp vs spm_expm floor {floor:.3e} >= 1e-9; the torch Pade "
+        "backend and SPM's spm_expm diverge beyond the recorded ceiling."
+    )
