@@ -70,8 +70,9 @@ try
     load(input_path, 'DCM');
     P = DCM.P;
     M = DCM.M;
-    fprintf('DCM loaded: %d state(s), input grid %dx%d\n', ...
-        size(DCM.U.u, 1), size(DCM.U.u, 1), size(DCM.U.u, 2));
+    fprintf('DCM loaded: input grid %dx%d (ns=%d time bins, %d input(s))\n', ...
+        size(DCM.U.u, 1), size(DCM.U.u, 2), ...
+        size(DCM.U.u, 1), size(DCM.U.u, 2));
 catch e
     fprintf('ERROR: Failed to load DCM from %s: %s\n', input_path, e.message);
     return;
