@@ -16,6 +16,11 @@ from pyro_dcm.forward_models.csd_computation import (
     compute_empirical_csd,
     default_welch_params,
 )
+from pyro_dcm.forward_models.erp_coupled_system import (
+    apply_condition_modulation,
+    cmc_network_f,
+    parameterize_cmc_network,
+)
 from pyro_dcm.forward_models.erp_input import erp_gaussian_input
 from pyro_dcm.forward_models.latent_observation import direct_observation
 from pyro_dcm.forward_models.neural_state import (
@@ -64,6 +69,10 @@ __all__ = [
     "cmc_unflatten",
     "erp_gaussian_input",
     "parameterize_cmc",
+    # Phase 34: CMC network forward + condition-B modulation (v0.8.0 ERP)
+    "apply_condition_modulation",
+    "cmc_network_f",
+    "parameterize_cmc_network",
     # Phase 20: Latent-circuit direct observation
     "direct_observation",
     # Phase 1: Neural-hemodynamic forward model
