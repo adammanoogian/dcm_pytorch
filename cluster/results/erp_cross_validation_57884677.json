@@ -1,0 +1,56 @@
+{
+  "status": "ok",
+  "job_id": "57884677",
+  "note": "Phase 33-02 single-source CMC-ERP fixture generation (D=1, x0==0). The fixtures are produced by run_spm_erp_dcm.m under MATLAB R2022a + SPM12 on M3. A soft shape/meta mismatch is RECORDED (checks_pass=False, exit 0); exit non-zero only on an unexpected MATLAB/IO failure (record-don't-crash).",
+  "fixture_path": "/fs04/fc37/adam/projects/dcm_pytorch/validation/data/erp_single_source_fixtures.mat",
+  "input_path": "/fs04/fc37/adam/projects/dcm_pytorch/validation/data/erp_single_source_input.mat",
+  "checks_pass": true,
+  "shapes": {
+    "f_field": [
+      8
+    ],
+    "J0": [
+      8,
+      8
+    ],
+    "dtJ": [
+      8,
+      8
+    ],
+    "Eexp": [
+      8,
+      8
+    ],
+    "Q_update": [
+      8,
+      8
+    ],
+    "y_states": [
+      128,
+      8
+    ]
+  },
+  "meta": {
+    "spm_ver": "SPM12",
+    "id_spm_int_L": "$Id: spm_int_L.m 7143 2017-07-29 18:50:38Z karl $",
+    "id_spm_fx_cmc": "$Id: spm_fx_cmc.m 7279 2018-03-10 21:22:44Z karl $",
+    "D": 1.0,
+    "nargout_Mf": 2,
+    "dt": 0.004,
+    "ns": 128,
+    "ons": 60.0,
+    "dur": 16.0,
+    "u_test": 32.0,
+    "x_test": [
+      0.1,
+      0.1,
+      0.1,
+      0.1,
+      0.1,
+      0.1,
+      0.1,
+      0.1
+    ]
+  },
+  "elapsed_s": 16.0
+}
