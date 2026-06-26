@@ -767,7 +767,8 @@ def export_erp_dcm_multisource(
     P : dict of str -> np.ndarray, optional
         Free-parameter struct. Keys ``A`` (length-4 list of ``(5,5)``), ``B``
         (length-``n_effects`` list of ``(5,5)``), ``T`` ``(5,4)``, ``G``
-        ``(5,4)``, ``C`` ``(5,n_inp)``, ``S`` ``(5,1)``, ``R`` ``(n_inp,2)`` and
+        ``(5,4)``, ``C`` ``(5,n_inp)``, ``S`` ``(1,1)`` (scalar slope,
+        spm_cmc_priors.m:124), ``R`` ``(n_inp,2)`` and
         ``X`` ``(Cnd,n_effects)``. Defaults to the locked MMN reference above.
     M_meta : dict of str -> float, optional
         Integration-grid / timing overrides (``ns``, ``dt``, ``ons``, ``dur``,
@@ -829,7 +830,10 @@ def export_erp_dcm_multisource(
             c[src, 0] = _MS_A_LIVE
         t = np.zeros((n, 4), dtype=np.float64)
         g = np.zeros((n, 4), dtype=np.float64)
-        s = np.zeros((n, 1), dtype=np.float64)
+        # P.S is a SCALAR slope (spm_cmc_priors.m:124 E.S = 0): spm_fx_cmc.m:92-93
+        # forms R = (2/3)*exp(P.S) then F = sigmoid(-R*x), and -R*x is a MATRIX
+        # multiply -- a per-source (n,1) S makes (n,1)*(n,8) fail (34-02-D2).
+        s = np.zeros((1, 1), dtype=np.float64)
         r = np.zeros((1, 2), dtype=np.float64)
         x_design = np.array([[0.0], [1.0]], dtype=np.float64)  # std / deviant
     else:

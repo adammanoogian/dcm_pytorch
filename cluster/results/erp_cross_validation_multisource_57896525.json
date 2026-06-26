@@ -1,0 +1,63 @@
+{
+  "status": "ok",
+  "mode": "multisource",
+  "job_id": "57896525",
+  "note": "Phase 34-02 multi-source (5-source MMN) CMC-ERP fixture generation (D=1, x0==0, N=5). The fixtures (QA, QG, J0, Qupd, y) are produced by run_spm_erp_dcm_multisource.m under MATLAB R2022a + SPM12 on M3. A soft shape/meta mismatch is RECORDED (checks_pass=False, exit 0); exit non-zero only on an unexpected MATLAB/IO failure (record-don't-crash).",
+  "fixture_path": "/fs04/fc37/adam/projects/dcm_pytorch/validation/data/erp_multisource_fixtures.mat",
+  "input_path": "/fs04/fc37/adam/projects/dcm_pytorch/validation/data/erp_multisource_input.mat",
+  "checks_pass": true,
+  "shapes": {
+    "Cnd": 2,
+    "QA": [
+      [
+        4,
+        [
+          5,
+          5
+        ]
+      ],
+      [
+        4,
+        [
+          5,
+          5
+        ]
+      ]
+    ],
+    "J0_0": [
+      40,
+      40
+    ],
+    "Qupd_0": [
+      40,
+      40
+    ],
+    "y_0": [
+      128,
+      40
+    ]
+  },
+  "meta": {
+    "spm_ver": "SPM12",
+    "id_spm_int_L": "$Id: spm_int_L.m 7143 2017-07-29 18:50:38Z karl $",
+    "id_spm_fx_cmc": "$Id: spm_fx_cmc.m 7279 2018-03-10 21:22:44Z karl $",
+    "id_spm_gen_Q": "$Id: spm_gen_Q.m 7279 2018-03-10 21:22:44Z karl $",
+    "id_spm_gen_erp": "$Id: spm_gen_erp.m 6427 2015-05-05 15:42:35Z karl $",
+    "D": 1.0,
+    "nargout_Mf": 2,
+    "N": 5,
+    "dt": 0.004,
+    "ns": 128,
+    "ons": 60.0,
+    "dur": 16.0,
+    "X": [
+      [
+        0
+      ],
+      [
+        1
+      ]
+    ]
+  },
+  "elapsed_s": 15.1
+}
