@@ -41,6 +41,7 @@ from pyro_dcm.forward_models.erp_coupled_system import (
     cmc_network_f,
 )
 from pyro_dcm.forward_models.erp_input import erp_gaussian_input
+from pyro_dcm.forward_models.erp_leadfield import project_to_scalp
 from pyro_dcm.utils.local_linearization import integrate_local_linearization
 
 _F64 = torch.float64
@@ -55,8 +56,17 @@ def simulate_erp_dcm(
     ons_ms: float = 60.0,
     dur_ms: float = 16.0,
     sus: float = 0.0,
+    l_full: Tensor | None = None,
 ) -> dict[str, Tensor | None]:
     """Per-condition source-level evoked responses via the ``spm_gen_erp`` loop.
+
+    When ``l_full`` is supplied, the source-state trajectory is additionally
+    projected to scalp (Phase 35, LEAD-03) via
+    :func:`pyro_dcm.forward_models.project_to_scalp` and the deviant-standard
+    scalp difference wave is returned. The scalp difference wave's NON-ZEROness is
+    the Phase-35 gate; the negative-going / frontal-dominance SIGN is Phase 36 (it
+    needs ECD dipole orientation + MNI coords, which do not exist yet -- Fact 6).
+    This function therefore does NOT pin a scalp polarity in LFP identity mode.
 
     Parameters
     ----------
@@ -80,6 +90,10 @@ def simulate_erp_dcm(
         Gaussian dispersion in ms (``M.dur``). Default 16.
     sus : float, optional
         Sustained-input level (``M.sus``). Default 0.
+    l_full : torch.Tensor or None, optional
+        Full per-state lead field ``(Nc, 8n)`` (e.g.
+        :func:`pyro_dcm.forward_models.build_lead_field`). When supplied, the
+        scalp projection keys are added.
 
     Returns
     -------
@@ -87,6 +101,10 @@ def simulate_erp_dcm(
         ``{"states": (Cnd, ns, n, 8), "pst": (ns,), "inputs": (ns, n_inp),
         "difference_wave": (ns, n, 8) | None}``. ``difference_wave`` is
         ``states[deviant] - states[standard]`` (``None`` when ``Cnd < 2``).
+        When ``l_full`` is supplied two more keys are added:
+        ``"scalp": (Cnd, ns, Nc)`` and ``"difference_wave_scalp": (ns, Nc) | None``
+        (``scalp[1] - scalp[0]``, ``None`` when ``Cnd < 2``). The existing
+        source-state keys are byte-unchanged.
     """
     x_design = torch.as_tensor(x_design, dtype=_F64)
     if x_design.ndim == 1:
@@ -101,6 +119,7 @@ def simulate_erp_dcm(
     cnd = x_design.shape[0]
 
     states_list: list[Tensor] = []
+    scalp_list: list[Tensor] = []
     for c in range(cnd):
         q = apply_condition_modulation(p, x_design[c])
 
@@ -110,6 +129,9 @@ def simulate_erp_dcm(
         traj = integrate_local_linearization(f_c, x0, inputs, dt)  # (ns, 8n)
         src = torch.stack([cmc_unflatten(traj[i], n) for i in range(ns)], dim=0)
         states_list.append(src)  # (ns, n, 8)
+        if l_full is not None:
+            # Project the flat (ns, 8n) source trajectory to scalp (LEAD-03).
+            scalp_list.append(project_to_scalp(traj, l_full))  # (ns, Nc)
 
     states = torch.stack(states_list, dim=0)  # (Cnd, ns, n, 8)
 
@@ -119,6 +141,13 @@ def simulate_erp_dcm(
         "inputs": inputs,
     }
     # Difference wave on SOURCE states (sp voltage col 2 is the readout of
-    # interest); scalp projection + true MMN are Phase 35 (LEAD-03).
+    # interest); the TRUE MMN scalp difference is the scalp keys below.
     out["difference_wave"] = states[1] - states[0] if cnd >= 2 else None
+
+    if l_full is not None:
+        scalp = torch.stack(scalp_list, dim=0)  # (Cnd, ns, Nc)
+        out["scalp"] = scalp
+        # Deviant - standard scalp difference (NON-ZERO iff B is wired). The SIGN
+        # (negative-going / frontal) is Phase 36 -- not asserted here (Fact 6).
+        out["difference_wave_scalp"] = scalp[1] - scalp[0] if cnd >= 2 else None
     return out

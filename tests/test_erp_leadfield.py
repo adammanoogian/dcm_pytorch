@@ -35,8 +35,76 @@ from pyro_dcm.forward_models.erp_leadfield import (
     lfp_spatial,
     project_to_scalp,
 )
+from pyro_dcm.inference.forward_models import ERPDCMForward, ForwardModel
+from pyro_dcm.simulators.erp_simulator import simulate_erp_dcm
 
 _F64 = torch.float64
+
+
+def _edge_block(n: int, edges: list[tuple[int, int]]) -> torch.Tensor:
+    """``(n,n)`` free log-param block: ``-32`` (dead) except ``0`` at ``edges``."""
+    a = torch.full((n, n), -32.0, dtype=_F64)
+    for r, c in edges:
+        a[r, c] = 0.0
+    return a
+
+
+def _planted_p(n: int, b_wired: bool) -> dict[str, object]:
+    """Planted 2-source ERP free-param dict (one forward edge 0->1).
+
+    ``B[0]`` carries a forward-edge modulation + a non-zero diagonal (the
+    precision path) when ``b_wired``; an all-zero ``B[0]`` otherwise (control).
+    """
+    b0 = (
+        torch.tensor([[0.3, 0.0], [0.2, 0.5]], dtype=_F64)
+        if b_wired
+        else torch.zeros(n, n, dtype=_F64)
+    )
+    return {
+        "T": torch.zeros(n, 4, dtype=_F64),
+        "G": torch.zeros(n, 4, dtype=_F64),
+        "C": torch.zeros(n, 1, dtype=_F64),
+        "S": torch.zeros(n, 1, dtype=_F64),
+        "R": torch.zeros(1, 2, dtype=_F64),
+        "A": torch.stack(
+            [
+                _edge_block(n, [(1, 0)]),  # A[0] fwd sp->ss, edge 0->1
+                _edge_block(n, []),
+                _edge_block(n, []),
+                _edge_block(n, []),
+            ],
+            dim=0,
+        ),
+        "B": [b0],
+    }
+
+
+def _erp_forward(n: int, b_wired: bool, ns: int = 64) -> ERPDCMForward:
+    """Build an ``ERPDCMForward`` matching the planted 2-source net."""
+    a_masks = [
+        _edge_block(n, [(1, 0)]) >= 0.0,  # live where free == 0
+        torch.zeros(n, n, dtype=torch.bool),
+        torch.zeros(n, n, dtype=torch.bool),
+        torch.zeros(n, n, dtype=torch.bool),
+    ]
+    a_masks_f = [m.double() for m in a_masks]
+    b0 = (
+        torch.tensor([[0.3, 0.0], [0.2, 0.5]], dtype=_F64)
+        if b_wired
+        else torch.zeros(n, n, dtype=_F64)
+    )
+    c_mask = torch.ones(n, 1, dtype=_F64)
+    l_full = build_lead_field(cmc_default_pj(), lfp_spatial(torch.ones(n), n))
+    x_design = torch.tensor([[0.0], [1.0]], dtype=_F64)
+    return ERPDCMForward(
+        l_full=l_full,
+        x_design=x_design,
+        a_masks=a_masks_f,
+        b_masks=[b0],
+        c_mask=c_mask,
+        dt=0.004,
+        ns=ns,
+    )
 
 
 def test_cmc_default_pj_is_state_index_2() -> None:
@@ -174,3 +242,140 @@ def test_lead_field_outputs_float64() -> None:
     assert l_full.dtype == _F64
     states = torch.zeros(3, 8 * n, dtype=_F64)
     assert project_to_scalp(states, l_full).dtype == _F64
+
+
+# --------------------------------------------------------------------------- #
+# Task 2: ERPDCMForward protocol implementor (additive) + simulator scalp path #
+# --------------------------------------------------------------------------- #
+
+
+def test_erpdcmforward_is_forward_model() -> None:
+    """``ERPDCMForward`` satisfies the ``runtime_checkable`` ``ForwardModel``."""
+    fwd = _erp_forward(2, b_wired=True)
+    assert isinstance(fwd, ForwardModel)
+    assert fwd.residual_is_complex is False
+
+
+def test_erpdcmforward_param_count() -> None:
+    """``param_count`` == 4NN + N*M + 4N + 4N + N + 2M (A+C+T+G+S+R, L/J fixed)."""
+    n = 2
+    fwd = _erp_forward(n, b_wired=True)
+    m = 1  # n_inp from c_mask
+    expected = 4 * n * n + n * m + 4 * n + 4 * n + n + 2 * m
+    assert fwd.param_count(n) == expected
+    assert fwd.param_count(n) == 38
+
+
+def test_erpdcmforward_pack_unpack_roundtrip() -> None:
+    """``pack(unpack(theta)) == theta`` on the frozen ordering."""
+    n = 2
+    fwd = _erp_forward(n, b_wired=True)
+    np_full = fwd.param_count(n)
+    torch.manual_seed(3)
+    theta = torch.randn(np_full, dtype=_F64)
+    unpacked = fwd.unpack_params(theta, n)
+    # Keys + shapes are the frozen pack order.
+    assert unpacked["A_free"].shape == (4, n, n)
+    assert unpacked["C_free"].shape == (n, 1)
+    assert unpacked["T"].shape == (n, 4)
+    assert unpacked["G"].shape == (n, 4)
+    assert unpacked["S"].shape == (n, 1)
+    assert unpacked["R"].shape == (1, 2)
+    repacked = fwd.pack_params(**unpacked)
+    assert torch.equal(repacked, theta)
+
+
+def test_erpdcmforward_build_precision_identity() -> None:
+    """``build_precision`` is identity of size ``Cnd*ns*Nc``."""
+    n = 2
+    ns = 64
+    fwd = _erp_forward(n, b_wired=True, ns=ns)
+    cnd = 2
+    nc = n
+    observed = torch.zeros(cnd, ns, nc, dtype=_F64)
+    q_list, nq = fwd.build_precision(observed)
+    assert nq == 1
+    assert len(q_list) == 1
+    assert q_list[0].shape == (cnd * ns * nc, cnd * ns * nc)
+    assert torch.equal(q_list[0], torch.eye(cnd * ns * nc, dtype=_F64))
+
+
+def test_erpdcmforward_predict_ndim_guard() -> None:
+    """``predict`` returns identical flat output for 3-D and flat ``observed`` (B3).
+
+    The VL main loop calls ``predict`` with the ``(Cnd, ns, Nc)`` tensor; the
+    FD-Jacobian calls it with the flat ``observed.reshape(-1)``. The ``observed.ndim``
+    guard must make both paths return the same flat vector.
+    """
+    n = 2
+    ns = 64
+    fwd = _erp_forward(n, b_wired=True, ns=ns)
+    planted = _planted_p(n, b_wired=True)
+    theta = fwd.pack_params(
+        A_free=planted["A"],
+        C_free=planted["C"],
+        T=planted["T"],
+        G=planted["G"],
+        S=planted["S"],
+        R=planted["R"],
+    )
+    cnd = 2
+    nc = n
+    obs_3d = torch.zeros(cnd, ns, nc, dtype=_F64)
+    obs_flat = obs_3d.reshape(-1)
+    a_mask = torch.ones(n, n, dtype=_F64)
+
+    y_main = fwd.predict(theta, obs_3d, n, a_mask=a_mask)
+    y_fd = fwd.predict(theta, obs_flat, n, a_mask=a_mask)
+    assert y_main.shape == (cnd * ns * nc,)
+    assert torch.equal(y_main, y_fd)
+    assert torch.isfinite(y_main).all()
+
+
+def test_simulate_erp_dcm_scalp_path() -> None:
+    """``simulate_erp_dcm(l_full=...)`` adds ``scalp`` + ``difference_wave_scalp``.
+
+    The scalp difference wave is NON-ZERO when ``B`` is wired (the LEAD-03 gate)
+    and EXACTLY zero on the B-omitted control -- proving the condition difference
+    is driven entirely by ``B``. The SIGN (negative-going / frontal) is NOT
+    asserted (Phase 36, needs ECD orientation + MNI coords -- Fact 6).
+    """
+    n = 2
+    ns = 64
+    x_design = torch.tensor([[0.0], [1.0]], dtype=_F64)
+    l_full = build_lead_field(cmc_default_pj(), lfp_spatial(torch.ones(n), n))
+
+    out = simulate_erp_dcm(
+        _planted_p(n, b_wired=True), x_design, n, ns=ns, l_full=l_full
+    )
+    assert out["scalp"].shape == (2, ns, n)
+    assert out["scalp"].dtype == _F64
+    # Existing source-state keys remain present + unchanged in shape.
+    assert out["states"].shape == (2, ns, n, 8)
+    dws = out["difference_wave_scalp"]
+    assert dws is not None
+    assert dws.shape == (ns, n)
+    assert torch.isfinite(dws).all()
+    assert dws.abs().max().item() > 0.0  # NON-ZERO (B wired)
+
+    # Through the identity LFP lead field the scalp == source sp-voltage (col 2).
+    src_spv = out["states"][..., 2]  # (Cnd, ns, n)
+    assert torch.allclose(out["scalp"], src_spv)
+
+    out0 = simulate_erp_dcm(
+        _planted_p(n, b_wired=False), x_design, n, ns=ns, l_full=l_full
+    )
+    dws0 = out0["difference_wave_scalp"]
+    assert dws0 is not None
+    assert torch.equal(dws0, torch.zeros_like(dws0))  # B off -> no difference
+
+
+def test_simulate_erp_dcm_no_lead_field_unchanged() -> None:
+    """Without ``l_full`` the scalp keys are absent; source keys are unchanged."""
+    n = 2
+    ns = 32
+    x_design = torch.tensor([[0.0], [1.0]], dtype=_F64)
+    out = simulate_erp_dcm(_planted_p(n, b_wired=True), x_design, n, ns=ns)
+    assert "scalp" not in out
+    assert "difference_wave_scalp" not in out
+    assert out["states"].shape == (2, ns, n, 8)

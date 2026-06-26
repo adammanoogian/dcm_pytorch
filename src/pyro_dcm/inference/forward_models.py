@@ -680,3 +680,328 @@ class LatentCircuitForward:
 
         solution = self._integrate(theta_final, N, a_mask)
         return {"theta_post": theta_post, "predicted_output": solution}
+
+
+# Free log-parameter value mapping an ABSENT CMC connection (mask == 0) to a dead
+# edge. CMC parameterises strengths as ``exp(P) * E0`` (NOT the linear fMRI
+# convention), so an absent edge must map to a strongly NEGATIVE free value
+# (``exp(-32) * E0 ~ 1e-12``), NOT 0 (``exp(0) * E0 = E0`` would be a LIVE edge).
+# Mirrors the ``mask*32-32`` / ``_ms_log_block`` convention (spm_cmc_priors.m:80).
+_ERP_DEAD_FREE = -32.0
+
+
+class ERPDCMForward:
+    """DCM-for-evoked-responses (CMC) forward model for Variational Laplace.
+
+    The fourth additive ``ForwardModel`` implementor (after ``SpectralDCMForward``,
+    ``TaskDCMForward``, ``LatentCircuitForward``), exposing the parity-verified
+    Phase-33/34 canonical-microcircuit network forward + condition-B modulation +
+    the Phase-35 single-dipole lead field to the model-agnostic VL engine
+    (``_run_vl_generic``). NOTHING in the ``ForwardModel`` protocol,
+    ``variational_laplace.py``, or the sibling forward classes is edited.
+
+    The forward composes (lazy-imported inside :meth:`predict` so import-time
+    coupling stays zero): per-condition ``apply_condition_modulation``
+    (``spm_gen_Q``) -> ``integrate_local_linearization`` (``spm_int_L`` exp-Euler)
+    of ``cmc_network_f`` (``spm_fx_cmc``) -> ``project_to_scalp``
+    (``spm_lx_erp`` ``y = (x - x0) @ L_full.T``), stacked to the canonical internal
+    layout ``(Cnd, ns, Nc)`` and flattened C-order at the ``predict`` /
+    ``build_precision`` boundary.
+
+    Frozen parameter vector ordering (``param_count`` /
+    :meth:`pack_params` / :meth:`unpack_params`)::
+
+        A_free (4*N*N) + C_free (N*M) + T (4*N) + G (4*N) + S (N) + R (2*M)
+
+    where ``M = n_inp``. The lead field ``L`` and contributing-state ``J`` are held
+    FIXED (carried in the precomputed ``l_full``) -- they are observation context,
+    not recovered parameters, for the forward-parity + protocol round-trip (Open Q3
+    RESOLVED). The between-trial ``B`` matrices and the four extrinsic routing
+    masks ``a_masks`` ride as constructor args (B2: ERP-specific needs are NOT
+    protocol methods); the engine-supplied scalar ``a_mask`` (``context``) is a
+    compatibility no-op -- CMC uses its own 4-block ``a_masks`` (Open Q4 RESOLVED).
+
+    Parameters
+    ----------
+    l_full : torch.Tensor
+        Full per-state lead field ``(Nc, 8N)`` (e.g.
+        :func:`pyro_dcm.forward_models.build_lead_field`).
+    x_design : torch.Tensor
+        Between-trial design ``(Cnd, n_effects)``. Row 0 = standard, row 1 =
+        deviant.
+    a_masks : sequence of torch.Tensor
+        The four extrinsic routing-graph masks (fwd sp->ss, fwd sp->dp, bwd
+        dp->sp, bwd dp->ii), each ``(N, N)`` binary.
+    b_masks : list of torch.Tensor
+        The FIXED between-trial ``B`` value matrices (one per between-trial
+        effect), each ``(N, N)``. ``B`` is NOT a free parameter in v1.
+    c_mask : torch.Tensor
+        Driving-input mask ``(N, n_inp)`` binary.
+    dt : float, optional
+        Integration step (``U.dt``) in seconds. Default 0.004.
+    ns : int, optional
+        Number of peristimulus samples. Default 128.
+    ons_ms : float, optional
+        Stimulus onset in ms (``M.ons``). Default 60.
+    dur_ms : float, optional
+        Gaussian dispersion in ms (``M.dur``). Default 16.
+    sus : float, optional
+        Sustained-input level (``M.sus``). Default 0.
+
+    References
+    ----------
+    SPM12 ``spm_fx_cmc.m`` / ``spm_gen_Q.m`` / ``spm_int_L.m`` / ``spm_lx_erp.m``
+    (Phase 33/34/35 ports). ``LatentCircuitForward`` -- the additive 4th-implementor
+    precedent (``observed.ndim`` FD guard, identity ``build_precision``, lazy import).
+    """
+
+    def __init__(
+        self,
+        l_full: torch.Tensor,
+        x_design: torch.Tensor,
+        a_masks: list[torch.Tensor] | tuple[torch.Tensor, ...],
+        b_masks: list[torch.Tensor],
+        c_mask: torch.Tensor,
+        *,
+        dt: float = 0.004,
+        ns: int = 128,
+        ons_ms: float = 60.0,
+        dur_ms: float = 16.0,
+        sus: float = 0.0,
+    ) -> None:
+        if len(a_masks) != 4:
+            raise ValueError(
+                "ERPDCMForward: a_masks must hold exactly 4 extrinsic routing "
+                f"blocks (fwd/fwd/bwd/bwd); got {len(a_masks)}."
+            )
+        self._l_full = l_full.to(torch.float64)
+        self._x_design = x_design.to(torch.float64)
+        self._a_masks = [m.to(torch.float64) for m in a_masks]
+        self._b_masks = [b.to(torch.float64) for b in b_masks]
+        self._c_mask = c_mask.to(torch.float64)
+        self._dt = dt
+        self._ns = ns
+        self._ons_ms = ons_ms
+        self._dur_ms = dur_ms
+        self._sus = sus
+        # Peristimulus time grid in seconds (spm_gen_erp.m:35), precomputed.
+        self._pst = (
+            torch.arange(1, ns + 1, dtype=torch.float64) * dt - ons_ms / 1000.0
+        )
+
+    @property
+    def residual_is_complex(self) -> bool:
+        """ERP residuals are real-valued time-domain scalp ERPs."""
+        return False
+
+    @property
+    def _n_inp(self) -> int:
+        """Number of driving inputs ``M`` (columns of ``c_mask``)."""
+        return self._c_mask.shape[1]
+
+    def param_count(self, n_regions: int) -> int:
+        """Total free params: ``4NN + N*M + 4N + 4N + N + 2M`` (L/J fixed)."""
+        N = n_regions
+        M = self._n_inp
+        # A{1..4} + C + T + G + S + R (L/J fixed in the precomputed l_full).
+        return 4 * N * N + N * M + 4 * N + 4 * N + N + 2 * M
+
+    def pack_params(self, **kwargs: torch.Tensor) -> torch.Tensor:
+        """Flatten ``A_free, C_free, T, G, S, R`` in the frozen pack order."""
+        return torch.cat([
+            kwargs["A_free"].reshape(-1),
+            kwargs["C_free"].reshape(-1),
+            kwargs["T"].reshape(-1),
+            kwargs["G"].reshape(-1),
+            kwargs["S"].reshape(-1),
+            kwargs["R"].reshape(-1),
+        ])
+
+    def unpack_params(
+        self, theta: torch.Tensor, n_regions: int,
+    ) -> dict[str, torch.Tensor]:
+        """Reverse the frozen pack order into named CMC free-parameter tensors."""
+        N = n_regions
+        M = self._n_inp
+        idx = 0
+        result: dict[str, torch.Tensor] = {}
+        result["A_free"] = theta[idx : idx + 4 * N * N].reshape(4, N, N)
+        idx += 4 * N * N
+        result["C_free"] = theta[idx : idx + N * M].reshape(N, M)
+        idx += N * M
+        result["T"] = theta[idx : idx + 4 * N].reshape(N, 4)
+        idx += 4 * N
+        result["G"] = theta[idx : idx + 4 * N].reshape(N, 4)
+        idx += 4 * N
+        result["S"] = theta[idx : idx + N].reshape(N, 1)
+        idx += N
+        result["R"] = theta[idx : idx + 2 * M].reshape(M, 2)
+        return result
+
+    def build_prior_cov(
+        self,
+        n_regions: int,
+        prior_variance: float,
+        a_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        """CMC prior variances flattened IN PACK ORDER (cmc_prior_moments).
+
+        ``A`` ``mask/16``, ``C`` ``mask/32``, ``T``/``G`` ``1/32``, ``S`` ``1/64``,
+        ``R`` ``1/16`` (``spm_cmc_priors.m``). Absent ``A``/``C`` entries get
+        variance 0 so ``_spm_svd`` drops them (same idiom as
+        ``LatentCircuitForward.build_prior_cov``). The engine-supplied scalar
+        ``a_mask`` / ``prior_variance`` are IGNORED -- CMC uses its own stored
+        4-block ``a_masks`` and the fixed ``spm_cmc_priors`` variances.
+        """
+        N = n_regions
+        M = self._n_inp
+        # A: 4 routing blocks, var 1/16 on live edges, 0 on absent (spm_cmc:80-81).
+        a_var = torch.cat([
+            (self._a_masks[i].reshape(-1) > 0).double() / 16.0 for i in range(4)
+        ])
+        # C: var mask/32 (spm_cmc_priors.m:114-116).
+        c_var = (self._c_mask.reshape(-1) > 0).double() / 32.0
+        t_var = torch.full((4 * N,), 1.0 / 32.0, dtype=torch.float64)  # :121
+        g_var = torch.full((4 * N,), 1.0 / 32.0, dtype=torch.float64)  # :122
+        s_var = torch.full((N,), 1.0 / 64.0, dtype=torch.float64)  # :124
+        r_var = torch.full((2 * M,), 1.0 / 16.0, dtype=torch.float64)  # :133
+        return torch.cat([a_var, c_var, t_var, g_var, s_var, r_var])
+
+    def build_precision(
+        self, observed: torch.Tensor,
+    ) -> tuple[list[torch.Tensor], int]:
+        """Identity observation precision over ``Cnd*ns*Nc`` (v1).
+
+        AR(1) ``spm_Q`` temporal precision is deferred to a later milestone (the
+        forward-only Phase-35 scope uses the identity).
+        """
+        ny = observed.numel()
+        Q = torch.eye(ny, dtype=torch.float64, device=observed.device)
+        return [Q], 1
+
+    def _masked_free(
+        self, params: dict[str, torch.Tensor],
+    ) -> tuple[list[torch.Tensor], torch.Tensor]:
+        """Apply the routing/input masks, sending absent edges to the dead value.
+
+        Returns the four masked free ``A`` log-blocks (list of ``(N, N)``) and the
+        masked free ``C`` log-gain ``(N, M)``. Live entries keep their (recovered)
+        free value; absent entries map to ``_ERP_DEAD_FREE`` so ``exp(P) * E0`` is
+        negligible (a 0 free value would be a LIVE edge under the CMC parameterisation).
+        """
+        a_free_list: list[torch.Tensor] = []
+        for i in range(4):
+            mb = (self._a_masks[i] > 0).double()
+            a_free_list.append(
+                params["A_free"][i] * mb + _ERP_DEAD_FREE * (1.0 - mb)
+            )
+        cb = (self._c_mask > 0).double()
+        c_free = params["C_free"] * cb + _ERP_DEAD_FREE * (1.0 - cb)
+        return a_free_list, c_free
+
+    def predict(
+        self,
+        theta: torch.Tensor,
+        observed: torch.Tensor,
+        n_regions: int,
+        **context: object,
+    ) -> torch.Tensor:
+        """Per-condition integrate -> project -> stack ``(Cnd, ns, Nc)`` -> flat.
+
+        The canonical internal layout is ``(Cnd, ns, Nc)``; the flat boundary is a
+        C-order ``reshape(-1)`` (condition-blocked), matching the engine's
+        ``observed.reshape(-1)`` and the identity precision element-for-element
+        (locked stacking layout, gap 4). The ``observed.ndim`` guard handles BOTH
+        the main-loop ``(Cnd, ns, Nc)`` call (truncate ``ns`` to the observed
+        length) AND the flat FD-Jacobian call (no truncation) -- pitfall B3.
+        """
+        from pyro_dcm.forward_models.erp_coupled_system import (
+            apply_condition_modulation,
+            cmc_network_f,
+        )
+        from pyro_dcm.forward_models.erp_input import erp_gaussian_input
+        from pyro_dcm.forward_models.erp_leadfield import project_to_scalp
+        from pyro_dcm.utils.local_linearization import (
+            integrate_local_linearization,
+        )
+
+        N = n_regions
+        params = self.unpack_params(theta, N)
+        a_free_list, c_free = self._masked_free(params)
+        p_struct: dict[str, object] = {
+            "T": params["T"],
+            "G": params["G"],
+            "C": c_free,
+            "S": params["S"],
+            "R": params["R"],
+            "A": a_free_list,
+            "B": self._b_masks,
+        }
+        inputs = erp_gaussian_input(
+            self._pst, params["R"], self._ons_ms, self._dur_ms, self._sus,
+        )
+        x0 = torch.zeros(8 * N, dtype=torch.float64, device=theta.device)
+
+        y_list: list[torch.Tensor] = []
+        for c in range(self._x_design.shape[0]):
+            q = apply_condition_modulation(p_struct, self._x_design[c])
+
+            def f_c(
+                v: torch.Tensor, u: torch.Tensor, q: dict = q,
+            ) -> torch.Tensor:
+                return cmc_network_f(v, u, q, N)
+
+            traj = integrate_local_linearization(f_c, x0, inputs, self._dt)
+            if not torch.isfinite(traj).all():
+                traj = torch.zeros_like(traj)
+            y_list.append(project_to_scalp(traj, self._l_full))  # (ns, Nc)
+
+        y = torch.stack(y_list, dim=0)  # (Cnd, ns, Nc)
+        # Main loop passes (Cnd, ns, Nc); FD Jacobian passes a flat vector whose
+        # trajectory length already matches ns (so only truncate when 3-D).
+        if observed.ndim >= 3:
+            y = y[:, : observed.shape[1]]
+        return y.reshape(-1)
+
+    def build_result(
+        self,
+        theta_final: torch.Tensor,
+        a_mask: torch.Tensor,
+        n_regions: int,
+        **context: object,
+    ) -> dict:
+        """Build the posterior result: parameterised ``A``/``C`` + ``(Cnd,ns,Nc)``.
+
+        ``theta_post`` keeps the raw free params (``A_free, C_free, T, G, S, R``)
+        and adds the parameterised extrinsic ``A`` ``(4, N, N)``, the parameterised
+        input gain ``C`` ``(N, M)``, and the fixed ``B`` stack. ``predicted_output``
+        is the scalp ERP at the mode, reshaped to the canonical ``(Cnd, ns, Nc)``.
+        """
+        from pyro_dcm.forward_models.erp_coupled_system import (
+            parameterize_cmc_network,
+        )
+
+        N = n_regions
+        params = self.unpack_params(theta_final, N)
+        a_free_list, c_free = self._masked_free(params)
+        net = parameterize_cmc_network(
+            {
+                "T": params["T"],
+                "G": params["G"],
+                "C": c_free,
+                "S": params["S"],
+                "A": a_free_list,
+            },
+            N,
+        )
+        theta_post: dict[str, torch.Tensor] = {**params}
+        theta_post["A"] = net["A"]  # parameterised extrinsic blocks (4, N, N)
+        theta_post["C"] = net["C"]  # parameterised input gain exp(P.C)
+        if self._b_masks:
+            theta_post["B"] = torch.stack(self._b_masks, dim=0)
+
+        cnd = self._x_design.shape[0]
+        nc = self._l_full.shape[0]
+        predicted_flat = self.predict(theta_final, torch.empty(0), N, **context)
+        predicted = predicted_flat.reshape(cnd, self._ns, nc)
+        return {"theta_post": theta_post, "predicted_output": predicted}
