@@ -22,6 +22,13 @@ from pyro_dcm.forward_models.erp_coupled_system import (
     parameterize_cmc_network,
 )
 from pyro_dcm.forward_models.erp_input import erp_gaussian_input
+from pyro_dcm.forward_models.erp_leadfield import (
+    build_lead_field,
+    cmc_default_pj,
+    ecd_spatial,
+    lfp_spatial,
+    project_to_scalp,
+)
 from pyro_dcm.forward_models.latent_observation import direct_observation
 from pyro_dcm.forward_models.neural_state import (
     NeuralStateEquation,
@@ -73,6 +80,12 @@ __all__ = [
     "apply_condition_modulation",
     "cmc_network_f",
     "parameterize_cmc_network",
+    # Phase 35: single-dipole lead field + scalp projection (v0.8.0 ERP)
+    "build_lead_field",
+    "cmc_default_pj",
+    "ecd_spatial",
+    "lfp_spatial",
+    "project_to_scalp",
     # Phase 20: Latent-circuit direct observation
     "direct_observation",
     # Phase 1: Neural-hemodynamic forward model
