@@ -58,9 +58,14 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+from pyro_dcm.forward_models import (  # noqa: E402
+    build_mmn_5source_network,
+    mmn_cmc_params,
+)
 from pyro_dcm.forward_models.erp_coupled_system import (  # noqa: E402
     apply_condition_modulation,
     cmc_network_f,
+    parameterize_cmc_network,
 )
 from pyro_dcm.forward_models.erp_leadfield import (  # noqa: E402
     build_lead_field,
@@ -68,6 +73,7 @@ from pyro_dcm.forward_models.erp_leadfield import (  # noqa: E402
     lfp_spatial,
     project_to_scalp,
 )
+from pyro_dcm.simulators import simulate_erp_dcm  # noqa: E402
 from pyro_dcm.utils.local_linearization import (  # noqa: E402
     integrate_local_linearization,
 )
@@ -100,6 +106,26 @@ _FIXTURE_PATH = (
 
 # The Phase-35 LEAD-05 production-path tolerance (David & Friston 2003 forward).
 _PARITY_TOL = 1e-7
+
+# Source / channel indices (LFP identity readout -> one channel per source;
+# A1L=0, A1R=1, STGL=2, STGR=3, rIFG=4; build_mmn_5source_network source order).
+_RIFG, _A1L, _A1R = 4, 0, 1
+
+# The classic MMN latency window (ms): the rIFG deviant-standard deflection at
+# ~100 ms (Garrido et al. 2009; Naatanen et al. 2007). The windowed-minimum sign
+# + attenuation are asserted here (NOT the global |peak|, which carries an early
+# evoked transient -- see the SUMMARY / the Phase-36 honest-scope note).
+_MMN_WINDOW_MS = (90.0, 120.0)
+
+# Swept self-inhibition-gain grid: the regime where the MMN deflection is present
+# (beyond ~1.5 the deflection has attenuated to noise and its windowed sign flips
+# -- so the sweep covers the physically-meaningful precision range, Adams 2013).
+_GAIN_GRID = torch.linspace(0.0, 1.5, 7, dtype=_F64)
+
+# Fixed deviant B gains for the demo (the baseline == the fixture reference point:
+# a1_b_gain == rifg_b_gain == _MS_B_DIAG, so gain=0 reproduces the gated forward).
+_A1_B_GAIN = 0.5
+_RIFG_B_GAIN = 0.5
 
 
 def _reference_p() -> dict[str, Any]:
@@ -308,9 +334,190 @@ def run_parity_gate(fixture_path: Path = _FIXTURE_PATH) -> dict[str, float]:
     }
 
 
+def assert_permutation_guard() -> dict[str, float]:
+    """Reused Phase-33 guard: the FREE ``P.G[:,0]`` moves ``G[:,6]``, not ``G[:,0]``.
+
+    Confirms the sweep hits the RIGHT knob (pitfall S1): perturbing the free
+    ``P.G[node, 0]`` at the precision nodes changes the parameterised sp
+    self-inhibition column ``G[:,6]`` (via the intrinsic permutation
+    ``J_PERM[0] == 6``, ``spm_fx_cmc.m:151``) and leaves ``G[:,0]`` untouched --
+    the swept gain is precision / synaptic-gain, never a mis-indexed column.
+
+    Returns
+    -------
+    dict
+        ``{"moved_g6": float, "moved_g0": float}`` (``moved_g6 > 0``,
+        ``moved_g0 == 0`` on success).
+
+    Raises
+    ------
+    RuntimeError
+        If ``P.G[:,0]`` fails to move ``G[:,6]`` or spuriously moves ``G[:,0]``.
+    """
+    n = _MS_N
+    nodes = list(_MS_PRECISION_NODES)
+    p0 = mmn_cmc_params(0.0, _A1_B_GAIN, _RIFG_B_GAIN)["p"]
+    p1 = mmn_cmc_params(0.7, _A1_B_GAIN, _RIFG_B_GAIN)["p"]
+    g0 = parameterize_cmc_network(p0, n)["G"]  # (n, 10)
+    g1 = parameterize_cmc_network(p1, n)["G"]
+    moved_g6 = (g1[nodes, 6] - g0[nodes, 6]).abs().max().item()
+    moved_g0 = (g1[nodes, 0] - g0[nodes, 0]).abs().max().item()
+    if not (moved_g6 > 0.0 and moved_g0 == 0.0):
+        raise RuntimeError(
+            "PERMUTATION GUARD FAILED: free P.G[:,0] must move parameterised "
+            f"G[:,6] (sp self-inhibition) and leave G[:,0] fixed; got "
+            f"moved_g6={moved_g6:.3e} (want >0), moved_g0={moved_g0:.3e} (want 0). "
+            "The swept knob is mis-indexed (J_PERM[0]=6 broken)."
+        )
+    print(
+        f"[GUARD] P.G[:,0] -> G[:,6]: moved_g6={moved_g6:.3e} (>0), "
+        f"moved_g0={moved_g0:.3e} (==0)  [J_PERM[0]=6 confirmed]"
+    )
+    return {"moved_g6": moved_g6, "moved_g0": moved_g0}
+
+
+def _windowed_mmn_min(rifg_diff: torch.Tensor, pst_ms: torch.Tensor) -> float:
+    """Signed minimum of the rIFG difference wave inside the MMN latency window.
+
+    Parameters
+    ----------
+    rifg_diff : torch.Tensor
+        Deviant-standard difference at the rIFG channel, shape ``(ns,)``.
+    pst_ms : torch.Tensor
+        Peristimulus time in ms, shape ``(ns,)``.
+
+    Returns
+    -------
+    float
+        ``min`` of ``rifg_diff`` over ``_MMN_WINDOW_MS`` (negative for a
+        canonical MMN deflection).
+    """
+    lo, hi = _MMN_WINDOW_MS
+    mask = (pst_ms >= lo) & (pst_ms <= hi)
+    return float(rifg_diff[mask].min().item())
+
+
+def run_precision_sweep() -> dict[str, Any]:
+    """Pure-forward sweep of the sp self-inhibition gain (ERPDCM-04, re-scoped).
+
+    Sweeps ``sp_inhibition_gain`` (the free ``P.G[:,0] -> G[:,6]`` knob) over
+    :data:`_GAIN_GRID` on the SPM-parity-gated 5-source MMN network, routing each
+    point through :func:`pyro_dcm.simulators.simulate_erp_dcm` (the parity-verified
+    forward; no re-assembly). Records the rIFG ``|MMN|`` peak (the transfer
+    curve), the windowed MMN-latency minimum, and the rIFG/A1 amplitude ratio.
+
+    Honest LFP source-space scope (Option A; orchestrator decision 2026-06-26): in
+    the LFP-identity readout the input node A1 dominates raw source amplitude, so
+    frontal scalp dominance is NOT assertable here -- it is an ECD
+    dipole-orientation phenomenon deferred to a follow-up phase (35-01-D1 / Fact
+    6). The rIFG/A1 ratio is therefore RECORDED, not gated.
+
+    Returns
+    -------
+    dict
+        ``{"gains": (G,), "mmn_peak": (G,), "win_min": (G,), "rifg_a1_ratio":
+        (G,), "pst_ms": (ns,), "diff_low"/"diff_base"/"diff_high": (ns, Nc),
+        "idx_low"/"idx_base"/"idx_high": int}``. ``diff_*`` are the rIFG-channel
+        difference waves at the lowest / a mid / the highest swept gain.
+
+    Raises
+    ------
+    RuntimeError
+        If the monotone-attenuation or windowed-negative-MMN acceptance criteria
+        fail (the science is not loosened -- a failure is a real finding).
+    """
+    net = build_mmn_5source_network()
+    assert tuple(net["source_names"]) == ("A1L", "A1R", "STGL", "STGR", "rIFG")  # type: ignore[arg-type]
+
+    gains = _GAIN_GRID
+    mmn_peak: list[float] = []
+    win_min: list[float] = []
+    ratio: list[float] = []
+    diff_waves: list[torch.Tensor] = []
+    pst_ms = torch.empty(0, dtype=_F64)
+    for g in gains:
+        bundle = mmn_cmc_params(float(g), _A1_B_GAIN, _RIFG_B_GAIN)
+        sim = simulate_erp_dcm(
+            bundle["p"], bundle["x_design"], _MS_N, l_full=bundle["l_full"]
+        )
+        dw = sim["difference_wave_scalp"]  # (ns, Nc); deviant - standard
+        pst_ms = sim["pst"] * 1000.0
+        rifg = dw[:, _RIFG]
+        mmn_peak.append(float(rifg.abs().max().item()))
+        win_min.append(_windowed_mmn_min(rifg, pst_ms))
+        a1 = max(
+            float(dw[:, _A1L].abs().max().item()),
+            float(dw[:, _A1R].abs().max().item()),
+        )
+        ratio.append(float(rifg.abs().max().item()) / a1)
+        diff_waves.append(dw.clone())
+
+    mmn_t = torch.tensor(mmn_peak, dtype=_F64)
+    win_t = torch.tensor(win_min, dtype=_F64)
+
+    # ACCEPTANCE 1: monotone non-increasing |MMN| transfer curve (the headline).
+    incr = (mmn_t[1:] - mmn_t[:-1] > 1e-15).nonzero().flatten().tolist()
+    if incr:
+        raise RuntimeError(
+            "ACCEPTANCE FAILED (monotone attenuation): |MMN| peak is NOT "
+            f"non-increasing across gain (increases at indices {incr}); "
+            f"curve={mmn_peak}."
+        )
+
+    # ACCEPTANCE 2: windowed MMN-latency minimum is negative AND its magnitude
+    # attenuates (non-increasing) with gain (the canonical ~100 ms deflection).
+    if not bool((win_t < 0.0).all()):
+        raise RuntimeError(
+            "ACCEPTANCE FAILED (windowed-negative MMN): the rIFG difference wave "
+            f"has no negative minimum in {_MMN_WINDOW_MS} ms at some gain; "
+            f"win_min={win_min}."
+        )
+    win_mag = win_t.abs()
+    incr_w = (win_mag[1:] - win_mag[:-1] > 1e-15).nonzero().flatten().tolist()
+    if incr_w:
+        raise RuntimeError(
+            "ACCEPTANCE FAILED (windowed-MMN attenuation): |windowed minimum| is "
+            f"NOT non-increasing across gain (increases at indices {incr_w}); "
+            f"win_min={win_min}."
+        )
+
+    idx_low, idx_high = 0, len(gains) - 1
+    idx_base = len(gains) // 2
+    return {
+        "gains": gains,
+        "mmn_peak": mmn_t,
+        "win_min": win_t,
+        "rifg_a1_ratio": torch.tensor(ratio, dtype=_F64),
+        "pst_ms": pst_ms,
+        "diff_low": diff_waves[idx_low],
+        "diff_base": diff_waves[idx_base],
+        "diff_high": diff_waves[idx_high],
+        "idx_low": idx_low,
+        "idx_base": idx_base,
+        "idx_high": idx_high,
+    }
+
+
 def main() -> None:
-    """Run the gate; the sweep + figure are added in Tasks 2-3."""
+    """Gate -> permutation guard -> precision sweep -> assertions (Tasks 1-2)."""
     run_parity_gate()
+    assert_permutation_guard()
+    sweep = run_precision_sweep()
+    gains = sweep["gains"].tolist()
+    print("\n[SWEEP] sp_inhibition_gain -> |MMN| (rIFG, LFP source-space):")
+    print("  gain   |MMN|peak    winMin(~100ms)   rIFG/A1")
+    for i, g in enumerate(gains):
+        print(
+            f"  {g:5.3f}  {sweep['mmn_peak'][i].item():.4e}   "
+            f"{sweep['win_min'][i].item():+.4e}      "
+            f"{sweep['rifg_a1_ratio'][i].item():.4e}"
+        )
+    print(
+        "\n[SCOPE] LFP-identity readout: the input node A1 dominates raw source "
+        f"amplitude (rIFG/A1 ~ {sweep['rifg_a1_ratio'].max().item():.1e}). True "
+        "frontal SCALP dominance is an ECD dipole-orientation effect, deferred to "
+        "a follow-up phase (35-01-D1 / Fact 6) -- recorded, not asserted."
+    )
 
 
 if __name__ == "__main__":
