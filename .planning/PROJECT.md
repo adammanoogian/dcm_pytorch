@@ -17,6 +17,19 @@ point estimate. This is the scientific meaning that must be preserved above all 
 
 ## Current State
 
+**v0.8.0 DCM for Evoked Responses (EEG/MEG ERP) complete (2026-06-26).** Pyro-DCM now has a full
+time-domain ERP forward stack — a canonical-microcircuit (CMC) neural-mass model → extrinsic
+laminar coupling + condition modulation + evoked integration (`spm_int_L` exp-Euler port) →
+single-dipole lead-field → scalp ERP — **SPM12-parity-verified at every stage** (Phases 33-36, all
+gsd-verifier-passed; 79 ERP tests green on M3). `ERPDCMForward` plugs into the existing
+`ForwardModel` protocol so VL + amortized inference came for free. The headline artifact — a
+5-source MMN precision-sweep demo showing monotone superficial-pyramidal-gain → attenuated-MMN (the
+Adams/Ranlund mechanism the `actinf_physics` consumer imports) — ships gated behind the SPM parity
+check. **Deferred (Phase 37, follow-up):** frontal-dominant *scalp* topography, which is an ECD
+dipole-orientation phenomenon not recoverable in LFP-identity readout — needs a sensor montage +
+verified MNI coords. Zero new dependencies; entirely additive (existing fMRI/spectral/rDCM/latent
+paths bit-exact).
+
 **v0.7.0 Variational Laplace Validation complete (2026-06-12).** The VL engine is now
 validated across an N×SNR recovery matrix (spectral/task/latent-circuit), BMR relative-ranking
 recovers true circuit structure (vs brute-force ELBO), and VL was cross-validated against MATLAB

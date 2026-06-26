@@ -444,6 +444,28 @@ roadmap creation.
   check (LFP + difference wave reproduced from `spm_gen_erp` + `spm_lx_erp`) BEFORE any sweep
   output is produced.
 
+### ECD Dipole Lead-Field & Frontal-Dominant Scalp MMN (ERPECD) — Phase 37 (FOLLOW-UP)
+
+Added 2026-06-26 (user-approved "ship LFP demo now + ECD follow-up"). The Phase-36 MMN demo proved
+frontal scalp dominance is structurally unrecoverable in LFP-identity readout (a dipole-orientation
+phenomenon). These requirements complete the deferred ECD path. **Prerequisite: verified 5-source
+MNI coords + dipole orientations from the user.** Defined, not started; may become v0.8.1.
+
+- [ ] **ERPECD-01**: `erp_leadfield.py` `ecd_spatial()` completed — builds the ECD gain
+  `L_spatial (Nc, N)` from a sensor montage + per-source dipole position/orientation (the
+  `spm_erp_L` ECD path incl. `spm_cond_units`), consuming a MATLAB-exported gain via the
+  `validation/` bridge; additive (LFP path + Phases 33–36 stay bit-exact).
+- [ ] **ERPECD-02**: SPM12 ECD **parity gate** — scalp ERP in ECD mode matches `spm_gen_erp` +
+  `spm_lx_erp` (ECD `dipfit`) on a NEW frozen M3 fixture (D=1, verified coords) within ~1e-7
+  (jacrev floor measured).
+- [ ] **ERPECD-03**: the 5-source MMN demo in ECD mode reproduces a **frontal-dominant**
+  (`max|diff[:,frontal]| > max|diff[:,temporal]|`) **negative-going** difference wave at MMN
+  latency — the literal artifact ERPDCM-04 deferred — gated behind ERPECD-02.
+- [ ] **ERPECD-04**: the precision sweep (`sp_inhibition_gain → G[:,6]`) produces monotone
+  `gain → |MMN|` attenuation on the ECD scalp readout (Phase-33 permutation guard reused).
+- [ ] **ERPECD-05**: 5-source MNI coords + dipole orientations documented with provenance (verified
+  vs the primary papers; REF-MMN keys added to Zotero before any `[REF-xxx]`).
+
 ## v0.8.0 Out of Scope
 
 Explicit anti-features for v0.8.0 (documented to prevent scope creep).
@@ -490,9 +512,15 @@ Explicit anti-features for v0.8.0 (documented to prevent scope creep).
 | ERPDCM-04 | Phase 36 | Complete |
 | ERPDCM-05 | Phase 36 | Complete |
 | ERPDCM-06 | Phase 36 | Complete |
+| ERPECD-01 | Phase 37 | Pending (follow-up; not started) |
+| ERPECD-02 | Phase 37 | Pending (follow-up; not started) |
+| ERPECD-03 | Phase 37 | Pending (follow-up; not started) |
+| ERPECD-04 | Phase 37 | Pending (follow-up; not started) |
+| ERPECD-05 | Phase 37 | Pending (follow-up; not started) |
 
-**Coverage:** 25 v0.8.0 requirement IDs (CMC-01..07, EVOK-01..06, LEAD-01..06, ERPDCM-01..06);
-25/25 mapped to exactly one phase each; 0 unmapped, 0 duplicated.
+**Coverage:** 25 core v0.8.0 requirement IDs (CMC-01..07, EVOK-01..06, LEAD-01..06, ERPDCM-01..06)
+ALL COMPLETE (Phases 33–36); + 5 ERPECD follow-up IDs (Phase 37, ECD; defined, not started — needs
+user MNI coords). 30/30 mapped; 0 unmapped, 0 duplicated.
 
 **Per-phase distribution:**
 - Phase 33 (CMC Core Dynamics, spm_int_L Integrator & Single-Source Parity): 7 reqs (CMC-01..07)

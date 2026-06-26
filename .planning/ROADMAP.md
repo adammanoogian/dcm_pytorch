@@ -10,7 +10,7 @@
 - ✅ **v0.6.0 Latent Circuit DCM** - Phases 20-28 (shipped 2026-06-10, scope-cut; real-data → v0.7.0)
 - 📋 **v0.7.0 Variational Laplace Validation** - Phases 29-32 (defined 2026-06-10; not yet started)
 - ✅ **v0.7.0 Variational Laplace Validation** - Phases 29-32 (complete; verified 2026-06-12)
-- 📋 **v0.8.0 DCM for Evoked Responses (EEG/MEG ERP)** - Phases 33-36 (defined 2026-06-25; not yet started)
+- ✅ **v0.8.0 DCM for Evoked Responses (EEG/MEG ERP)** - Phases 33-36 (complete 2026-06-26; CMC ERP forward stack SPM12-parity-verified + MMN precision-sweep demo) · 📋 Phase 37 ECD follow-up defined (needs MNI coords)
 
 <details>
 <summary>v0.1.0 Foundation (Phases 1-8) - SHIPPED 2026-04-03</summary>
@@ -870,6 +870,43 @@ Plans:
 - [ ] 36-02-PLAN.md — public 5-source MMN network builder + consumer adapter API (ERPDCM-03, ERPDCM-05) [Wave 1]
 - [ ] 36-03-PLAN.md — gated MMN precision-sweep demo + gain->|MMN| transfer curve (ERPDCM-04, ERPDCM-06) [Wave 2]
 
+#### Phase 37: ECD Dipole Lead-Field & Frontal-Dominant Scalp MMN (FOLLOW-UP — defined, not started)
+
+**Goal:** Recover the literal Adams/Ranlund artifact — a **frontal-dominant, negative-going scalp
+MMN** — by completing the **equivalent-current-dipole (ECD)** spatial path that Phases 35/36
+deliberately deferred. Frontal scalp dominance is a dipole-orientation phenomenon (frontal dipoles
+project to frontal electrodes; the A1 input node that dominates raw LFP sp-voltage is tangential),
+so it is only assertable once a real sensor montage + dipole gain replace the LFP identity readout.
+
+**Status:** Defined 2026-06-26 (added per the "ship LFP demo now + ECD follow-up" decision when the
+Phase-36 MMN demo's frontal-dominance criterion proved structurally LFP-unrecoverable — 189
+forward-only tunings, best rIFG/A1 ratio 0.062). **Not started.** This phase MAY be promoted to its
+own milestone (v0.8.1).
+**Branch:** `gsd/phase-37-ecd-leadfield-scalp-mmn` (proposed)
+**Depends on:** Phase 35 (`erp_leadfield.py` `ecd_spatial()` stub + `project_to_scalp`), Phase 36
+(`mmn_reference.py` 5-source network + `mmn_cmc_params` adapter, the gated demo harness).
+**Requirements:** ERPECD-01..05 (see REQUIREMENTS.md v0.8.0 / ECD follow-up section).
+**PREREQUISITE (user input):** verified 5-source **MNI coordinates + dipole orientations** (the
+Garrido/Ranlund published values, confirmed by the user before hard-coding) — the one input the LFP
+path did not need.
+
+**Success Criteria** (provisional — finalized at planning):
+
+  1. `erp_leadfield.py` `ecd_spatial()` is completed: builds the ECD gain `L_spatial (Nc, N)` from a
+     sensor montage + per-source dipole position/orientation (the `spm_erp_L` ECD path incl.
+     `spm_cond_units`), consuming a MATLAB-exported gain via the `validation/` bridge (additive;
+     the LFP path and Phases 33–36 stay bit-exact).
+  2. **SPM12 ECD PARITY GATE:** the scalp ERP in ECD mode matches `spm_gen_erp` + `spm_lx_erp`
+     (ECD `dipfit`) on a NEW frozen M3 fixture (D=1, verified coords) within the documented scalp
+     tolerance (~1e-7, jacrev-floor measured).
+  3. The 5-source MMN demo in ECD mode reproduces a **frontal-dominant** difference wave
+     (`max|diff[:, frontal]| > max|diff[:, temporal]|`) that is **negative-going** at MMN latency —
+     the literal artifact ERPDCM-04 deferred — gated behind criterion 2.
+  4. The precision sweep (`sp_inhibition_gain → G[:,6]`) still produces the monotone `gain → |MMN|`
+     attenuation (now on the ECD scalp readout), reusing the Phase-33 permutation guard.
+  5. MNI coords + dipole orientations are documented with provenance (verified vs the primary
+     papers; REF-MMN keys added to Zotero before any `[REF-xxx]`).
+
 ### Progress
 
 **Execution Order:** 33 -> 34 -> 35 -> 36 (strictly linear; NO phase-level parallelism -- each phase
@@ -882,6 +919,7 @@ parity gate is green).
 | 34. Extrinsic Coupling, Condition B & Multi-Source Evoked Integration | `spm_gen_Q` + `spm_gen_erp` (5-source, D=1) | Q.A/Q.G element-wise, traj <=1e-8 | 3/3 | ✅ Complete (verified 6/6; 8-rung ladder GREEN vs 5-source fixtures job 57896525; Q.A/Q.G 0.0, traj FD-Jac 1.3e-10; precision diag→G confirmed) | 2026-06-26 |
 | 35. Single-Dipole Lead-Field, Scalp Projection & ERPDCMForward | `spm_lx_erp` (LFP mode) | scalp ERP <=1e-7 | 3/3 | ✅ Complete (verified 6/6; M3 job 57900055 fixtures; L_full bit-exact 0.0, scalp parity 1.4e-13, production jacrev gated ≤1e-7 @ 6.4e-11; ERPDCMForward VL reuse confirmed) | 2026-06-26 |
 | 36. ERP-DCM Pyro Model, Amortized Wiring & MMN Precision-Sweep Demo | full pipeline at fixed-ref params (LFP) | same as Phase 35 + monotone curve | 3/3 | ✅ Complete (verified 6/6; parity gate green 6.4e-11; monotone gain→\|MMN\| + windowed-MMN delivered; ERPDCM-04 frontal-topography amended→Phase 37 ECD; 79 ERP tests pass M3 job 57904695) | 2026-06-26 |
+| 37. ECD Dipole Lead-Field & Frontal-Dominant Scalp MMN (FOLLOW-UP) | `spm_lx_erp` (ECD dipfit) | scalp ERP ~1e-7 + frontal-dominant negative MMN | 0/? | 📋 Defined, not started (needs user MNI coords; may become v0.8.1) | -- |
 
 ---
 
@@ -919,6 +957,7 @@ parity gate is green).
 | 34. Extrinsic Coupling, Condition B & Multi-Source Evoked Integration | v0.8.0 | 3/3 | ✅ Complete 2026-06-26 (EVOK-01..06; 44 tests; multi-source parity GREEN vs spm_gen_Q+spm_gen_erp; cmc_network_f≡spm_fx_cmc at N=5; MMN precision diag→G mechanism verified) | 2026-06-26 |
 | 35. Single-Dipole Lead-Field, Scalp Projection & ERPDCMForward | v0.8.0 | 3/3 | ✅ Complete 2026-06-26 (LEAD-01..06; 65 ERP tests pass on M3; scalp source→sensor parity vs spm_lx_erp; ERPDCMForward = 4th ForwardModel impl, VL reuse confirmed) | 2026-06-26 |
 | 36. ERP-DCM Pyro Model, Amortized Wiring & MMN Precision-Sweep Demo | v0.8.0 | 3/3 | ✅ Complete 2026-06-26 (ERPDCM-01..06; ERP-DCM Pyro model + amortized + MMN precision-sweep demo; precision→MMN attenuation mechanism shipped; frontal scalp topography → Phase 37 ECD) | 2026-06-26 |
+| 37. ECD Dipole Lead-Field & Frontal-Dominant Scalp MMN (FOLLOW-UP) | v0.8.0 | 0/? | 📋 Defined 2026-06-26, not started (ERPECD-01..05; needs user MNI coords; may become v0.8.1) | -- |
 
 ---
 *Roadmap created: 2026-04-07*
