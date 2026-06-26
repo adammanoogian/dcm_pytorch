@@ -61,6 +61,7 @@ sys.path.insert(0, str(_REPO_ROOT / "src"))
 from config import MATLAB_PATH  # noqa: E402
 from validation.export_to_mat import (  # noqa: E402
     export_erp_dcm,
+    export_erp_dcm_leadfield,
     export_erp_dcm_multisource,
 )
 
@@ -78,6 +79,11 @@ _MS_N = 5
 _MS_CND = 2
 _MS_NS = 128
 _MS_DIM = 8 * _MS_N  # 40 -- the network state dimension.
+
+# Lead-field (Phase 35-02) paths + the MATLAB generator entrypoint.
+_LF_INPUT_PATH = (_DATA_DIR / "erp_leadfield_input.mat").as_posix()
+_LF_FIXTURE_PATH = (_DATA_DIR / "erp_leadfield_fixtures.mat").as_posix()
+_LF_NC = 5            # LFP channels == sources.
 
 # Expected frozen fixture shapes (the Wave-3 parity ladder asserts against these).
 _EXPECTED_SHAPES = {
@@ -520,6 +526,239 @@ def main() -> int:
     return exit_code
 
 
+def _check_leadfield_fixtures(path: str) -> dict[str, Any]:
+    """Round-trip the LFP lead-field fixtures and validate shapes + meta.
+
+    Parameters
+    ----------
+    path : str
+        Path to ``erp_leadfield_fixtures.mat``.
+
+    Returns
+    -------
+    dict
+        ``{checks_pass, shapes, shape_ok, meta_D, nargout_Mf, N, Nc,
+        dipfit_type, x0_is_zero, pj_index, meta}`` -- a recorded diagnostic,
+        never raised (record-don't-crash). ``L_full`` is ``(Nc,8N)=(5,40)``,
+        ``y_scalp`` a length-``Cnd`` cell of ``(ns,Nc)=(128,5)``, ``diff_wave``
+        ``(128,5)``.
+    """
+    mat = scipy.io.loadmat(path, squeeze_me=False, struct_as_record=False)
+    shapes: dict[str, Any] = {}
+    shape_ok = True
+
+    l_full = np.asarray(mat["L_full"])
+    shapes["L_full"] = list(l_full.shape)
+    shape_ok = shape_ok and l_full.shape == (_LF_NC, _MS_DIM)
+
+    y_scalp = mat["y_scalp"]  # (1, Cnd) cell, each (ns, Nc)
+    cnd = y_scalp.shape[1]
+    shapes["Cnd"] = cnd
+    shape_ok = shape_ok and cnd == _MS_CND
+    y_shapes = []
+    for c in range(cnd):
+        y_c = np.asarray(y_scalp[0, c])
+        y_shapes.append(list(y_c.shape))
+        shape_ok = shape_ok and y_c.shape == (_MS_NS, _LF_NC)
+    shapes["y_scalp"] = y_shapes
+
+    diff_wave = np.asarray(mat["diff_wave"])
+    shapes["diff_wave"] = list(diff_wave.shape)
+    shape_ok = shape_ok and diff_wave.shape == (_MS_NS, _LF_NC)
+
+    meta = mat["meta"][0, 0]
+    meta_d = float(np.asarray(meta.D).reshape(-1)[0])
+    nargout_mf = int(np.asarray(meta.nargout_Mf).reshape(-1)[0])
+    n_src = int(np.asarray(meta.N).reshape(-1)[0])
+    n_chan = int(np.asarray(meta.Nc).reshape(-1)[0])
+    dipfit_type = str(np.asarray(meta.dipfit_type).reshape(-1)[0])
+    x0 = np.asarray(meta.x0).reshape(-1)
+    x0_is_zero = bool(np.all(x0 == 0.0)) and x0.size == _MS_DIM
+    p_j = np.asarray(meta.P_J).reshape(-1)
+    pj_index = int(np.argmax(p_j)) if p_j.size else -1
+
+    def _id(name: str) -> str:
+        try:
+            return str(np.asarray(getattr(meta, name)).reshape(-1)[0])
+        except Exception:  # noqa: BLE001
+            return ""
+
+    meta_record = {
+        "spm_ver": _id("spm_ver"),
+        "id_spm_lx_erp": _id("id_spm_lx_erp"),
+        "id_spm_erp_L": _id("id_spm_erp_L"),
+        "id_spm_L_priors": _id("id_spm_L_priors"),
+        "id_spm_gen_Q": _id("id_spm_gen_Q"),
+        "id_spm_int_L": _id("id_spm_int_L"),
+        "D": meta_d,
+        "nargout_Mf": nargout_mf,
+        "N": n_src,
+        "Nc": n_chan,
+        "dipfit_type": dipfit_type,
+        "pj_index": pj_index,
+        "dt": float(np.asarray(meta.dt).reshape(-1)[0]),
+        "ns": int(np.asarray(meta.ns).reshape(-1)[0]),
+        "ons": float(np.asarray(meta.ons).reshape(-1)[0]),
+        "dur": float(np.asarray(meta.dur).reshape(-1)[0]),
+        "P_J": _json_safe(np.asarray(meta.P_J)),
+        "P_L": _json_safe(np.asarray(meta.P_L)),
+        "X": _json_safe(np.asarray(meta.X)),
+    }
+
+    checks_pass = bool(
+        shape_ok
+        and meta_d == 1.0
+        and nargout_mf == 2
+        and n_src == _MS_N
+        and n_chan == _LF_NC
+        and dipfit_type == "LFP"
+        and pj_index == 2
+        and x0_is_zero
+        and meta_record["dt"] == 0.004
+        and meta_record["ns"] == 128
+        and meta_record["dur"] == 16.0
+    )
+    return {
+        "checks_pass": checks_pass,
+        "shapes": shapes,
+        "shape_ok": shape_ok,
+        "meta_D": meta_d,
+        "nargout_Mf": nargout_mf,
+        "N": n_src,
+        "Nc": n_chan,
+        "dipfit_type": dipfit_type,
+        "x0_is_zero": x0_is_zero,
+        "pj_index": pj_index,
+        "meta": meta_record,
+    }
+
+
+def main_leadfield() -> int:
+    """Generate + validate the LFP lead-field + scalp-ERP fixtures and record it.
+
+    Mirrors :func:`main_multisource` (export -> ``matlab -batch`` -> round-trip
+    check -> JSON record, record-don't-crash) but for the Phase-35 LFP lead
+    field: it writes the DCM input via :func:`export_erp_dcm_leadfield`, invokes
+    ``run_spm_erp_dcm_leadfield.m``, and validates ``L_full`` (5,40), the
+    per-condition ``y_scalp`` cell (128,5), and ``diff_wave`` (128,5).
+
+    Returns
+    -------
+    int
+        ``0`` on success OR on a recorded soft check miss (record-don't-crash);
+        ``1`` only on an unexpected exception (MATLAB failed / no fixture file).
+    """
+    job_id = os.environ.get("SLURM_JOB_ID", "local")
+    output_dir = Path("cluster/results")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    out_path = output_dir / f"erp_cross_validation_leadfield_{job_id}.json"
+    _DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    note = (
+        "Phase 35-02 LFP lead-field + scalp-ERP fixture generation (D=1, x0==0, "
+        "N=5, Nc=5, dipfit.type='LFP'). The fixtures (L_full, y_scalp, diff_wave) "
+        "are produced by run_spm_erp_dcm_leadfield.m under MATLAB R2022a + SPM12 "
+        "on M3. A soft shape/meta mismatch is RECORDED (checks_pass=False, exit "
+        "0); exit non-zero only on an unexpected MATLAB/IO failure "
+        "(record-don't-crash)."
+    )
+    t0 = time.time()
+
+    entry: dict[str, Any]
+    exit_code = 0
+    try:
+        print(
+            f"MATLAB_PATH={os.environ.get('MATLAB_PATH', str(MATLAB_PATH))} "
+            f"SPM12_PATH={os.environ.get('SPM12_PATH', '<unset>')}"
+        )
+
+        # 1. Write the frozen LFP lead-field DCM input .mat.
+        export_meta = export_erp_dcm_leadfield(output_path=_LF_INPUT_PATH)
+        print(f"Wrote lead-field DCM input: {_LF_INPUT_PATH}")
+        print(
+            f"  N={export_meta['N']} Nc={export_meta['Nc']} "
+            f"dipfit={export_meta['dipfit_type']} dt={export_meta['dt']} "
+            f"ns={export_meta['ns']} n_effects={export_meta['n_effects']}"
+        )
+        print(f"  source_names: {export_meta['source_names']}")
+
+        # 2. Invoke run_spm_erp_dcm_leadfield.m via matlab -batch.
+        matlab_cmd = (
+            f"cd('{_MATLAB_SCRIPTS_DIR}'); "
+            f"setenv('DCM_INPUT_PATH', '{_LF_INPUT_PATH}'); "
+            f"setenv('DCM_OUTPUT_PATH', '{_LF_FIXTURE_PATH}'); "
+            f"run_spm_erp_dcm_leadfield"
+        )
+        child_env = dict(os.environ)
+        matlab_bin = os.environ.get("MATLAB_PATH", str(MATLAB_PATH))
+        print(f"Invoking MATLAB: {matlab_bin} -batch run_spm_erp_dcm_leadfield")
+        proc = subprocess.run(
+            [matlab_bin, "-batch", matlab_cmd],
+            capture_output=True,
+            text=True,
+            timeout=1800,
+            env=child_env,
+        )
+        print("---- MATLAB stdout (tail) ----")
+        print(proc.stdout[-2500:])
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"MATLAB/SPM12 fixture generation failed (rc={proc.returncode}).\n"
+                f"stderr: {proc.stderr[-1000:]}"
+            )
+        if not Path(_LF_FIXTURE_PATH).exists():
+            raise RuntimeError(
+                f"MATLAB returned 0 but {_LF_FIXTURE_PATH} was not produced."
+            )
+
+        # 3. Round-trip + validate the fixtures.
+        checks = _check_leadfield_fixtures(_LF_FIXTURE_PATH)
+        print("\n=== LFP lead-field ERP fixture provenance ===")
+        print(f"  shapes: {checks['shapes']}")
+        print(
+            f"  meta.D={checks['meta_D']} nargout_Mf={checks['nargout_Mf']} "
+            f"N={checks['N']} Nc={checks['Nc']} "
+            f"dipfit_type={checks['dipfit_type']} pj_index={checks['pj_index']} "
+            f"x0_is_zero={checks['x0_is_zero']} "
+            f"spm_ver={checks['meta']['spm_ver']} "
+            f"id_spm_lx_erp={checks['meta']['id_spm_lx_erp']}"
+        )
+        if checks["checks_pass"]:
+            print("  ALL LEAD-FIELD FIXTURE CHECKS PASS.")
+        else:
+            print("  FIXTURE CHECK MISS RECORDED (see JSON; exit 0 by design).")
+
+        entry = {
+            "status": "ok",
+            "mode": "leadfield",
+            "job_id": job_id,
+            "note": note,
+            "fixture_path": _LF_FIXTURE_PATH,
+            "input_path": _LF_INPUT_PATH,
+            "checks_pass": checks["checks_pass"],
+            "shapes": checks["shapes"],
+            "meta": checks["meta"],
+        }
+    except Exception as e:  # noqa: BLE001 -- record unexpected failures, exit 1
+        entry = {
+            "status": "error",
+            "mode": "leadfield",
+            "job_id": job_id,
+            "note": note,
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+        }
+        exit_code = 1
+        print(f"  ERROR (unexpected): {e}")
+
+    elapsed = time.time() - t0
+    entry["elapsed_s"] = round(elapsed, 1)
+    with open(out_path, "w") as f:
+        json.dump(entry, f, indent=2)
+    print(f"\nResult saved to: {out_path} ({elapsed:.0f}s)")
+    return exit_code
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse the ``--mode {single,multisource}`` selector.
 
@@ -538,12 +777,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description=(
             "Generate the CMC-ERP SPM12 fixtures on M3. --mode single (default) "
             "writes the Phase-33 single-source fixtures; --mode multisource "
-            "writes the Phase-34 5-source MMN fixtures."
+            "writes the Phase-34 5-source MMN fixtures; --mode leadfield writes "
+            "the Phase-35 LFP lead-field + scalp-ERP fixtures."
         )
     )
     parser.add_argument(
         "--mode",
-        choices=("single", "multisource"),
+        choices=("single", "multisource", "leadfield"),
         default="single",
         help="Fixture set to generate (default: single).",
     )
@@ -552,6 +792,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 if __name__ == "__main__":
     _args = _parse_args()
+    if _args.mode == "leadfield":
+        sys.exit(main_leadfield())
     if _args.mode == "multisource":
         sys.exit(main_multisource())
     sys.exit(main())
