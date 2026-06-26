@@ -860,7 +860,7 @@ parity gate is green).
 
 | Phase | SPM12 reference | Tolerances | Plans Complete | Status | Completed |
 |-------|-----------------|------------|----------------|--------|-----------|
-| 33. CMC Core Dynamics, spm_int_L Integrator & Single-Source Parity | `spm_fx_cmc` + `spm_int_L` (single source, D=1) | J0 <=1e-10, Q <=1e-9, traj <=1e-8 | 0/? | Not started | -- |
+| 33. CMC Core Dynamics, spm_int_L Integrator & Single-Source Parity | `spm_fx_cmc` + `spm_int_L` (single source, D=1) | J0 <=1e-10, Q <=1e-9, traj <=1e-8 | 3/3 | ✅ Complete (verified 7/7; parity ladder GREEN vs M3 fixtures job 57884677; measured matrix_exp floor 8.6e-11) | 2026-06-26 |
 | 34. Extrinsic Coupling, Condition B & Multi-Source Evoked Integration | `spm_gen_Q` + `spm_gen_erp` (5-source, D=1) | Q.A/Q.G element-wise, traj <=1e-8 | 0/? | Not started | -- |
 | 35. Single-Dipole Lead-Field, Scalp Projection & ERPDCMForward | `spm_lx_erp` (LFP mode) | scalp ERP <=1e-7 | 0/? | Not started | -- |
 | 36. ERP-DCM Pyro Model, Amortized Wiring & MMN Precision-Sweep Demo | full pipeline at fixed-ref params (LFP) | same as Phase 35 + monotone curve | 0/? | Not started | -- |
@@ -897,7 +897,7 @@ parity gate is green).
 | 30. Recovery Matrix Sweep (M3 Cluster) | v0.7.0 | 3/3 | ✅ Complete 2026-06-11 (10/10 classified, 0 errored; 6 PASS / 4 ident-limit; task underflow fixed via rk4) | 2026-06-11 |
 | 31. BMR Validation & Posterior Tempering (Exploratory) | v0.7.0 | 3/3 | ✅ Complete 2026-06-11 (VLBMR-01/02/03; 8 vl tests; tempering exploratory/PD-safe, never gates absolute ΔF) | 2026-06-11 |
 | 32. SPM12 Cross-Validation (Local / MATLAB) | v0.7.0 | 3/3 | ✅ Complete 2026-06-12 (VLSPM-01/02/03; ran on M3; ranking 1.0, constant 270-nat F offset, forward-model divergence documented) | 2026-06-12 |
-| 33. CMC Core Dynamics, spm_int_L Integrator & Single-Source Parity | v0.8.0 | 0/? | Not started | -- |
+| 33. CMC Core Dynamics, spm_int_L Integrator & Single-Source Parity | v0.8.0 | 3/3 | ✅ Complete 2026-06-26 (CMC-01..07; 25 tests; parity ladder GREEN vs SPM12 fixtures, measured matrix_exp floor 8.6e-11; spm_int_L≡rk4-risk retired in isolation) | 2026-06-26 |
 | 34. Extrinsic Coupling, Condition B & Multi-Source Evoked Integration | v0.8.0 | 0/? | Not started | -- |
 | 35. Single-Dipole Lead-Field, Scalp Projection & ERPDCMForward | v0.8.0 | 0/? | Not started | -- |
 | 36. ERP-DCM Pyro Model, Amortized Wiring & MMN Precision-Sweep Demo | v0.8.0 | 0/? | Not started | -- |

@@ -459,13 +459,13 @@ Explicit anti-features for v0.8.0 (documented to prevent scope creep).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CMC-01 | Phase 33 | Pending |
-| CMC-02 | Phase 33 | Pending |
-| CMC-03 | Phase 33 | Pending |
-| CMC-04 | Phase 33 | Pending |
-| CMC-05 | Phase 33 | Pending |
-| CMC-06 | Phase 33 | Pending |
-| CMC-07 | Phase 33 | Pending |
+| CMC-01 | Phase 33 | Complete |
+| CMC-02 | Phase 33 | Complete |
+| CMC-03 | Phase 33 | Complete |
+| CMC-04 | Phase 33 | Complete |
+| CMC-05 | Phase 33 | Complete |
+| CMC-06 | Phase 33 | Complete |
+| CMC-07 | Phase 33 | Complete |
 | EVOK-01 | Phase 34 | Pending |
 | EVOK-02 | Phase 34 | Pending |
 | EVOK-03 | Phase 34 | Pending |
