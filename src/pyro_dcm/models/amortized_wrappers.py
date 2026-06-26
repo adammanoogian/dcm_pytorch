@@ -28,6 +28,8 @@ References
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 import pyro
 import pyro.distributions as dist
@@ -46,6 +48,10 @@ from pyro_dcm.utils.ode_integrator import (
     integrate_ode,
     make_initial_state,
 )
+
+if TYPE_CHECKING:
+    from pyro_dcm.guides.parameter_packing import ERPDCMPacker
+    from pyro_dcm.inference.forward_models import ERPDCMForward
 
 
 def _sample_latent_and_unpack(
@@ -307,4 +313,145 @@ def amortized_spectral_dcm_model(
         "obs_csd",
         dist.Normal(pred_real, csd_noise_scale).to_event(1),
         obs=obs_real,
+    )
+
+
+def _run_erp_forward_model(
+    forward: ERPDCMForward,
+    theta: torch.Tensor,
+    observed_scalp: torch.Tensor,
+    n_regions: int,
+    obs_noise_std: float = 1.0,
+) -> None:
+    """Run the parity-gated ERP forward and evaluate the Gaussian likelihood.
+
+    Reuses :meth:`ERPDCMForward.predict` (the Phase 33/34/35 parity-verified
+    pipeline; ``B`` FIXED inside ``forward``) -- the forward is NEVER
+    re-assembled here (pitfall V1). NaN-guards the prediction
+    (``torch.nan_to_num``) so an untrained-flow divergence yields a large finite
+    penalty rather than a NaN ELBO, then conditions ``obs_erp`` on the flattened
+    scalp residual.
+
+    Parameters
+    ----------
+    forward : ERPDCMForward
+        The pre-built forward (carries the FIXED ``l_full``, ``x_design``,
+        ``a_masks``, ``b_masks``, ``c_mask`` + integration grid).
+    theta : torch.Tensor
+        Flat free-parameter vector in the frozen ``ERPDCMForward`` pack order.
+    observed_scalp : torch.Tensor
+        Observed scalp ERP, shape ``(Cnd, ns, Nc)``, float64.
+    n_regions : int
+        Number of sources ``N``.
+    obs_noise_std : float, optional
+        FIXED observation-noise scale for the Gaussian likelihood. Default 1.0.
+        ``ERPDCMForward`` carries no noise parameter (VL estimates it as a ReML
+        hyperparameter), and the amortized flow guide samples ONLY ``_latent``,
+        so observation noise is held fixed in the amortized path rather than
+        learned (an extra sample site would be unmatched by the guide).
+    """
+    pred_flat = forward.predict(theta, observed_scalp, n_regions)
+    pred_flat = torch.nan_to_num(pred_flat)
+    pyro.deterministic("predicted_scalp", pred_flat)
+
+    noise_std = torch.tensor(obs_noise_std, dtype=torch.float64).clamp(min=1e-6)
+    pyro.sample(
+        "obs_erp",
+        dist.Normal(pred_flat, noise_std).to_event(1),
+        obs=observed_scalp.reshape(-1),
+    )
+
+
+def amortized_erp_dcm_model(
+    observed_scalp: torch.Tensor,
+    a_masks: list[torch.Tensor],
+    b_masks: list[torch.Tensor],
+    c_mask: torch.Tensor,
+    x_design: torch.Tensor,
+    l_full: torch.Tensor,
+    forward: ERPDCMForward,
+    packer: ERPDCMPacker,
+    *,
+    dt: float = 0.004,
+    ns: int = 128,
+    ons_ms: float = 60.0,
+    dur_ms: float = 16.0,
+    sus: float = 0.0,
+    obs_noise_std: float = 1.0,
+) -> None:
+    """Wrap ERP-DCM for amortized inference via a single packed latent.
+
+    Samples a single packed ``_latent`` vector from a standard normal prior (in
+    standardized space), unstandardizes + unpacks into the CMC free params
+    (``A_free, C_free, T, G, S, R`` -- ``B`` is EXCLUDED, held FIXED inside
+    ``forward``), repacks via the frozen :meth:`ERPDCMForward.pack_params`
+    order, and runs the parity-gated forward + Gaussian likelihood.
+
+    The single ``_latent`` site matches ``AmortizedFlowGuide`` (which also
+    samples only ``_latent``). ``B`` is held fixed (mirroring ``ERPDCMForward``
+    + the v0.3.0-D5 "amortized defers B" precedent), so there is NO amortized
+    B-packing scope creep.
+
+    Construct ``forward = ERPDCMForward(l_full, x_design, a_masks, b_masks,
+    c_mask, ...)`` ONCE OUTSIDE the model so ``b_masks`` stay fixed across SVI
+    steps.
+
+    Parameters
+    ----------
+    observed_scalp : torch.Tensor
+        Observed scalp ERP, shape ``(Cnd, ns, Nc)``, float64.
+    a_masks : list of torch.Tensor
+        The four extrinsic routing masks, each ``(N, N)``. Used only to infer
+        ``N``; the authoritative copies are carried in ``forward``.
+    b_masks : list of torch.Tensor
+        Between-trial ``B`` masks. Carried (FIXED) in ``forward``; the argument
+        is present for API symmetry with ``erp_dcm_model``.
+    c_mask : torch.Tensor
+        Driving-input mask ``(N, M)``. Carried in ``forward``.
+    x_design : torch.Tensor
+        Between-trial design ``(Cnd, n_effects)``. Carried in ``forward``.
+    l_full : torch.Tensor
+        LFP lead field ``(Nc, 8N)``. Carried in ``forward``.
+    forward : ERPDCMForward
+        The pre-built parity-gated forward (authoritative for the FIXED context
+        + integration grid).
+    packer : ERPDCMPacker
+        Packer with fitted standardization; ``packer.n_features ==
+        forward.param_count(N)``.
+    dt, ns, ons_ms, dur_ms, sus : float or int, optional
+        Integration-grid parameters. Present for API symmetry with
+        ``erp_dcm_model``; the authoritative values are baked into ``forward``.
+    obs_noise_std : float, optional
+        FIXED observation-noise scale for the likelihood. Default 1.0.
+
+    Notes
+    -----
+    The prior on ``_latent`` is ``N(0, I)`` in standardized space; since the
+    packer standardization was fit to the data-generating distribution, this
+    approximately matches the actual parameter priors after the inverse
+    transform.
+    """
+    # The forward carries the authoritative FIXED context + integration grid;
+    # these arguments exist for API symmetry with erp_dcm_model.
+    del b_masks, c_mask, x_design, l_full, dt, ns, ons_ms, dur_ms, sus
+
+    n_regions = a_masks[0].shape[0]
+    n = packer.n_features
+    z_std = pyro.sample(
+        "_latent",
+        dist.Normal(
+            torch.zeros(n, dtype=torch.float64),
+            torch.ones(n, dtype=torch.float64),
+        ).to_event(1),
+    )
+    z = packer.unstandardize(z_std)
+    params = packer.unpack(z)
+    # Reuse the frozen pack order so a packed latent <-> VL theta interchange.
+    theta = forward.pack_params(**params)
+    _run_erp_forward_model(
+        forward,
+        theta,
+        observed_scalp,
+        n_regions,
+        obs_noise_std,
     )

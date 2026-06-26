@@ -35,7 +35,7 @@ activate_env "$ENV_NAME"
 verify_torch
 print_job_header "ERP pytest (v0.8.0 verification)"
 
-TEST_TARGET="${TEST_TARGET:-tests/test_local_linearization.py tests/test_cmc_forward.py tests/test_spm_erp_dcm_validation.py tests/test_erp_coupled_system.py tests/test_spm_erp_multisource_validation.py tests/test_export_erp_multisource.py tests/test_erp_leadfield.py tests/test_spm_erp_leadfield_validation.py}"
+TEST_TARGET="${TEST_TARGET:-tests/test_local_linearization.py tests/test_cmc_forward.py tests/test_spm_erp_dcm_validation.py tests/test_erp_coupled_system.py tests/test_spm_erp_multisource_validation.py tests/test_export_erp_multisource.py tests/test_erp_leadfield.py tests/test_spm_erp_leadfield_validation.py tests/test_erp_dcm_model.py tests/test_amortized_erp.py}"
 
 echo "TEST_TARGET=${TEST_TARGET}"
 mkdir -p cluster/logs
