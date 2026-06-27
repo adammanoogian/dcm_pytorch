@@ -10,6 +10,10 @@ from pyro_dcm.forward_models.cmc_neural_mass import (
     parameterize_cmc,
 )
 from pyro_dcm.forward_models.cmc_priors import cmc_prior_moments, cmc_steady_state
+from pyro_dcm.forward_models.collision_reference import (
+    build_collision_2node_network,
+    collision_cmc_params,
+)
 from pyro_dcm.forward_models.coupled_system import CoupledDCMSystem
 from pyro_dcm.forward_models.csd_computation import (
     bold_to_csd_torch,
@@ -28,10 +32,6 @@ from pyro_dcm.forward_models.erp_leadfield import (
     ecd_spatial,
     lfp_spatial,
     project_to_scalp,
-)
-from pyro_dcm.forward_models.collision_reference import (
-    build_collision_2node_network,
-    collision_cmc_params,
 )
 from pyro_dcm.forward_models.latent_observation import direct_observation
 from pyro_dcm.forward_models.mmn_reference import (

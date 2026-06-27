@@ -148,7 +148,9 @@ def test_forward_smoke_and_monotone_gain() -> None:
         _GAIN_HIGH_SELFINHIB, _IPC_FIXED, _VIOLATION_B_GAIN, "both"
     )
 
-    sim_low = simulate_erp_dcm(b_low["p"], b_low["x_design"], _N, l_full=b_low["l_full"])
+    sim_low = simulate_erp_dcm(
+        b_low["p"], b_low["x_design"], _N, l_full=b_low["l_full"]
+    )
     sim_high = simulate_erp_dcm(
         b_high["p"], b_high["x_design"], _N, l_full=b_high["l_full"]
     )
