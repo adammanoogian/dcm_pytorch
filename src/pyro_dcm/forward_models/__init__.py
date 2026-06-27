@@ -29,6 +29,10 @@ from pyro_dcm.forward_models.erp_leadfield import (
     lfp_spatial,
     project_to_scalp,
 )
+from pyro_dcm.forward_models.collision_reference import (
+    build_collision_2node_network,
+    collision_cmc_params,
+)
 from pyro_dcm.forward_models.latent_observation import direct_observation
 from pyro_dcm.forward_models.mmn_reference import (
     build_mmn_5source_network,
@@ -93,6 +97,9 @@ __all__ = [
     # Phase 36: public 5-source MMN network + actinf_physics CMC adapter (v0.8.0 ERP)
     "build_mmn_5source_network",
     "mmn_cmc_params",
+    # Phase 133.1: visual 2-node collision network
+    "build_collision_2node_network",
+    "collision_cmc_params",
     # Phase 20: Latent-circuit direct observation
     "direct_observation",
     # Phase 1: Neural-hemodynamic forward model
