@@ -10,6 +10,11 @@ from pyro_dcm.forward_models.cmc_neural_mass import (
     parameterize_cmc,
 )
 from pyro_dcm.forward_models.cmc_priors import cmc_prior_moments, cmc_steady_state
+from pyro_dcm.forward_models.collision_3node_reference import (
+    C3_MNI_COORDS,
+    build_collision_3node_network,
+    collision_3node_cmc_params,
+)
 from pyro_dcm.forward_models.collision_reference import (
     build_collision_2node_network,
     collision_cmc_params,
@@ -100,6 +105,10 @@ __all__ = [
     # Phase 133.1: visual 2-node collision network
     "build_collision_2node_network",
     "collision_cmc_params",
+    # visual 3-node collision network (Long 2026 + Zbaren 2024: MT->SPL->PMd)
+    "C3_MNI_COORDS",
+    "build_collision_3node_network",
+    "collision_3node_cmc_params",
     # Phase 20: Latent-circuit direct observation
     "direct_observation",
     # Phase 1: Neural-hemodynamic forward model
