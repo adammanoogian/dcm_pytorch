@@ -25,16 +25,36 @@ Nodes (0-indexed):
 
 * node 0 = **V5/hMT+** -- sensory motion / launch-kinematics; carries the fitted
   ascending sensory precision ``kappa`` (the schizophrenia visual-gain hook).
-  Long: MT = object motion direction. Coord (Kolster et al. 2010) right hMT+
-  ~ MNI [46, -78, 6].
+  Long: MT = object motion direction. Region provenance: Fischer et al. 2016 (fMRI
+  physics-network localizer -- the physics-inference network exists and is
+  physics-specific) + Ahuja et al. 2024 (macaque fMRI: motion-sensitive V5/MT-like
+  regions ACTIVATE during physical simulation even WITHOUT visual motion -> the
+  empirical warrant for MT as the simulation-carrying bottom node); the ``kappa`` ->
+  sp self-inhibition precision hook follows the Adams/Bastos lineage (precision =
+  superficial-pyramidal gain). Coord (Kolster et al. 2010) right hMT+ ~ MNI [46, -78, 6].
 * node 1 = **SPL/IPS (right superior parietal / intraparietal)** -- the relational
   / simulation hub; carries the fitted Newtonian-prior ``omega`` (belief precision).
   Zbaren DCM hub (SPL ~ MNI [20, -70, 50]; SMG/IPS ~ [56, -36, 52]); Long: relational
-  variables + spatial working-memory tracking during occlusion.
+  variables + spatial working-memory tracking during occlusion. Region provenance:
+  Zbaren 2024 (the fMRI-DCM directed-edge hub) + Pramod et al. 2025 (the physics
+  network decodes PREDICTED collisions / future states -- the forward-simulation this
+  DCM instantiates) + Schwettmann et al. 2019 (invariant physical-property coding in
+  the same parietal network).
 * node 2 = **PMd (right dorsal premotor / frontal)** -- the higher-order relational
   / predictive-control node; the Long ~700 ms early-predictive + late (~1.4 s)
-  frontal-parietal simulation locus; the Zbaren PMd/FEF premotor arm. Coord
-  ~ MNI [30, 0, 52].
+  frontal-parietal simulation locus; the Zbaren PMd/FEF premotor arm. Region
+  provenance: Long et al. 2026 (MEG ms-timing -- the ONLY anchor that licenses a
+  distinct FRONTAL ERP node) + Ahuja & Desrochers 2026 (macaque LPFC monotonic
+  RAMPING selective to simulation -> reframes this node from static "predictive
+  control" to a sequential-monitoring engine that steps a hidden trajectory forward,
+  predicting a blunted occlusion-window ramp in SZ). Coord ~ MNI [30, 0, 52].
+
+METHOD-HONESTY CAVEAT (do NOT overclaim ERP timing from fMRI): Fischer 2016,
+Pramod 2025, Schwettmann 2019, and the macaque JOCN/CurBiol work (Ahuja 2024/2026)
+are **fMRI** -- they establish spatial identity + functional connectivity ONLY, with
+NO millisecond timing. Only **Long et al. 2026 (MEG)** licenses the ERP time-course;
+Adams lineage is computational/DCM (the intrinsic-gain mechanism). The fMRI anchors
+motivate node identity + edges; they are NOT evidence for ERP latency.
 
 Hierarchy (edges as ``[to, from]``, SPM convention ``A{to-row, from-col}``,
 matching ``cmc_network_f`` / ``spm_fx_cmc`` routing):
@@ -96,8 +116,24 @@ real keys in prose ONLY after the entry is confirmed; do NOT invent citation key
       neighbors" J Neurosci 30(29):9801-9820. DOI 10.1523/JNEUROSCI.2069-10.2010
   [ ] Fischer, Mikhael, Tenenbaum & Kanwisher (2016) "Functional neuroanatomy of
       intuitive physical inference" PNAS 113(34):E5072-E5081. DOI 10.1073/pnas.1610344113
+      [fMRI physics-network localizer; node identity ONLY, no ms-timing]
+  [ ] Pramod, Mieczkowski, Fang, Tenenbaum & Kanwisher (2025) "The physics network
+      decodes predicted collisions and future physical states" Sci Adv.
+      DOI 10.1126/sciadv.adr7429   [fMRI; forward-simulation / predicted collisions]
+  [ ] Ahuja, Yusif Rodriguez, Sheinberg & Desrochers (2026) "LPFC sequential
+      monitoring scaffolds visual simulation (Planko)" JOCN 38(7):1297-1306.
+      DOI 10.1162/jocn.a.2584   [MACAQUE fMRI; LPFC ramp = the frontal-node algorithm]
+  [ ] Ahuja, Yusif Rodriguez, Karkada Ashok, Serre, Desrochers & Sheinberg (2024)
+      "Visual simulation in macaques" Curr Biol 34(24):5635-5645.e3.
+      DOI 10.1016/j.cub.2024.10.026   [MACAQUE fMRI; MT-like activation w/o visual motion]
+  [ ] Schwettmann, Tenenbaum & Kanwisher (2019) "Invariant representations of mass"
+      eLife 8:e46619. DOI 10.7554/eLife.46619   [fMRI; parietal physical-property coding]
   [ ] Kiebel, David & Friston (2006) "DCM of evoked responses in EEG/MEG with lead
       field parameterization" NeuroImage 30:1273-1284. DOI 10.1016/j.neuroimage.2005.12.055
+# METHOD-HONESTY: Fischer/Pramod/Schwettmann/Ahuja are fMRI (spatial + connectivity
+# only); ONLY Long 2026 (MEG) licenses ERP ms-timing; Adams lineage = DCM mechanism.
+# NEVER edit the .bib -- the user does the Zotero pass; real keys in prose ONLY after
+# each entry is confirmed present. Do NOT invent citation keys.
 """
 
 from __future__ import annotations
