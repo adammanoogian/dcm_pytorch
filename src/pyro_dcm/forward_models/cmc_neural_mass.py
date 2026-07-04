@@ -32,6 +32,20 @@ State column layout (``spm_fx_cmc.m:6-14``), 0-indexed, shape ``(n, 8)``:
 ``x[:,7]``  dp             conductance
 ==========  =============  =====================================
 
+Limitations
+-----------
+(a) **Delay-free (``D = I``).** Conduction delays are deliberately dropped: the
+delay operator is the identity, applied via the ``spm_fx_cmc_nodelay.m`` wrapper
+rather than SPM's delayed ``spm_fx_cmc.m``. The SPM parity fixtures were
+themselves generated delay-free, so parity is apples-to-apples. Consequently this
+forward reproduces SPM's evoked *amplitude* and *shape* but NOT delay-sensitive
+*timing* (e.g. the forward/backward loop latency expressed as a difference-wave
+peak shift). This is fine for the ratio / direction readouts this port is used
+for, but is a real limitation if the model is ever fit to real MEG/EEG *timing*.
+(b) **``P.M`` term not implemented.** The SPM ``P.M`` dp-voltage-gated modulatory
+self-inhibition term (``spm_fx_cmc.m:158-160``) is NOT implemented here and is
+SILENTLY IGNORED if a caller passes ``P["M"]``.
+
 References
 ----------
 SPM12 ``spm_fx_cmc.m`` -- equations of motion (``:171-198``), sigmoid
