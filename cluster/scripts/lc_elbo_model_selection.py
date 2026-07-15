@@ -41,6 +41,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+from config import CLUSTER_RESULTS_DIR  # noqa: E402
 
 from benchmarks.runners.latent_circuit_recovery import (
     _build_ground_truth,
@@ -116,7 +117,7 @@ def main() -> None:
         f"duration={DURATION}s"
     )
 
-    output_dir = Path("cluster/results")
+    output_dir = CLUSTER_RESULTS_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
     t0 = time.time()

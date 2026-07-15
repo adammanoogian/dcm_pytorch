@@ -54,6 +54,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+from config import CLUSTER_RESULTS_DIR  # noqa: E402
 
 from benchmarks.recovery_matrix_metrics import (  # noqa: E402
     NEAR_BOUNDARY_HI,
@@ -64,7 +65,7 @@ from benchmarks.recovery_matrix_thresholds import (  # noqa: E402
     classify_cell,
 )
 
-DEFAULT_GLOB = "cluster/results/recovery_matrix_*.json"
+DEFAULT_GLOB = str(CLUSTER_RESULTS_DIR / "recovery_matrix_*.json")
 DEFAULT_OUT_DIR = "benchmarks/results"
 DEFAULT_REPORT_PATH = (
     ".planning/phases/30-recovery-matrix-sweep/30-RECOVERY-MATRIX-REPORT.md"

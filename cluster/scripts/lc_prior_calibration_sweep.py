@@ -24,6 +24,7 @@ from itertools import product
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from config import CLUSTER_RESULTS_DIR  # noqa: E402
 
 from benchmarks.config import BenchmarkConfig
 from benchmarks.runners.latent_circuit_recovery import run_latent_circuit_recovery
@@ -131,7 +132,7 @@ def main() -> None:
     task_id_str = os.environ.get("SLURM_ARRAY_TASK_ID")
     job_id = os.environ.get("SLURM_JOB_ID", "local")
 
-    output_dir = Path("cluster/results")
+    output_dir = CLUSTER_RESULTS_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if task_id_str is not None:

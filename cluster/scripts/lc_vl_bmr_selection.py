@@ -35,6 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+from config import CLUSTER_RESULTS_DIR  # noqa: E402
 
 import torch
 
@@ -99,7 +100,7 @@ def _fit_full_vl(seed: int) -> tuple[torch.Tensor, torch.Tensor]:
 def main() -> None:
     """Run BMR structure selection over the requested seeds."""
     job_id = os.environ.get("SLURM_JOB_ID", "local")
-    out_dir = Path("cluster/results")
+    out_dir = CLUSTER_RESULTS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
 

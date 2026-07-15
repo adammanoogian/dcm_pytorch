@@ -38,6 +38,7 @@ import numpy as np
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+from config import CLUSTER_RESULTS_DIR  # noqa: E402
 
 from validation.run_vl_validation import (  # noqa: E402
     run_vl_spectral_dcm_validation,
@@ -105,7 +106,7 @@ def main() -> int:
     seeds_csv = os.environ.get("XVAL_SEEDS", "42,43,44,45,46")
     seeds = [int(s) for s in seeds_csv.split(",") if s.strip()]
 
-    out_dir = Path("cluster/results")
+    out_dir = CLUSTER_RESULTS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"spm_xval_multiseed_{job_id}.json"
 

@@ -12,6 +12,9 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from config import CLUSTER_RESULTS_DIR  # noqa: E402
+
 
 def aggregate(job_id: str | None = None) -> list[dict]:
     """Collect per-task results into a sorted list.
@@ -26,7 +29,7 @@ def aggregate(job_id: str | None = None) -> list[dict]:
     list[dict]
         Combined results sorted by task_id.
     """
-    results_dir = Path("cluster/results")
+    results_dir = CLUSTER_RESULTS_DIR
     if job_id:
         pattern = f"lc_calib_{job_id}_*.json"
     else:
@@ -122,7 +125,7 @@ def print_summary(results: list[dict]) -> None:
 
     print("=" * 90)
 
-    merged_path = Path("cluster/results/lc_calibration_sweep_merged.json")
+    merged_path = CLUSTER_RESULTS_DIR / "lc_calibration_sweep_merged.json"
     with open(merged_path, "w") as f:
         json.dump(
             {

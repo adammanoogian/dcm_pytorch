@@ -57,6 +57,7 @@ import scipy.io
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO_ROOT))
 sys.path.insert(0, str(_REPO_ROOT / "src"))
+from config import CLUSTER_RESULTS_DIR  # noqa: E402
 
 from config import MATLAB_PATH  # noqa: E402
 from validation.export_to_mat import (  # noqa: E402
@@ -305,7 +306,7 @@ def main_multisource() -> int:
         ``1`` only on an unexpected exception (MATLAB failed / no fixture file).
     """
     job_id = os.environ.get("SLURM_JOB_ID", "local")
-    output_dir = Path("cluster/results")
+    output_dir = CLUSTER_RESULTS_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / f"erp_cross_validation_multisource_{job_id}.json"
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -422,7 +423,7 @@ def main() -> int:
         ``1`` only on an unexpected exception (MATLAB failed / no fixture file).
     """
     job_id = os.environ.get("SLURM_JOB_ID", "local")
-    output_dir = Path("cluster/results")
+    output_dir = CLUSTER_RESULTS_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / f"erp_cross_validation_{job_id}.json"
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -649,7 +650,7 @@ def main_leadfield() -> int:
         ``1`` only on an unexpected exception (MATLAB failed / no fixture file).
     """
     job_id = os.environ.get("SLURM_JOB_ID", "local")
-    output_dir = Path("cluster/results")
+    output_dir = CLUSTER_RESULTS_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / f"erp_cross_validation_leadfield_{job_id}.json"
     _DATA_DIR.mkdir(parents=True, exist_ok=True)

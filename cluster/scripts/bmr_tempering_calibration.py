@@ -71,6 +71,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+from config import BENCHMARK_RESULTS_DIR, CLUSTER_RESULTS_DIR  # noqa: E402
 
 from benchmarks.bmr_recovery import (  # noqa: E402
     bmr_tensors_from_vl_result,
@@ -311,7 +312,7 @@ def main() -> None:
     seed = int(os.environ.get("BMR_TEMPER_SEED", "42"))
     max_iter = int(os.environ.get("BMR_TEMPER_MAX_ITER", "64"))
 
-    output_dir = Path("cluster/results")
+    output_dir = CLUSTER_RESULTS_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / f"bmr_tempering_calibration_{job_id}.json"
 
@@ -323,7 +324,7 @@ def main() -> None:
 
     entry: dict[str, Any]
     try:
-        matrix_path = Path("benchmarks/results/recovery_matrix.json")
+        matrix_path = BENCHMARK_RESULTS_DIR / "recovery_matrix.json"
         with open(matrix_path) as f:
             matrix = json.load(f)
         rows = matrix["rows"]

@@ -54,6 +54,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+from config import CLUSTER_RESULTS_DIR  # noqa: E402
 
 from validation.run_vl_validation import (  # noqa: E402
     run_vl_spectral_dcm_validation,
@@ -100,7 +101,7 @@ def main() -> int:
     seed = int(os.environ.get("SPM_XVAL_SEED", "42"))
     max_iter = int(os.environ.get("SPM_XVAL_MAX_ITER", "64"))
 
-    output_dir = Path("cluster/results")
+    output_dir = CLUSTER_RESULTS_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / f"spm_cross_validation_{job_id}.json"
 

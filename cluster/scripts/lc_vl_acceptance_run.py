@@ -32,6 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+from config import CLUSTER_RESULTS_DIR  # noqa: E402
 
 import torch
 
@@ -80,7 +81,7 @@ def main() -> None:
         f"B_prior={LC_B_PRIOR_VARIANCE:.4f}"
     )
 
-    output_dir = Path("cluster/results")
+    output_dir = CLUSTER_RESULTS_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
 

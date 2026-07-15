@@ -44,6 +44,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+from config import CLUSTER_RESULTS_DIR  # noqa: E402
 
 from benchmarks.recovery_matrix_grid import (  # noqa: E402
     cell_for_index,
@@ -68,7 +69,7 @@ def main() -> None:
         f"(max_iter={max_iter}, base_seed={base_seed}, quick={quick})"
     )
 
-    output_dir = Path("cluster/results")
+    output_dir = CLUSTER_RESULTS_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
 
