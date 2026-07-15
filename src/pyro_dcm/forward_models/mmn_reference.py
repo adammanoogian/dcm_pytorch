@@ -49,40 +49,30 @@ self-inhibition knob).
 
 from __future__ import annotations
 
-import torch
-from torch import Tensor
-
-from pyro_dcm.forward_models.erp_leadfield import (
-    build_lead_field,
-    cmc_default_pj,
-    lfp_spatial,
+from pyro_dcm.forward_models._cmc_network import (
+    CmcTopology,
+    build_network,
+    cmc_params_from_knobs,
+    read_ms_scalars,
 )
 
-_F64 = torch.float64
 
-
-def _ms_topology() -> dict[str, object]:
+def _mmn_topology() -> CmcTopology:
     """Read the locked ``_MS_*`` 5-source MMN topology constants (single source).
 
-    Lazily imports the canonical edge lists / precision nodes / B values from
+    Lazily imports the canonical edge lists / precision nodes from
     :mod:`validation.export_to_mat` so the topology stays byte-identical to the
     SPM12-parity-gated fixture (Phases 34-35) and the package import does not pull
     in ``scipy`` at load time. NOTHING in ``validation.export_to_mat`` is mutated
-    -- the locked masks are read only.
+    -- the locked masks are read only. The free-log + ``B`` scalars come separately
+    from :func:`read_ms_scalars`.
 
     Returns
     -------
-    dict of str -> object
-        Keys ``n`` (int), ``source_names`` (tuple[str, ...]), ``forward`` /
-        ``lateral`` / ``backward`` ([to, from] edge tuples), ``inputs`` /
-        ``precision`` (source-index tuples), ``b_edge`` / ``b_diag`` /
-        ``a_live`` / ``a_dead`` (float scalars).
+    CmcTopology
+        The 5-source auditory-MMN node set + directed extrinsic edges.
     """
     from validation.export_to_mat import (
-        _MS_A_DEAD,
-        _MS_A_LIVE,
-        _MS_B_DIAG,
-        _MS_B_EDGE,
         _MS_BACKWARD_EDGES,
         _MS_FORWARD_EDGES,
         _MS_INPUT_SOURCES,
@@ -92,27 +82,15 @@ def _ms_topology() -> dict[str, object]:
         _MS_SOURCE_NAMES,
     )
 
-    return {
-        "n": _MS_N,
-        "source_names": _MS_SOURCE_NAMES,
-        "forward": _MS_FORWARD_EDGES,
-        "lateral": _MS_LATERAL_EDGES,
-        "backward": _MS_BACKWARD_EDGES,
-        "inputs": _MS_INPUT_SOURCES,
-        "precision": _MS_PRECISION_NODES,
-        "b_edge": _MS_B_EDGE,
-        "b_diag": _MS_B_DIAG,
-        "a_live": _MS_A_LIVE,
-        "a_dead": _MS_A_DEAD,
-    }
-
-
-def _edge_mask(n: int, edges: tuple[tuple[int, int], ...]) -> Tensor:
-    """Build a ``(n, n)`` binary presence mask from a ``[to, from]`` edge list."""
-    mask = torch.zeros(n, n, dtype=_F64)
-    for to_i, from_i in edges:
-        mask[to_i, from_i] = 1.0
-    return mask
+    return CmcTopology(
+        n=int(_MS_N),
+        source_names=tuple(_MS_SOURCE_NAMES),
+        forward=_MS_FORWARD_EDGES,
+        lateral=_MS_LATERAL_EDGES,
+        backward=_MS_BACKWARD_EDGES,
+        inputs=_MS_INPUT_SOURCES,
+        precision=_MS_PRECISION_NODES,
+    )
 
 
 def build_mmn_5source_network() -> dict[str, object]:
@@ -150,46 +128,8 @@ def build_mmn_5source_network() -> dict[str, object]:
         ("A1L", "A1R", "STGL", "STGR", "rIFG"), "precision_nodes": (4, 0, 1)}``.
         All tensors float64.
     """
-    topo = _ms_topology()
-    n = int(topo["n"])  # type: ignore[call-overload]
-    forward: tuple[tuple[int, int], ...] = topo["forward"]  # type: ignore[assignment]
-    lateral: tuple[tuple[int, int], ...] = topo["lateral"]  # type: ignore[assignment]
-    backward: tuple[tuple[int, int], ...] = topo["backward"]  # type: ignore[assignment]
-    inputs: tuple[int, ...] = topo["inputs"]  # type: ignore[assignment]
-    precision: tuple[int, ...] = topo["precision"]  # type: ignore[assignment]
-    b_edge = float(topo["b_edge"])  # type: ignore[arg-type]
-    b_diag = float(topo["b_diag"])  # type: ignore[arg-type]
-
-    # Forward blocks carry the bottom-up edges PLUS the reciprocal lateral pair
-    # (so (1 + 4L) fires); backward blocks carry the top-down edges.
-    fwd_mask = _edge_mask(n, forward + lateral)
-    bwd_mask = _edge_mask(n, backward)
-    a_masks = [fwd_mask.clone(), fwd_mask.clone(), bwd_mask.clone(), bwd_mask.clone()]
-
-    # Deviant B: b_edge on every extrinsic edge, b_diag on the precision diag.
-    b = torch.zeros(n, n, dtype=_F64)
-    for to_i, from_i in forward + lateral + backward:
-        b[to_i, from_i] = b_edge
-    for node in precision:
-        b[node, node] = b_diag
-
-    c_mask = torch.zeros(n, 1, dtype=_F64)
-    for src in inputs:
-        c_mask[src, 0] = 1.0
-
-    x_design = torch.tensor([[0.0], [1.0]], dtype=_F64)  # standard / deviant
-
-    return {
-        "a_masks": a_masks,
-        "b_masks": [b],
-        "c_mask": c_mask,
-        "x_design": x_design,
-        "source_names": tuple(topo["source_names"]),  # type: ignore[arg-type]
-        "precision_nodes": precision,
-    }
-
-
-_VALID_FLAGS = ("forward", "backward", "both")
+    scalars = read_ms_scalars()
+    return build_network(_mmn_topology(), scalars["b_edge"], scalars["b_diag"])
 
 
 def mmn_cmc_params(
@@ -251,72 +191,20 @@ def mmn_cmc_params(
     ValueError
         If ``fwd_bwd_flag`` is not one of ``{"forward", "backward", "both"}``.
     """
-    if fwd_bwd_flag not in _VALID_FLAGS:
-        raise ValueError(
-            "fwd_bwd_flag must be one of {'forward', 'backward', 'both'}; "
-            f"expected one of {_VALID_FLAGS}, got {fwd_bwd_flag!r}"
-        )
-
+    topo = _mmn_topology()
     net = build_mmn_5source_network()
-    topo = _ms_topology()
-    n = int(topo["n"])  # type: ignore[call-overload]
-    forward: tuple[tuple[int, int], ...] = topo["forward"]  # type: ignore[assignment]
-    lateral: tuple[tuple[int, int], ...] = topo["lateral"]  # type: ignore[assignment]
-    backward: tuple[tuple[int, int], ...] = topo["backward"]  # type: ignore[assignment]
-    precision: tuple[int, ...] = topo["precision"]  # type: ignore[assignment]
-    a_live = float(topo["a_live"])  # type: ignore[arg-type]
-    a_dead = float(topo["a_dead"])  # type: ignore[arg-type]
-    b_edge = float(topo["b_edge"])  # type: ignore[arg-type]
+    scalars = read_ms_scalars()
+    a_idx = {name: i for i, name in enumerate(topo.source_names)}
 
-    a_idx = {name: i for i, name in enumerate(net["source_names"])}  # type: ignore[arg-type]
-
-    # A / C free-log: presence mask 1 -> _MS_A_LIVE (on), 0 -> _MS_A_DEAD (off).
-    a_masks: list[Tensor] = net["a_masks"]  # type: ignore[assignment]
-    a_free = [m * (a_live - a_dead) + a_dead for m in a_masks]
-    c_mask: Tensor = net["c_mask"]  # type: ignore[assignment]
-    c_free = c_mask * (a_live - a_dead) + a_dead
-
-    # Deviant B: b_edge on the flag-selected extrinsic edges + diag gains.
-    edges: tuple[tuple[int, int], ...] = ()
-    if fwd_bwd_flag in ("forward", "both"):
-        edges = edges + forward + lateral
-    if fwd_bwd_flag in ("backward", "both"):
-        edges = edges + backward
-    b = torch.zeros(n, n, dtype=_F64)
-    for to_i, from_i in edges:
-        b[to_i, from_i] = b_edge
-    b[a_idx["A1L"], a_idx["A1L"]] = a1_b_gain
-    b[a_idx["A1R"], a_idx["A1R"]] = a1_b_gain
-    b[a_idx["rIFG"], a_idx["rIFG"]] = rifg_b_gain
-
-    # Free intrinsic G: sp_inhibition_gain on the FREE P.G[:,0] precision column
-    # (-> parameterised G[:,6] via J_PERM[0]=6). Direct-G[:,6] indexing is wrong.
-    g = torch.zeros(n, 4, dtype=_F64)
-    for node in precision:
-        g[node, 0] = sp_inhibition_gain
-
-    t = torch.zeros(n, 4, dtype=_F64)
-    s = torch.zeros(n, 1, dtype=_F64)
-    r = torch.zeros(c_free.shape[1], 2, dtype=_F64)
-
-    p: dict[str, object] = {
-        "T": t,
-        "G": g,
-        "C": c_free,
-        "S": s,
-        "R": r,
-        "A": a_free,
-        "B": [b],
+    # sp_inhibition_gain drives the FREE P.G[:,0] at every precision node (-> the
+    # parameterised G[:,6] via J_PERM[0]=6); NEVER index G[:,6] directly.
+    g_gains = {node: sp_inhibition_gain for node in topo.precision}
+    # Deviant diag(B): grouped gains -- a1_b_gain at bilateral A1, rifg_b_gain at rIFG.
+    b_diag_gains = {
+        a_idx["A1L"]: a1_b_gain,
+        a_idx["A1R"]: a1_b_gain,
+        a_idx["rIFG"]: rifg_b_gain,
     }
-
-    l_spatial = lfp_spatial(torch.ones(n, dtype=_F64), n)
-    l_full = build_lead_field(cmc_default_pj(), l_spatial)
-
-    return {
-        "p": p,
-        "a_masks": a_free,
-        "b_masks": [b],
-        "c_mask": c_free,
-        "x_design": net["x_design"],
-        "l_full": l_full,
-    }
+    return cmc_params_from_knobs(
+        topo, net, scalars, g_gains, b_diag_gains, fwd_bwd_flag
+    )

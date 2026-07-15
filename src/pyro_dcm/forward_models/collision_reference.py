@@ -81,64 +81,26 @@ real keys in prose ONLY after the entry is confirmed; do NOT invent citation key
 
 from __future__ import annotations
 
-import torch
-from torch import Tensor
-
-from pyro_dcm.forward_models.erp_leadfield import (
-    build_lead_field,
-    cmc_default_pj,
-    lfp_spatial,
+from pyro_dcm.forward_models._cmc_network import (
+    CmcTopology,
+    build_network,
+    cmc_params_from_knobs,
+    read_ms_scalars,
 )
 
-_F64 = torch.float64
-
 # Visual 2-node topology (0-indexed): V5/MT = 0, rIPC = 1.
-_COLLISION_SOURCE_NAMES: tuple[str, ...] = ("V5/MT", "rIPC")
-_COLLISION_N = 2
 # Forward V5/MT -> rIPC = [to=1, from=0]; backward rIPC -> V5/MT = [to=0, from=1].
-_COLLISION_FORWARD_EDGES: tuple[tuple[int, int], ...] = ((1, 0),)
-_COLLISION_BACKWARD_EDGES: tuple[tuple[int, int], ...] = ((0, 1),)
-_COLLISION_LATERAL_EDGES: tuple[tuple[int, int], ...] = ()  # 2-node: no lateral.
-_COLLISION_INPUT_SOURCES: tuple[int, ...] = (0,)  # C drives V5/MT only.
-_COLLISION_PRECISION_NODES: tuple[int, ...] = (0, 1)  # both nodes carry diag(B).
-
-
-def _collision_scalars() -> dict[str, float]:
-    """Read the locked free-log + B-value scalar conventions (single source).
-
-    Lazily imports the SPM12-parity-gated scalar constants from
-    :mod:`validation.export_to_mat` -- the SAME constants the MMN builder reads --
-    so the visual clone inherits the free-log A/C convention (``_MS_A_LIVE`` = 0 on,
-    ``_MS_A_DEAD`` = -32 off) and the between-trial ``B`` edge/diag values verbatim.
-    NOTHING in ``validation.export_to_mat`` is mutated.
-
-    Returns
-    -------
-    dict of str -> float
-        Keys ``a_live`` / ``a_dead`` (free-log on/off) and ``b_edge`` / ``b_diag``
-        (the representative between-trial values).
-    """
-    from validation.export_to_mat import (
-        _MS_A_DEAD,
-        _MS_A_LIVE,
-        _MS_B_DIAG,
-        _MS_B_EDGE,
-    )
-
-    return {
-        "a_live": float(_MS_A_LIVE),
-        "a_dead": float(_MS_A_DEAD),
-        "b_edge": float(_MS_B_EDGE),
-        "b_diag": float(_MS_B_DIAG),
-    }
-
-
-def _edge_mask(n: int, edges: tuple[tuple[int, int], ...]) -> Tensor:
-    """Build a ``(n, n)`` binary presence mask from a ``[to, from]`` edge list."""
-    mask = torch.zeros(n, n, dtype=_F64)
-    for to_i, from_i in edges:
-        mask[to_i, from_i] = 1.0
-    return mask
+# No lateral edge (2-node, unilateral right); C drives V5/MT only; both nodes are
+# precision nodes carrying diag(B).
+_TOPO = CmcTopology(
+    n=2,
+    source_names=("V5/MT", "rIPC"),
+    forward=((1, 0),),
+    lateral=(),
+    backward=((0, 1),),
+    inputs=(0,),
+    precision=(0, 1),
+)
 
 
 def build_collision_2node_network() -> dict[str, object]:
@@ -169,43 +131,8 @@ def build_collision_2node_network() -> dict[str, object]:
         presence mask, "x_design": (2, 1), "source_names": ("V5/MT", "rIPC"),
         "precision_nodes": (0, 1)}``. All tensors float64.
     """
-    scalars = _collision_scalars()
-    n = _COLLISION_N
-    b_edge = scalars["b_edge"]
-    b_diag = scalars["b_diag"]
-
-    # Forward blocks carry the ascending V5/MT->rIPC edge (no lateral at n=2);
-    # backward blocks carry the descending rIPC->V5/MT edge.
-    fwd_mask = _edge_mask(n, _COLLISION_FORWARD_EDGES + _COLLISION_LATERAL_EDGES)
-    bwd_mask = _edge_mask(n, _COLLISION_BACKWARD_EDGES)
-    a_masks = [fwd_mask.clone(), fwd_mask.clone(), bwd_mask.clone(), bwd_mask.clone()]
-
-    # Violated B: b_edge on every extrinsic edge, b_diag on the precision diag.
-    b = torch.zeros(n, n, dtype=_F64)
-    for to_i, from_i in (
-        _COLLISION_FORWARD_EDGES + _COLLISION_LATERAL_EDGES + _COLLISION_BACKWARD_EDGES
-    ):
-        b[to_i, from_i] = b_edge
-    for node in _COLLISION_PRECISION_NODES:
-        b[node, node] = b_diag
-
-    c_mask = torch.zeros(n, 1, dtype=_F64)
-    for src in _COLLISION_INPUT_SOURCES:
-        c_mask[src, 0] = 1.0
-
-    x_design = torch.tensor([[0.0], [1.0]], dtype=_F64)  # expected / violated
-
-    return {
-        "a_masks": a_masks,
-        "b_masks": [b],
-        "c_mask": c_mask,
-        "x_design": x_design,
-        "source_names": _COLLISION_SOURCE_NAMES,
-        "precision_nodes": _COLLISION_PRECISION_NODES,
-    }
-
-
-_VALID_FLAGS = ("forward", "backward", "both")
+    scalars = read_ms_scalars()
+    return build_network(_TOPO, scalars["b_edge"], scalars["b_diag"])
 
 
 def collision_cmc_params(
@@ -267,65 +194,10 @@ def collision_cmc_params(
     ValueError
         If ``fwd_bwd_flag`` is not one of ``{"forward", "backward", "both"}``.
     """
-    if fwd_bwd_flag not in _VALID_FLAGS:
-        raise ValueError(
-            "fwd_bwd_flag must be one of {'forward', 'backward', 'both'}; "
-            f"expected one of {_VALID_FLAGS}, got {fwd_bwd_flag!r}"
-        )
-
     net = build_collision_2node_network()
-    scalars = _collision_scalars()
-    n = _COLLISION_N
-    a_live = scalars["a_live"]
-    a_dead = scalars["a_dead"]
-    b_edge = scalars["b_edge"]
-
-    # A / C free-log: presence mask 1 -> _MS_A_LIVE (on), 0 -> _MS_A_DEAD (off).
-    a_masks: list[Tensor] = net["a_masks"]  # type: ignore[assignment]
-    a_free = [m * (a_live - a_dead) + a_dead for m in a_masks]
-    c_mask: Tensor = net["c_mask"]  # type: ignore[assignment]
-    c_free = c_mask * (a_live - a_dead) + a_dead
-
-    # Violated B: b_edge on the flag-selected extrinsic edges + the shared diag gain.
-    edges: tuple[tuple[int, int], ...] = ()
-    if fwd_bwd_flag in ("forward", "both"):
-        edges = edges + _COLLISION_FORWARD_EDGES + _COLLISION_LATERAL_EDGES
-    if fwd_bwd_flag in ("backward", "both"):
-        edges = edges + _COLLISION_BACKWARD_EDGES
-    b = torch.zeros(n, n, dtype=_F64)
-    for to_i, from_i in edges:
-        b[to_i, from_i] = b_edge
-    for node in _COLLISION_PRECISION_NODES:
-        b[node, node] = violation_b_gain
-
-    # Free intrinsic G: per-node sp self-inhibition on the FREE P.G[:,0] precision
-    # column (-> parameterised G[:,6] via J_PERM[0]=6). Direct-G[:,6] is wrong.
-    g = torch.zeros(n, 4, dtype=_F64)
-    g[0, 0] = v5_sp_gain
-    g[1, 0] = ipc_sp_gain
-
-    t = torch.zeros(n, 4, dtype=_F64)
-    s = torch.zeros(n, 1, dtype=_F64)
-    r = torch.zeros(c_free.shape[1], 2, dtype=_F64)
-
-    p: dict[str, object] = {
-        "T": t,
-        "G": g,
-        "C": c_free,
-        "S": s,
-        "R": r,
-        "A": a_free,
-        "B": [b],
-    }
-
-    l_spatial = lfp_spatial(torch.ones(n, dtype=_F64), n)
-    l_full = build_lead_field(cmc_default_pj(), l_spatial)
-
-    return {
-        "p": p,
-        "a_masks": a_free,
-        "b_masks": [b],
-        "c_mask": c_free,
-        "x_design": net["x_design"],
-        "l_full": l_full,
-    }
+    scalars = read_ms_scalars()
+    g_gains = {0: v5_sp_gain, 1: ipc_sp_gain}
+    b_diag_gains = {node: violation_b_gain for node in _TOPO.precision}
+    return cmc_params_from_knobs(
+        _TOPO, net, scalars, g_gains, b_diag_gains, fwd_bwd_flag
+    )
