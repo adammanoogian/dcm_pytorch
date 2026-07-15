@@ -12,7 +12,7 @@ import pytest
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from pyro_dcm.neural_data_models.latent_extraction import (
+from pyro_dcm.neural_data_models.latent_csd import (
     compute_latent_csd,
     extract_latent_trajectories,
     prepare_for_spectral_dcm,

@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from pyro_dcm.forward_models.csd_computation import compute_empirical_csd
 from pyro_dcm.models.guides import create_guide, run_svi
 from pyro_dcm.models.spectral_dcm_model import spectral_dcm_model
-from pyro_dcm.neural_data_models.latent_extraction import (
+from pyro_dcm.neural_data_models.latent_csd import (
     compute_latent_csd,
     extract_latent_trajectories,
     prepare_for_spectral_dcm,

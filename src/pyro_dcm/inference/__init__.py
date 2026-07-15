@@ -9,7 +9,7 @@ via ``pyro_dcm.models.guides`` for amortized inference.
 from __future__ import annotations
 
 from pyro_dcm.inference.csd_precision import compute_csd_precision
-from pyro_dcm.inference.forward_models import (
+from pyro_dcm.inference.vl_forward_models import (
     ForwardModel,
     LatentCircuitForward,
     SpectralDCMForward,
@@ -22,6 +22,11 @@ from pyro_dcm.inference.variational_laplace import (
     run_variational_laplace,
     run_variational_laplace_generic,
 )
+
+# The sbi_* modules (sbi_spectral, sbi_embedding, sbi_diagnostics) are
+# intentionally NOT re-exported here: they carry the optional `sbi` dependency
+# and are imported directly by the training scripts/tests that need them, e.g.
+# ``from pyro_dcm.inference.sbi_spectral import train_npe``.
 
 __all__ = [
     "ForwardModel",

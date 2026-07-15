@@ -38,7 +38,7 @@ from pyro_dcm.forward_models.erp_leadfield import (
     lfp_spatial,
     project_to_scalp,
 )
-from pyro_dcm.inference.forward_models import ERPDCMForward, ForwardModel
+from pyro_dcm.inference.vl_forward_models import ERPDCMForward, ForwardModel
 from pyro_dcm.simulators.erp_simulator import simulate_erp_dcm
 
 _F64 = torch.float64

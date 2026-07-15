@@ -22,7 +22,7 @@ from pyro_dcm.forward_models import (
     lfp_spatial,
 )
 from pyro_dcm.guides import AmortizedFlowGuide, ERPDCMPacker, ErpSummaryNet
-from pyro_dcm.inference.forward_models import ERPDCMForward
+from pyro_dcm.inference.vl_forward_models import ERPDCMForward
 from pyro_dcm.models.amortized_wrappers import amortized_erp_dcm_model
 
 _F64 = torch.float64

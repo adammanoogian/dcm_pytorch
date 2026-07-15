@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from pyro_dcm.inference.forward_models import (
+from pyro_dcm.inference.vl_forward_models import (
     ForwardModel,
     SpectralDCMForward,
     TaskDCMForward,

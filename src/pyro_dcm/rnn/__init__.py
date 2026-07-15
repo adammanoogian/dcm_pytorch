@@ -6,7 +6,7 @@ from pyro_dcm.rnn.fixed_point_analysis import (
     compute_jacobian_at_fp,
     find_fixed_points,
 )
-from pyro_dcm.rnn.latent_extraction import (
+from pyro_dcm.rnn.trajectory_pca import (
     extract_trajectories,
     output_r_squared_gate,
     pca_reduce,

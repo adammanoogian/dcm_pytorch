@@ -51,7 +51,7 @@ from pyro_dcm.utils.ode_integrator import (
 
 if TYPE_CHECKING:
     from pyro_dcm.guides.parameter_packing import ERPDCMPacker
-    from pyro_dcm.inference.forward_models import ERPDCMForward
+    from pyro_dcm.inference.vl_forward_models import ERPDCMForward
 
 
 def _sample_latent_and_unpack(

@@ -468,7 +468,7 @@ def run_variational_laplace(
         Posterior parameters, covariance, free energy trace, and
         convergence flag.
     """
-    from pyro_dcm.inference.forward_models import SpectralDCMForward
+    from pyro_dcm.inference.vl_forward_models import SpectralDCMForward
 
     forward_model = SpectralDCMForward(
         eig_clamp=eig_clamp, mar_order=mar_order,
