@@ -30,6 +30,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+import config  # noqa: E402
 from benchmarks.plotting import _apply_style  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -934,14 +935,14 @@ def main() -> None:
     parser.add_argument(
         "--results-dir",
         type=Path,
-        default=Path("benchmarks/results"),
+        default=config.BENCHMARK_RESULTS_DIR,
         help="Directory with phase result NPZ files "
         "(default: benchmarks/results)",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("figures"),
+        default=config.FIGURES_DIR,
         help="Output directory for figures (default: figures/)",
     )
     parser.add_argument(

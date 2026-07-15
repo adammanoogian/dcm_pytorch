@@ -41,6 +41,8 @@ _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
+import config  # noqa: E402
+
 from benchmarks.plotting import (  # noqa: E402
     _parse_calibration_key,
     generate_comparison_table,
@@ -492,7 +494,7 @@ def main() -> None:
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="benchmarks/figures",
+        default=str(config.BENCHMARK_FIGURES_DIR),
         help=(
             "Output directory for figures and tables "
             "(default: benchmarks/figures)"

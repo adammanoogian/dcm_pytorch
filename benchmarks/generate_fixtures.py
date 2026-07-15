@@ -36,6 +36,13 @@ from pathlib import Path
 import numpy as np
 import torch
 
+# Ensure project root is on sys.path when run as a script (for `import config`).
+_PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+import config  # noqa: E402
+
 from pyro_dcm.forward_models.rdcm_forward import generate_bold
 from pyro_dcm.models.spectral_dcm_model import decompose_csd_for_likelihood
 from pyro_dcm.simulators.latent_circuit_simulator import (
@@ -747,7 +754,7 @@ def main() -> None:
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="benchmarks/fixtures",
+        default=str(config.BENCHMARK_FIXTURES_DIR),
         help="Output directory. Default: benchmarks/fixtures.",
     )
     args = parser.parse_args()

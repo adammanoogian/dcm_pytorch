@@ -26,7 +26,7 @@ import numpy as np
 import pyro
 import torch
 
-from config import TAPAS_RDCM_PATH
+from config import MATLAB_PATH, TAPAS_RDCM_PATH
 from pyro_dcm.forward_models.csd_computation import (
     bold_to_csd_torch,
 )
@@ -55,7 +55,6 @@ from validation.export_to_mat import (
     upsample_stimulus,
 )
 
-MATLAB_PATH = "C:/Program Files/MATLAB/R2022a/bin/matlab"
 MATLAB_SCRIPTS_DIR = os.path.join(
     os.path.dirname(__file__), "matlab_scripts"
 ).replace("\\", "/")

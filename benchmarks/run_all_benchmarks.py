@@ -50,6 +50,7 @@ if _PROJECT_ROOT not in sys.path:
 
 import torch
 
+from config import BENCHMARK_RESULTS_DIR  # noqa: E402
 from benchmarks.config import BenchmarkConfig
 from benchmarks.runners import RUNNER_REGISTRY
 
@@ -270,7 +271,7 @@ def main() -> None:
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="benchmarks/results",
+        default=str(BENCHMARK_RESULTS_DIR),
         help="Directory for saving results (default: benchmarks/results)",
     )
     parser.add_argument(
