@@ -12,10 +12,12 @@ References
 
 from __future__ import annotations
 
+import warnings
 from typing import Protocol, runtime_checkable
 
 import torch
 
+from pyro_dcm.forward_models.cmc_priors import ERP_DEAD_FREE
 from pyro_dcm.forward_models.neural_state import parameterize_A, parameterize_B
 from pyro_dcm.forward_models.spectral_transfer import spectral_dcm_forward
 from pyro_dcm.inference.csd_precision import compute_csd_precision
@@ -682,12 +684,9 @@ class LatentCircuitForward:
         return {"theta_post": theta_post, "predicted_output": solution}
 
 
-# Free log-parameter value mapping an ABSENT CMC connection (mask == 0) to a dead
-# edge. CMC parameterises strengths as ``exp(P) * E0`` (NOT the linear fMRI
-# convention), so an absent edge must map to a strongly NEGATIVE free value
-# (``exp(-32) * E0 ~ 1e-12``), NOT 0 (``exp(0) * E0 = E0`` would be a LIVE edge).
-# Mirrors the ``mask*32-32`` / ``_ms_log_block`` convention (spm_cmc_priors.m:80).
-_ERP_DEAD_FREE = -32.0
+# Free log value mapping an ABSENT CMC connection (mask == 0) to a dead edge --
+# single source of truth in ``cmc_priors`` (shared with the SVI ``erp_dcm_model``).
+_ERP_DEAD_FREE = ERP_DEAD_FREE
 
 
 class ERPDCMForward:
@@ -953,6 +952,22 @@ class ERPDCMForward:
 
             traj = integrate_local_linearization(f_c, x0, inputs, self._dt)
             if not torch.isfinite(traj).all():
+                # The exp-Euler integrator diverged; clamp to a finite (zero)
+                # trajectory so the ELBO/free-energy stays finite. Warn, because a
+                # zeroed, parameter-independent forward yields a FLAT
+                # finite-difference Jacobian region that can mislead Variational
+                # Laplace into treating a diverging parameter as inert. A silent
+                # clamp here is invisible; make it observable (dedup'd by warnings
+                # so a persistent divergence does not spam).
+                warnings.warn(
+                    "ERPDCMForward.predict: exp-Euler integration produced "
+                    f"non-finite states at condition index {c} (dt={self._dt}); "
+                    "clamping the trajectory to zeros. Expected all-finite; got "
+                    "NaN/Inf. Inspect priors/dt if this recurs -- the zeroed "
+                    "forward flattens the VL finite-difference Jacobian.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
                 traj = torch.zeros_like(traj)
             y_list.append(project_to_scalp(traj, self._l_full))  # (ns, Nc)
 

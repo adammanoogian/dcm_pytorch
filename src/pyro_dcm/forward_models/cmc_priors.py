@@ -26,6 +26,17 @@ from torch import Tensor
 
 _F64 = torch.float64
 
+#: Free log-parameter value mapping an ABSENT CMC connection (mask == 0) to a dead
+#: edge. The CMC parameterises strengths as ``exp(P) * E0``, so an absent ``A``/``C``
+#: edge must map to a strongly NEGATIVE free value (``exp(-32) * E0 ~ 1e-12``), NOT 0
+#: (``exp(0) * E0 = E0`` would be a LIVE edge). This is the ``mask*32-32`` DEAD limit
+#: of the ``spm_cmc_priors.m:114-116`` free-log convention -- the single source of
+#: truth shared by the SVI ERP model and the VL ERP forward. The fixture-side
+#: ``validation.export_to_mat._MS_A_DEAD`` holds the same value independently (the
+#: parity ground truth must not import the code under test); the parity tests enforce
+#: their equality.
+ERP_DEAD_FREE: float = -32.0
+
 
 def cmc_prior_moments(
     a_mask: Tensor,

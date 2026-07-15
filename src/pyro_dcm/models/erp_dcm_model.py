@@ -42,14 +42,12 @@ import pyro
 import pyro.distributions as dist
 import torch
 
+from pyro_dcm.forward_models.cmc_priors import ERP_DEAD_FREE
 from pyro_dcm.simulators.erp_simulator import simulate_erp_dcm
 
-# Free log-parameter value mapping an ABSENT CMC connection (mask == 0) to a
-# dead edge. CMC parameterises strengths as ``exp(P) * E0``, so an absent edge
-# must map to a strongly NEGATIVE free value (``exp(-32) * E0 ~ 1e-12``), NOT 0
-# (``exp(0) * E0 = E0`` would be a LIVE edge). Mirrors ``ERPDCMForward._masked_free``
-# / ``spm_cmc_priors.m:80``.
-_ERP_DEAD_FREE: float = -32.0
+# Free log value mapping an ABSENT CMC connection (mask == 0) to a dead edge --
+# single source of truth in ``cmc_priors`` (shared with ``ERPDCMForward``).
+_ERP_DEAD_FREE: float = ERP_DEAD_FREE
 
 # Provisional prior variance for the between-trial B modulation. B is NOT in
 # ``cmc_prior_moments`` (Phase-34 condition modulation; FIXED in the parity gate).
@@ -57,6 +55,61 @@ _ERP_DEAD_FREE: float = -32.0
 # ``spm_dcm_erp.m`` / ``spm_cmc_priors.m``; this provisional value is low-stakes
 # for the fixed-B headline demo and matters only for B-modulation recovery.
 B_PRIOR_VARIANCE: float = 1.0 / 8.0
+
+
+def _sample_logspace(
+    name: str, shape: tuple[int, ...], var: float, event_dim: int
+) -> torch.Tensor:
+    """Sample a zero-mean log-space CMC free parameter (``spm_cmc_priors.m``).
+
+    All CMC free parameters share the same prior form -- ``dist.Normal(0,
+    sqrt(var))`` reshaped to ``shape`` and made independent via ``.to_event``.
+
+    Parameters
+    ----------
+    name : str
+        Pyro sample-site name.
+    shape : tuple of int
+        Parameter shape.
+    var : float
+        Prior variance (``spm_cmc_priors.m`` scale); the std is ``sqrt(var)``.
+    event_dim : int
+        Number of rightmost dims to declare dependent via ``.to_event``.
+
+    Returns
+    -------
+    torch.Tensor
+        The sampled free parameter, shape ``shape``, dtype float64.
+    """
+    return pyro.sample(
+        name,
+        dist.Normal(
+            torch.zeros(shape, dtype=torch.float64),
+            var**0.5 * torch.ones(shape, dtype=torch.float64),
+        ).to_event(event_dim),
+    )
+
+
+def _apply_dead_mask(free: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    """Map absent (``mask == 0``) ``A``/``C`` edges to the dead free value.
+
+    Live positions keep the sampled free value; absent positions map to
+    :data:`_ERP_DEAD_FREE` (``exp(-32) * E0 ~ 1e-12``, an off edge).
+
+    Parameters
+    ----------
+    free : torch.Tensor
+        Sampled free values.
+    mask : torch.Tensor
+        Binary presence mask, same shape as ``free``.
+
+    Returns
+    -------
+    torch.Tensor
+        ``free`` with absent positions set to :data:`_ERP_DEAD_FREE`.
+    """
+    m = (mask > 0).to(torch.float64)
+    return free * m + _ERP_DEAD_FREE * (1.0 - m)
 
 
 def erp_dcm_model(
@@ -152,76 +205,27 @@ def erp_dcm_model(
     M = c_mask.shape[1]
 
     # --- Sample A_free: four extrinsic routing blocks (var 1/16). ---
-    A_free = pyro.sample(
-        "A_free",
-        dist.Normal(
-            torch.zeros(4, N, N, dtype=torch.float64),
-            (1.0 / 16.0) ** 0.5 * torch.ones(4, N, N, dtype=torch.float64),
-        ).to_event(3),
-    )
-    # Mask: live edges keep the sampled free value, absent edges -> -32 (dead).
-    a_free_list: list[torch.Tensor] = []
-    for i in range(4):
-        mb = (a_masks[i] > 0).to(torch.float64)
-        a_free_list.append(A_free[i] * mb + _ERP_DEAD_FREE * (1.0 - mb))
+    # Live edges keep the sampled free value; absent edges -> -32 (dead).
+    A_free = _sample_logspace("A_free", (4, N, N), 1.0 / 16.0, 3)
+    a_free_list = [_apply_dead_mask(A_free[i], a_masks[i]) for i in range(4)]
 
     # --- Sample per-effect B_free_{j} (var B_PRIOR_VARIANCE; NO pyro.plate). ---
     # Literal sample sites in a Python loop enable AutoGuide auto-discovery
     # across AutoNormal / AutoLowRankMVN / AutoIAFNormal (MODEL-06), mirroring
-    # the task_dcm_model bilinear branch.
-    b_prior_std = B_PRIOR_VARIANCE**0.5
+    # the task_dcm_model bilinear branch. B is an ADDITIVE log-offset, so absent
+    # positions map to 0 (no modulation), NOT the -32 dead value.
     B_free_list: list[torch.Tensor] = []
     for j, b_mask_j in enumerate(b_masks):
-        B_free_j = pyro.sample(
-            f"B_free_{j}",
-            dist.Normal(
-                torch.zeros(N, N, dtype=torch.float64),
-                b_prior_std * torch.ones(N, N, dtype=torch.float64),
-            ).to_event(2),
-        )
-        # B is an additive log-offset: absent positions -> 0 (no modulation).
+        B_free_j = _sample_logspace(f"B_free_{j}", (N, N), B_PRIOR_VARIANCE, 2)
         B_free_list.append(B_free_j * (b_mask_j > 0).to(torch.float64))
 
-    # --- Sample C_free: driving input gain (var 1/32). ---
-    C_free = pyro.sample(
-        "C_free",
-        dist.Normal(
-            torch.zeros(N, M, dtype=torch.float64),
-            (1.0 / 32.0) ** 0.5 * torch.ones(N, M, dtype=torch.float64),
-        ).to_event(2),
-    )
-    cb = (c_mask > 0).to(torch.float64)
-    c_masked = C_free * cb + _ERP_DEAD_FREE * (1.0 - cb)
-
-    # --- Sample intrinsic CMC params T, G, S and input dispersion R. ---
-    T = pyro.sample(
-        "T",
-        dist.Normal(
-            torch.zeros(N, 4, dtype=torch.float64),
-            (1.0 / 32.0) ** 0.5 * torch.ones(N, 4, dtype=torch.float64),
-        ).to_event(2),
-    )
-    G = pyro.sample(
-        "G",
-        dist.Normal(
-            torch.zeros(N, 4, dtype=torch.float64),
-            (1.0 / 32.0) ** 0.5 * torch.ones(N, 4, dtype=torch.float64),
-        ).to_event(2),
-    )
-    S = pyro.sample(
-        "S",
-        dist.Normal(
-            torch.zeros(N, 1, dtype=torch.float64),
-            (1.0 / 64.0) ** 0.5 * torch.ones(N, 1, dtype=torch.float64),
-        ).to_event(2),
-    )
-    R = pyro.sample(
-        "R",
-        dist.Normal(
-            torch.zeros(M, 2, dtype=torch.float64),
-            (1.0 / 16.0) ** 0.5 * torch.ones(M, 2, dtype=torch.float64),
-        ).to_event(2),
-    )
+    # --- Sample C_free (var 1/32) + intrinsic T, G, S and input dispersion R. ---
+    C_free = _sample_logspace("C_free", (N, M), 1.0 / 32.0, 2)
+    c_masked = _apply_dead_mask(C_free, c_mask)
+    T = _sample_logspace("T", (N, 4), 1.0 / 32.0, 2)
+    G = _sample_logspace("G", (N, 4), 1.0 / 32.0, 2)
+    S = _sample_logspace("S", (N, 1), 1.0 / 64.0, 2)
+    R = _sample_logspace("R", (M, 2), 1.0 / 16.0, 2)
 
     # --- Deterministic forward (the parity-gated pipeline; pitfall V1). ---
     p: dict[str, object] = {
