@@ -195,3 +195,24 @@ N = regions, M = inputs, T = time points, F = frequency bins
    - `spm_fx_fmri.m` (neural state equation)
    - `spm_gx_fmri.m` (BOLD observation)
    - `spm_csd_mtf.m` (CSD computation)
+
+## Research track
+
+This repo serves two research tracks:
+
+- **DCM + Machine Learning** (`dcm-ml`) -- `Tracks/Track - DCM + Machine Learning.md`
+- **Joint DCM-Behavioural Modelling** (`joint-dcm-behaviour`) -- `Tracks/Track - Joint DCM-Behavioural Modelling.md`
+
+Differentiable DCM, and the inference engine joint fitting needs. `dcm_hgf_mixed_models` depends on the `pyro_dcm` interface.
+
+A *track* is a research programme -- one scientific question pursued across many
+repos, over years. The roster, the full repo-to-track map, and the cross-track
+couplings live in the **`research-tracks` skill**
+(`~/.claude/skills/research-tracks/SKILL.md`); the authoritative notes live in
+the Obsidian vault at `C:\Users\aman0087\Documents\Obsidian Vault\Tracks\`.
+
+Read the track note before substantive work here -- it carries the current
+state, the open questions, and the decision log, none of which are duplicated in
+this repo. When work produces something durable (a derivation, a protocol, a
+transferable failure), file it to the vault layer that matches its lifetime
+rather than leaving it in this repo's docs.
