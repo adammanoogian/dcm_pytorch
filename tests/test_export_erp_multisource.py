@@ -59,9 +59,17 @@ def test_export_erp_dcm_multisource_roundtrip(tmp_path: Path) -> None:
     assert md.edges_lateral.shape == (2, 2)
 
 
-def test_export_erp_dcm_multisource_b_folding_teeth() -> None:
-    """B differs from A on edges and carries a non-zero diag (the EVOK-02 knob)."""
-    meta = export_erp_dcm_multisource()
+def test_export_erp_dcm_multisource_b_folding_teeth(tmp_path: Path) -> None:
+    """B differs from A on edges and carries a non-zero diag (the EVOK-02 knob).
+
+    ``output_path`` is redirected to ``tmp_path`` even though this test only
+    inspects the returned metadata: the exporter's default writes to the
+    tracked, byte-frozen ``validation/data/erp_multisource_input.mat``, so
+    calling it bare mutates a committed SPM12 fixture as a side effect.
+    """
+    meta = export_erp_dcm_multisource(
+        output_path=str(tmp_path / "erp_multisource_input.mat")
+    )
     # Forward + lateral + backward edges are recorded for the Wave-3 ladder.
     assert (2, 0) in meta["edges_forward"]  # A1L -> STGL
     assert (4, 2) in meta["edges_forward"]  # STGL -> rIFG
