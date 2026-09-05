@@ -26,7 +26,7 @@ import numpy as np
 import pyro
 import torch
 
-from config import MATLAB_PATH, TAPAS_RDCM_PATH
+from config import MATLAB_PATH, SPM12_PATH, TAPAS_RDCM_PATH
 from pyro_dcm.forward_models.csd_computation import (
     bold_to_csd_torch,
 )
@@ -62,6 +62,22 @@ DEFAULT_OUTPUT_DIR = os.path.join(
     os.path.dirname(__file__), "data"
 ).replace("\\", "/")
 
+
+def _matlab_env() -> dict[str, str]:
+    """Child environment for a MATLAB subprocess.
+
+    Exports :data:`config.SPM12_PATH` so every ``validation/matlab_scripts``
+    ``.m`` file resolves SPM12 via ``getenv('SPM12_PATH')`` rather than its
+    hardcoded per-machine fallback.
+
+    Returns
+    -------
+    dict[str, str]
+        A copy of the current environment with ``SPM12_PATH`` guaranteed set.
+    """
+    env = dict(os.environ)
+    env.setdefault("SPM12_PATH", str(SPM12_PATH))
+    return env
 
 def check_matlab_available() -> bool:
     """Verify MATLAB and SPM12 are accessible.
@@ -274,6 +290,7 @@ def run_task_dcm_validation(
         capture_output=True,
         text=True,
         timeout=600,
+        env=_matlab_env(),
     )
     if result.returncode != 0:
         msg = (
@@ -473,6 +490,7 @@ def run_spectral_dcm_validation(
         capture_output=True,
         text=True,
         timeout=600,
+        env=_matlab_env(),
     )
     if result.returncode != 0:
         msg = (

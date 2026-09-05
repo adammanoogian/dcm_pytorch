@@ -4,7 +4,7 @@ Single-task M3 entrypoint (NOT an array). The local MATLAB license server is
 unreachable (FlexLM -15), so the actual ``spm_nlsi_GN`` cross-validation runs
 here on M3 where MATLAB R2022a + SPM12 are licensed
 (``/usr/local/matlab/r2022a/bin/matlab`` on the comp partition; SPM12 at
-``/home/aman0087/fc37/Carrick/spm12``). It calls
+``$DCM_CLUSTER_ROOT/external/spm12``). It calls
 :func:`validation.run_vl_validation.run_vl_spectral_dcm_validation` (which fits
 the Phase 28 VL engine and injects the IDENTICAL CSD into SPM via the Plan 32-01
 bridge), prints a human summary, and writes the JSON-safe result to
@@ -26,7 +26,7 @@ MATLAB_PATH : str
     MATLAB binary (the sbatch exports ``/usr/local/matlab/r2022a/bin/matlab``).
 SPM12_PATH : str
     SPM12 location passed to the MATLAB child (the sbatch exports
-    ``/home/aman0087/fc37/Carrick/spm12``).
+    ``$DCM_CLUSTER_ROOT/external/spm12``).
 SPM_XVAL_SEED : int, default 42
     Seed for the spectral simulation.
 SPM_XVAL_MAX_ITER : int, default 64

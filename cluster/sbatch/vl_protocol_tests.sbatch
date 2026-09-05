@@ -6,15 +6,13 @@
 #SBATCH --time=01:00:00
 #SBATCH --output=cluster/logs/vl_protocol_%j.out
 #SBATCH --error=cluster/logs/vl_protocol_%j.err
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
 source cluster/lib/cluster_env.sh
 crlf_guard
 
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
-
 setup_torch_threads 4
-activate_env "$ENV_NAME"
+activate_env
 verify_torch
 print_job_header "VL ForwardModel Protocol Tests"
 

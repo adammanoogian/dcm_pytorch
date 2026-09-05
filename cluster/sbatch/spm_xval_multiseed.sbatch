@@ -9,13 +9,15 @@
 # (free-space 10%, S1/S2), matched free energy (strict 5% on the identical CSD,
 # the headline number), and relative cross-model ranking (>=0.80, S3-safe).
 #
-# Runs on M3 because the LOCAL MATLAB license server is unreachable (FlexLM
-# -15). MATLAB R2022a + SPM12 are VERIFIED working on the comp partition:
-#   MATLAB: /usr/local/matlab/r2022a/bin/matlab  (valid license)
-#   SPM12:  /home/aman0087/fc37/Carrick/spm12     (spm_nlsi_GN, spm_dcm_fmri_csd)
-# The Python orchestrator resolves the MATLAB binary from MATLAB_PATH and passes
-# SPM12_PATH to the MATLAB child; the injection .m falls back to its local
-# default when SPM12_PATH is unset.
+# MATLAB/SPM12 note (updated 2026-09-05, Monash M3 -> Radboud DCCN):
+# This job originally ran on M3 because the old laptop's MATLAB licence server
+# was unreachable (FlexLM -15). That is no longer true -- the DCCN workstation
+# has MATLAB R2025b with a valid licence and a complete SPM12, so the SPM
+# bridge is best run LOCALLY. DCCN compute nodes have MATLAB via Environment
+# Modules but NO system SPM12, so any cluster run must export SPM12_PATH to a
+# personal checkout first (setup_matlab enforces this and fails loudly).
+# The Python orchestrator resolves the MATLAB binary from config.MATLAB_PATH and
+# passes config.SPM12_PATH to the MATLAB child.
 #
 # A gate miss (incl. a real 5% matched-F miss) is RECORDED in the JSON + stdout
 # and the script exits 0 (record-don't-crash, mirroring 31-03-D3); only an
@@ -35,29 +37,25 @@
 #SBATCH --time=01:30:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
 source cluster/lib/cluster_env.sh
 crlf_guard
 
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
-
 setup_torch_threads 4
-activate_env "$ENV_NAME"
+activate_env
 
 # NEVER pip install inside this job. The package is found via sys.path in the
 # Python script; there is no install step here. Concurrent resolvers against
-# the shared conda env race -> OOM + .pth corruption (project hard rule).
+# the shared venv race -> OOM + .pth corruption (project hard rule).
 
 verify_torch
 print_job_header "VL-vs-SPM12 Multi-Seed Divergence Investigation (Phase 32-03)"
 
-# Verified M3 MATLAB + SPM12 locations (comp partition, valid license).
-export MATLAB_PATH=/usr/local/matlab/r2022a/bin/matlab
-export SPM12_PATH=/home/aman0087/fc37/Carrick/spm12
-
-echo "MATLAB_PATH=${MATLAB_PATH}"
-echo "SPM12_PATH=${SPM12_PATH}"
+# MATLAB comes from Environment Modules on DCCN. SPM12 is NOT installed
+# cluster-wide -- export SPM12_PATH to your own checkout before submitting, or
+# (preferred) run the SPM bridge on the workstation, which has R2025b + SPM12.
+setup_matlab R2024b
 
 mkdir -p cluster/logs cluster/results
 

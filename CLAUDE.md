@@ -87,72 +87,70 @@ No module is integrated into the pipeline until it passes its own standalone tes
 
 ```
 dcm_pytorch/
-├── src/
-│   └── pyro_dcm/
-│       ├── __init__.py
-│       ├── forward_models/
-│       │   ├── __init__.py
-│       │   ├── neural_state.py      # dx/dt = Ax + Cu  [REF-001]
-│       │   ├── balloon_model.py     # Balloon-Windkessel ODEs  [REF-002]
-│       │   ├── bold_signal.py       # BOLD observation equation  [REF-002]
-│       │   ├── coupled_system.py    # Coupled neural + hemodynamic system  [REF-002]
-│       │   ├── spectral_transfer.py # H(w) = (iwI - A)^-1  [REF-010]
-│       │   ├── spectral_noise.py    # Innovation/measurement noise spectra  [REF-010]
-│       │   ├── csd_computation.py   # Cross-spectral density  [REF-010]
-│       │   ├── rdcm_forward.py      # Frequency-domain regression  [REF-020]
-│       │   └── rdcm_posterior.py    # rDCM analytic VB posterior  [REF-020]
-│       ├── models/
-│       │   ├── __init__.py
-│       │   ├── task_dcm_model.py       # Pyro model for task-based DCM [v0.3.0: + bilinear B path]
-│       │   ├── spectral_dcm_model.py   # Pyro model for spectral DCM
-│       │   ├── rdcm_model.py           # Pyro model for regression DCM
-│       │   ├── guides.py               # SVI guide factory (AutoNormal/AutoLowRankMVN/AutoIAF/...)
-│       │   └── amortized_wrappers.py   # Amortized task/spectral DCM wrappers
-│       ├── guides/
-│       │   ├── __init__.py
-│       │   ├── amortized_flow.py    # Normalizing flow amortized guide
-│       │   ├── parameter_packing.py # Parameter packing for amortized guide
-│       │   └── summary_networks.py  # Summary networks (CNN/MLP) for amortized guide
-│       ├── simulators/
-│       │   ├── __init__.py
-│       │   ├── task_simulator.py
-│       │   ├── spectral_simulator.py
-│       │   └── rdcm_simulator.py
-│       └── utils/
-│           ├── __init__.py
-│           ├── ode_integrator.py    # Wrapper around torchdiffeq
-│           ├── circuit_viz.py       # CircuitViz JSON serializer for circuit-explorer template
-│           └── templates/           # Static HTML/JS assets (dcm_circuit_explorer_template.html)
-├── tests/
-│   ├── conftest.py
-│   ├── test_balloon.py
-│   ├── test_neural_state.py
-│   ├── test_spectral.py
-│   ├── test_rdcm.py
-│   ├── test_pyro_models.py
-│   ├── test_task_dcm_recovery.py
-│   ├── test_spectral_dcm_recovery.py
-│   ├── test_rdcm_recovery.py
-│   └── test_model_comparison.py
+├── src/pyro_dcm/
+│   ├── forward_models/          # deterministic forward models
+│   │   ├── neural_state.py          # dx/dt = Ax + Su.Bx + Cu  [REF-001]
+│   │   ├── balloon_model.py         # Balloon-Windkessel ODEs  [REF-002]
+│   │   ├── bold_signal.py           # BOLD observation equation  [REF-002]
+│   │   ├── coupled_system.py        # coupled neural + hemodynamic system
+│   │   ├── spectral_transfer.py     # H(w) = (iwI - A)^-1  [REF-010]
+│   │   ├── spectral_noise.py        # innovation / measurement noise spectra
+│   │   ├── csd_computation.py       # cross-spectral density  [REF-010]
+│   │   ├── mar_csd.py               # MAR-based CSD (SPM parity)
+│   │   ├── rdcm_forward.py          # frequency-domain regression  [REF-020]
+│   │   ├── rdcm_posterior.py        # rDCM analytic VB posterior  [REF-020]
+│   │   ├── latent_observation.py    # latent-circuit observation
+│   │   ├── cmc_neural_mass.py       # canonical microcircuit  (v0.8.0)
+│   │   ├── cmc_priors.py            # CMC prior specification
+│   │   ├── _cmc_network.py          # shared N-source CMC core
+│   │   ├── erp_coupled_system.py    # hierarchical extrinsic coupling
+│   │   ├── erp_input.py             # evoked input (spm_erp_u port)
+│   │   ├── erp_leadfield.py         # single-dipole lead field + scalp proj.
+│   │   ├── mmn_reference.py         # 5-source auditory MMN network
+│   │   └── collision_reference.py   # 2/3-node collision networks
+│   ├── inference/               # inference engines
+│   │   ├── variational_laplace.py   # SPM12 spm_nlsi_GN port (the VL engine)
+│   │   ├── vl_forward_models.py     # ForwardModel protocol implementors
+│   │   ├── csd_precision.py         # CSD precision / hyperpriors
+│   │   └── sbi_*.py                 # SBI/NPE (SBC calibration OPEN, 2/9)
+│   ├── model_selection/
+│   │   └── bmr.py                   # Bayesian Model Reduction  [REF-030]
+│   ├── models/                  # Pyro generative models
+│   │   ├── task_dcm_model.py        # task DCM (+ bilinear B path)
+│   │   ├── spectral_dcm_model.py    # spectral DCM
+│   │   ├── rdcm_model.py            # regression DCM
+│   │   ├── latent_circuit_dcm_model.py
+│   │   ├── erp_dcm_model.py         # ERP-DCM  (v0.8.0)
+│   │   ├── hybrid_vae_dcm.py        # amortized encoder + DCM ODE decoder
+│   │   ├── guides.py                # SVI guide factory
+│   │   └── amortized_wrappers.py
+│   ├── guides/                  # amortized / flow guides
+│   ├── simulators/              # task, spectral, rdcm, latent, erp, meg
+│   ├── io/                      # MNE + BIDS loaders
+│   ├── rnn/                     # CT-RNN training, PCA, fixed points
+│   ├── neural_data_models/      # LSTM autoencoder, latent CSD
+│   ├── foundation/              # TRIBE / LaBraM / BrainOmni extractors
+│   └── utils/
+│       ├── ode_integrator.py        # torchdiffeq wrapper
+│       ├── local_linearization.py   # spm_int_L exp-Euler  (v0.8.0)
+│       └── circuit_viz.py
+├── tests/                       # unit + recovery + SPM parity ladders
 ├── validation/
-│   ├── compare_spm.py
-│   └── recovery_results/
-├── benchmarks/
-│   ├── run_all_benchmarks.py
-│   └── results/
-├── scripts/
-│   └── train_amortized_guide.py
+│   ├── matlab_scripts/          # SPM12 .m bridges (getenv SPM12_PATH)
+│   ├── data/                    # byte-frozen SPM12 .mat fixtures
+│   ├── run_validation.py        # SVI-path SPM12 orchestrator
+│   └── run_vl_validation.py     # VL-path SPM12 orchestrator (Phase 32)
+├── benchmarks/                  # runners, metrics, recovery matrix
+├── cluster/                     # DCCN Slurm jobs (see cluster/README.md)
+│   ├── lib/cluster_env.sh       # shared env activation + MATLAB setup
+│   ├── sbatch/                  # job scripts
+│   └── scripts/                 # Python entrypoints
+├── scripts/                     # demos + training entrypoints
 ├── docs/
-│   ├── 00_current_todos/
-│   ├── 01_project_protocol/
-│   ├── 02_pipeline_guide/
-│   ├── 03_methods_reference/
-│   └── 04_scientific_reports/
-├── figures/
-├── .planning/
+├── .planning/                   # GSD roadmap / phases / state
+├── config.py                    # ALL path constants (CCDS v2)
 ├── pyproject.toml
-├── CLAUDE.md
-└── README.md
+└── CLAUDE.md
 ```
 
 ## Coding Conventions
@@ -184,6 +182,26 @@ Follows `project_utils/CODING_STANDARDS.md`:
 
 N = regions, M = inputs, T = time points, F = frequency bins
 
+## Compute Routing (DCCN)
+
+Compute runs on the **DCCN cluster** (`mentat`), Slurm-scheduled. Migrated from
+Monash M3 on 2026-09-05 -- `--partition=comp`, conda envs, and `/home/aman0087/`
+paths anywhere in this repo are pre-migration provenance.
+
+- Anything over **~3 minutes of saturating laptop CPU** goes to the cluster:
+  `pytest -m slow`, full-suite runs, SVI/NUTS fits, VL sweeps, identifiability
+  grids, recovery harnesses. Fast unit tests (<30 s) stay local.
+- **This binds subagents too.** No laptop-only carve-out.
+- Partition `batch`; **always pass `--mem`** (DCCN defaults to 1 GB).
+- No conda on the cluster -- jobs activate a uv venv via
+  `cluster/lib/cluster_env.sh`. Never install inside a job.
+- **MATLAB/SPM12 run LOCALLY**: the workstation has R2025b (valid licence) and a
+  complete SPM12. The cluster has MATLAB modules but no system SPM12.
+- The v0.8.0 ERP parity ladders are fixture-keyed and need no MATLAB; only
+  regenerating `validation/data/*.mat` does.
+
+See `cluster/README.md` and the `dccn-hpc` skill.
+
 ## When Stuck
 
 1. Check `.planning/REFERENCES.md` for the relevant paper and equation
@@ -209,7 +227,7 @@ A *track* is a research programme -- one scientific question pursued across many
 repos, over years. The roster, the full repo-to-track map, and the cross-track
 couplings live in the **`research-tracks` skill**
 (`~/.claude/skills/research-tracks/SKILL.md`); the authoritative notes live in
-the Obsidian vault at `C:\Users\aman0087\Documents\Obsidian Vault\Tracks\`.
+the Obsidian vault at `C:\Users\adaman\Documents\Obsidian Vault\Tracks\`.
 
 Read the track note before substantive work here -- it carries the current
 state, the open questions, and the decision log, none of which are duplicated in

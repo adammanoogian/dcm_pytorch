@@ -10,8 +10,8 @@
 #   bash cluster/submit_phase16.sh
 #
 # Overrides (pass through sbatch --export):
-#   ENV_NAME=my_env bash cluster/submit_phase16.sh       # primary conda env
-#   ENV_FALLBACK=other_env bash cluster/submit_phase16.sh # secondary env
+#   RETIRED: wraps cluster/run_phase16_acceptance.slurm, which is M3-era
+#   conda machinery and does not run on DCCN. Kept for provenance.
 #   PROJECT=ft29 bash cluster/submit_phase16.sh           # /scratch project code
 #   PUSH_TO_MAIN=true bash cluster/submit_phase16.sh      # NOT recommended
 # =============================================================================

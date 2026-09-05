@@ -24,13 +24,11 @@
 #SBATCH --time=04:00:00
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=4
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
 # =============================================================================
 # Environment Setup
 # =============================================================================
-module load miniforge3
-
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
 PROJECT_ROOT="$(pwd)"
 
@@ -53,7 +51,6 @@ echo "============================================================"
 # Configuration
 # =============================================================================
 _PROJECT="${PROJECT:-fc37}"
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
 N_SIMS="${N_SIMS:-50000}"
 N_SBC="${N_SBC:-200}"
 # Flow capacity (plumbed through to posterior_nn; previously dead args).
@@ -64,23 +61,15 @@ HIDDEN_FEATURES="${HIDDEN_FEATURES:-128}"
 MAX_EPOCHS="${MAX_EPOCHS:-500}"
 
 # =============================================================================
-# Conda Activation
+# Environment activation (uv venv -- DCCN has no conda)
 # =============================================================================
-conda deactivate 2>/dev/null || true
+source cluster/lib/cluster_env.sh
+crlf_guard
+activate_env
 
-if conda activate "$ENV_NAME" 2>/dev/null; then
-    echo "Activated env: $ENV_NAME (by name)"
-elif conda activate "/scratch/${_PROJECT}/${USER}/conda/envs/${ENV_NAME}" 2>/dev/null; then
-    echo "Activated env: $ENV_NAME (scratch)"
-else
-    echo "ERROR: cannot activate env $ENV_NAME"
-    exit 1
-fi
-
-# Install project + sbi dependency
-echo "Syncing deps..."
-pip install -q -e ".[dev]"
-pip install -q "sbi>=0.22"
+# NOTE: dependencies are NOT installed here. Provision the venv once from the
+# login node (including the optional `sbi>=0.22` extra) -- installing inside a
+# job races other jobs against the same venv and corrupts it.
 
 # Verify imports
 if ! python -c "import torch, sbi, scipy, pyro_dcm" 2>/dev/null; then

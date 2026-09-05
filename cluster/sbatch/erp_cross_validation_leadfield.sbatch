@@ -18,11 +18,13 @@
 # EXACT identity via the 2-output spm_fx_cmc_nodelay.m wrapper (nargout == 2 ->
 # spm_int_L D = 1), REUSED UNCHANGED from 33-02.
 #
-# Runs on M3 because the LOCAL MATLAB license server is unreachable (FlexLM -15).
-# MATLAB R2022a + SPM12 are VERIFIED working on the comp partition:
-#   MATLAB: /usr/local/matlab/r2022a/bin/matlab  (valid license)
-#   SPM12:  /home/aman0087/fc37/Carrick/spm12     (spm_lx_erp, spm_erp_L,
-#                                                   spm_gen_Q, spm_int_L, dcm_meeg)
+# MATLAB/SPM12 note (updated 2026-09-05, Monash M3 -> Radboud DCCN):
+# This job originally ran on M3 because the old laptop's MATLAB licence server
+# was unreachable (FlexLM -15). That is no longer true -- the DCCN workstation
+# has MATLAB R2025b with a valid licence and a complete SPM12, so the SPM
+# bridge is best run LOCALLY. DCCN compute nodes have MATLAB via Environment
+# Modules but NO system SPM12, so any cluster run must export SPM12_PATH to a
+# personal checkout first (setup_matlab enforces this and fails loudly).
 #
 # A soft fixture-shape / meta mismatch is RECORDED in the JSON + stdout
 # (checks_pass=False) and the script exits 0 (record-don't-crash, mirroring
@@ -43,29 +45,25 @@
 #SBATCH --time=01:00:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
 source cluster/lib/cluster_env.sh
 crlf_guard
 
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
-
 setup_torch_threads 4
-activate_env "$ENV_NAME"
+activate_env
 
 # NEVER pip install inside this job. The package is found via sys.path in the
 # Python script; there is no install step here. Concurrent resolvers against
-# the shared conda env race -> OOM + .pth corruption (project hard rule).
+# the shared venv race -> OOM + .pth corruption (project hard rule).
 
 verify_torch
 print_job_header "CMC-ERP LFP Lead-Field Fixture Generation (Phase 35-02)"
 
-# Verified M3 MATLAB + SPM12 locations (comp partition, valid license).
-export MATLAB_PATH=/usr/local/matlab/r2022a/bin/matlab
-export SPM12_PATH=/home/aman0087/fc37/Carrick/spm12
-
-echo "MATLAB_PATH=${MATLAB_PATH}"
-echo "SPM12_PATH=${SPM12_PATH}"
+# MATLAB comes from Environment Modules on DCCN. SPM12 is NOT installed
+# cluster-wide -- export SPM12_PATH to your own checkout before submitting, or
+# (preferred) run the SPM bridge on the workstation, which has R2025b + SPM12.
+setup_matlab R2024b
 
 mkdir -p cluster/logs cluster/results validation/data
 

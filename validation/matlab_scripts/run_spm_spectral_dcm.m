@@ -15,7 +15,11 @@ fprintf('Start time: %s\n', datestr(now));
 
 % --- Setup paths ---
 try
-    addpath('C:/Users/aman0087/Documents/Github/spm12');
+    spm12_path = getenv('SPM12_PATH');
+    if isempty(spm12_path)
+        spm12_path = 'C:/Users/adaman/Documents/external/spm12';
+    end
+    addpath(spm12_path);
     if ~exist('spm', 'file')
         error('SPM12 not found on path. Check addpath above.');
     end

@@ -25,15 +25,13 @@
 #SBATCH --time=03:00:00
 #SBATCH --mem=12G
 #SBATCH --cpus-per-task=4
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
 source cluster/lib/cluster_env.sh
 crlf_guard
 
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
-
 setup_torch_threads 4
-activate_env "$ENV_NAME"
+activate_env
 
 echo "Installing package..."
 pip install -e ".[benchmark,dev]" --quiet 2>&1 | tail -3

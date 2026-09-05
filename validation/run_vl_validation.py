@@ -49,7 +49,7 @@ import subprocess
 import numpy as np
 import torch
 
-from config import MATLAB_PATH
+from config import MATLAB_PATH, SPM12_PATH
 from pyro_dcm.inference.variational_laplace import run_variational_laplace
 from pyro_dcm.simulators.spectral_simulator import simulate_spectral_dcm
 from validation.compare_results import (
@@ -196,9 +196,11 @@ def _run_spm_on_csd(
         f"setenv('DCM_OUTPUT_PATH', '{results_path}'); "
         f"run_spm_spectral_dcm_csd_injected"
     )
-    # Pass SPM12_PATH through to the MATLAB child; the .m file falls back to its
-    # local default when the variable is absent (so laptop + M3 share one code).
+    # Pass SPM12_PATH through to the MATLAB child. config.SPM12_PATH is the
+    # single source of truth (env-overridable); the .m file's own fallback is
+    # only a last resort. One code path serves workstation and cluster alike.
     child_env = dict(os.environ)
+    child_env.setdefault("SPM12_PATH", str(SPM12_PATH))
 
     result = subprocess.run(
         [str(MATLAB_PATH), "-batch", matlab_cmd],

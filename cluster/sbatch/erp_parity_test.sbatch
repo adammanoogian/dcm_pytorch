@@ -28,32 +28,25 @@
 #SBATCH --time=01:00:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
 source cluster/lib/cluster_env.sh
 crlf_guard
 
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
-
 setup_torch_threads 4
-activate_env "$ENV_NAME"
+activate_env
 
 # NEVER pip install inside this job. The package is found via sys.path; there is
-# no install step here. Concurrent resolvers against the shared conda env race
+# no install step here. Concurrent resolvers against the shared venv race
 # -> OOM + .pth corruption (project hard rule).
 
 verify_torch
 print_job_header "SPM12 CMC-ERP single-source parity gate (Phase 33-03)"
 
-# Verified M3 MATLAB + SPM12 locations (comp partition, valid license). The
-# parity assertions do NOT call MATLAB (they compare torch to the frozen .mat),
-# but these are exported for parity with the Phase-32 bridge / fixture
-# regeneration.
-export MATLAB_PATH=/usr/local/matlab/r2022a/bin/matlab
-export SPM12_PATH=/home/aman0087/fc37/Carrick/spm12
-
-echo "MATLAB_PATH=${MATLAB_PATH}"
-echo "SPM12_PATH=${SPM12_PATH}"
+# The parity assertions do NOT call MATLAB -- they compare pure-torch output
+# against the frozen .mat fixtures, so this job needs no MATLAB at all. That is
+# exactly why the v0.8.0 parity ladders still run after the M3 -> DCCN move.
+# Set SPM12_PATH only if you intend to REGENERATE fixtures here.
 
 mkdir -p cluster/logs
 

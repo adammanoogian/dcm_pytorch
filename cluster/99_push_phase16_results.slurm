@@ -63,7 +63,7 @@
 #SBATCH --time=00:15:00
 #SBATCH --mem=4G
 #SBATCH --cpus-per-task=1
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
 # =============================================================================
 # Configuration

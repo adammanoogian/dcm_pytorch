@@ -12,10 +12,8 @@
 source cluster/lib/cluster_env.sh
 crlf_guard
 
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
-
 setup_torch_threads 4
-activate_env "$ENV_NAME"
+activate_env
 verify_torch
 verify_gpu
 print_job_header "Phase 24: TRIBE v2 Extraction + Spectral DCM"

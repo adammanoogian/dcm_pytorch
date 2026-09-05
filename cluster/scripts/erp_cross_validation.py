@@ -4,7 +4,7 @@ Single-task M3 entrypoint (NOT an array). The local MATLAB license server is
 unreachable (FlexLM -15), so the actual ``spm_int_L`` / ``spm_fx_cmc`` fixture
 run happens here on M3 where MATLAB R2022a + SPM12 are licensed
 (``/usr/local/matlab/r2022a/bin/matlab`` on the comp partition; SPM12 at
-``/home/aman0087/fc37/Carrick/spm12``). It
+``$DCM_CLUSTER_ROOT/external/spm12``). It
 
 1. writes the frozen single-source DCM input ``.mat`` via
    :func:`validation.export_to_mat.export_erp_dcm`,
@@ -28,7 +28,7 @@ MATLAB_PATH : str
     MATLAB binary (the sbatch exports ``/usr/local/matlab/r2022a/bin/matlab``).
 SPM12_PATH : str
     SPM12 location passed to the MATLAB child (the sbatch exports
-    ``/home/aman0087/fc37/Carrick/spm12``); ``run_spm_erp_dcm.m`` reads it via
+    ``$DCM_CLUSTER_ROOT/external/spm12``); ``run_spm_erp_dcm.m`` reads it via
     ``getenv('SPM12_PATH')`` with a local-default fallback.
 
 References

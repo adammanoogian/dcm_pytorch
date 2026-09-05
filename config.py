@@ -47,11 +47,16 @@ TAPAS_RDCM_PATH : pathlib.Path
     Path to the local clone of ``tapas/rDCM`` (MATLAB rDCM toolbox), used by
     ``validation/run_rdcm_validation.py`` and ``validation/run_validation.py``.
     Override via the ``TAPAS_RDCM_PATH`` environment variable when running on a
-    different machine (e.g., Monash M3 cluster).
+    different machine. Not currently installed on this workstation.
 MATLAB_PATH : pathlib.Path
     Path to the MATLAB binary used by the SPM12 cross-validation bridge
     (Phase 32, ``validation/run_vl_validation.py``). Override via the
     ``MATLAB_PATH`` environment variable when running on a different machine.
+SPM12_PATH : pathlib.Path
+    Path to the local SPM12 installation used by every script in
+    ``validation/matlab_scripts/``. Exported into the MATLAB subprocess
+    environment, where the ``.m`` files read it via ``getenv('SPM12_PATH')``.
+    Override via the ``SPM12_PATH`` environment variable.
 """
 
 from __future__ import annotations
@@ -81,16 +86,27 @@ BENCHMARK_FIGURES_DIR: Path = PROJECT_ROOT / "benchmarks" / "figures"
 BENCHMARK_FIXTURES_DIR: Path = PROJECT_ROOT / "benchmarks" / "fixtures"
 
 # --- External MATLAB toolchain (per-machine; env-overridable) ---
+# Defaults describe the DCCN workstation (verified 2026-09-05: MATLAB R2025b
+# holds a valid licence and SPM12 is complete, so the SPM bridge runs LOCALLY).
+# The DCCN cluster has MATLAB modules but NO system SPM12 -- set SPM12_PATH
+# explicitly if a SLURM job ever needs it.
 TAPAS_RDCM_PATH: Path = Path(
     os.environ.get(
         "TAPAS_RDCM_PATH",
-        "C:/Users/aman0087/Documents/Github/tapas/rDCM",
+        "C:/Users/adaman/Documents/external/tapas/rDCM",
     )
 )
 
 MATLAB_PATH: Path = Path(
     os.environ.get(
         "MATLAB_PATH",
-        "C:/Program Files/MATLAB/R2022a/bin/matlab",
+        "C:/Program Files/MATLAB/R2025b/bin/matlab",
+    )
+)
+
+SPM12_PATH: Path = Path(
+    os.environ.get(
+        "SPM12_PATH",
+        "C:/Users/adaman/Documents/external/spm12",
     )
 )

@@ -14,7 +14,11 @@ fprintf('Start time: %s\n', datestr(now));
 
 % --- Setup paths ---
 try
-    addpath('C:/Users/aman0087/Documents/Github/spm12');
+    spm12_path = getenv('SPM12_PATH');
+    if isempty(spm12_path)
+        spm12_path = 'C:/Users/adaman/Documents/external/spm12';
+    end
+    addpath(spm12_path);
     if ~exist('spm', 'file')
         error('SPM12 not found on path. Check addpath above.');
     end
@@ -26,7 +30,10 @@ catch e
 end
 
 % --- Add tapas rDCM to path ---
-tapas_path = 'C:/Users/aman0087/Documents/Github/tapas/rDCM';
+tapas_path = getenv('TAPAS_RDCM_PATH');
+if isempty(tapas_path)
+    tapas_path = 'C:/Users/adaman/Documents/external/tapas/rDCM';
+end
 if exist(tapas_path, 'dir')
     addpath(genpath(tapas_path));
     fprintf('tapas rDCM path added: %s\n', tapas_path);

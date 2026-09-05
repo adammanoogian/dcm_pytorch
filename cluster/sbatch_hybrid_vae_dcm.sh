@@ -27,7 +27,7 @@
 #SBATCH --time=04:00:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
 # =============================================================================
 # Environment Setup
@@ -36,7 +36,6 @@ source cluster/lib/cluster_env.sh
 crlf_guard
 
 # Configuration (overridable via --export)
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
 N_SAMPLES="${N_SAMPLES:-1000}"
 N_EPOCHS="${N_EPOCHS:-200}"
 WARMUP_EPOCHS="${WARMUP_EPOCHS:-40}"
@@ -54,7 +53,7 @@ PROJECT_ROOT="$(pwd)"
 mkdir -p cluster/logs results
 
 # Activate environment
-activate_env "$ENV_NAME"
+activate_env
 
 # Thread control
 setup_torch_threads "${SLURM_CPUS_ON_NODE:-4}"

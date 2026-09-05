@@ -6,15 +6,13 @@
 #SBATCH --time=04:00:00
 #SBATCH --output=cluster/logs/val_22_full_%j.out
 #SBATCH --error=cluster/logs/val_22_full_%j.err
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
 source cluster/lib/cluster_env.sh
 crlf_guard
 
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
-
 setup_torch_threads 4
-activate_env "$ENV_NAME"
+activate_env
 verify_torch
 print_job_header "Phase 22 Full Validation (raw vs latent)"
 

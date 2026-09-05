@@ -35,18 +35,16 @@
 #SBATCH --time=08:00:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
 source cluster/lib/cluster_env.sh
 crlf_guard
 
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
-
 setup_torch_threads 4
-activate_env "$ENV_NAME"
+activate_env
 
 # NEVER pip install inside this array job. N concurrent SLURM tasks running a
-# resolver against the shared conda env race -> OOM + .pth corruption (project
+# resolver against the shared venv race -> OOM + .pth corruption (project
 # hard rule). The package is found via sys.path in the Python script; no install
 # step here. See m3-hpc.skill convention and cluster/sbatch/lc_vl_acceptance.sbatch.
 

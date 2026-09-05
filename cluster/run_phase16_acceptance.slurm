@@ -1,5 +1,19 @@
 #!/bin/bash
 # =============================================================================
+# RETIRED -- Monash M3 machinery, does NOT run on DCCN (as of 2026-09-05)
+# =============================================================================
+# This is v0.3.0 Phase-16-era acceptance tooling. It carries its own conda
+# activation + `pip install` fallback ladder, both of which are invalid on
+# DCCN: there is no conda on the cluster, and installing inside a job races
+# other jobs against the shared venv.
+#
+# Kept for provenance only. For any new job use the shared library instead:
+#     source cluster/lib/cluster_env.sh
+#     activate_env
+# See cluster/README.md. The 2026-07-15 code-organization audit lists this file
+# (theme 5.2, "orphaned Phase-16 machinery") as a removal candidate.
+# =============================================================================
+# =============================================================================
 # Phase 16 v0.3.0 -- Bilinear DCM Acceptance Gate (CPU)
 # =============================================================================
 # Runs the slow acceptance test for the task-bilinear recovery benchmark:
@@ -11,7 +25,7 @@
 # Stack: PyTorch + Pyro only.
 #
 # Usage:
-#   # Default invocation (actinf-py-scripts primary, no fallback, project fc37):
+#   # Default invocation (legacy M3 conda path; see cluster/lib/cluster_env.sh):
 #   sbatch cluster/run_phase16_acceptance.slurm
 #
 #   # Override primary env:
@@ -46,7 +60,7 @@
 #SBATCH --time=04:00:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
 # NOTE: No `set -e` -- we want to capture the pytest exit code and still emit
 # the result summary + sacct report even when the acceptance gate fails.
@@ -81,7 +95,6 @@ echo "============================================================"
 # Configuration (override via --export=KEY=VALUE)
 # =============================================================================
 _PROJECT="${PROJECT:-fc37}"
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
 ENV_FALLBACK="${ENV_FALLBACK:-}"
 
 # Track which env actually activated, for the result summary.

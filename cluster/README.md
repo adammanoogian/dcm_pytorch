@@ -1,132 +1,133 @@
-# Cluster -- Phase 16 Acceptance Test
+# Cluster -- DCCN (Donders / Radboud)
 
-Run the v0.3.0 bilinear-recovery acceptance gate (`test_acceptance_gates_pass_at_10_seeds`, ~80-150 min CPU) on Monash M3. Uses an existing conda env (`actinf-py-scripts` by default) -- **do not create a new env**.
+Compute for Pyro-DCM runs on the **DCCN cluster** (`mentat001-007.dccn.nl`),
+Slurm-scheduled. Migrated from Monash M3 on **2026-09-05**; anything in this
+repo describing `--partition=comp`, conda envs, or `/home/aman0087/...` predates
+that move and is provenance only.
 
-## Dependencies
+## Routing rule
 
-`pyproject.toml` is the single source of truth. The slurm script runs `pip install -e .[benchmark,dev]` against the activated env on every invocation, so missing project packages (`torch`, `torchdiffeq`, `pyro-ppl`, `zuko`, `scipy`, `numpy`, `matplotlib`, `pytest`) are auto-synced. Idempotent when everything is already present.
+Anything projected to take **more than ~3 minutes of saturating laptop CPU**
+goes to the cluster. That includes `pytest -m slow`, full-suite runs, SVI/NUTS
+fits, VL sweeps, identifiability grids, recovery harnesses, and model-comparison
+sweeps. Single fast unit tests (<30 s) stay local. The rule binds subagents too.
 
-**Prior failure note:** The first submission (job 54900993) picked up `ds_env`, which had no `torch`. The failure mode was the fail-fast import check, as intended. The script now defaults to `actinf-py-scripts` and auto-installs any missing deps.
+The workstation is for orchestration: editing, linting, quick tests, reading
+logs, and -- newly -- the **SPM12/MATLAB bridge** (see below).
 
-If the cluster env is missing `torch` entirely, the first pip install will pull ~2GB. All subsequent runs are no-op verification (~5s).
+## What changed from M3
 
-## 1. Clone via deploy key
+| | M3 (retired) | DCCN (current) |
+|---|---|---|
+| Partition | `comp` | `batch` (default), `interactive`, `gpu`, `gpu40g` |
+| Env manager | conda (`actinf-py-scripts`) | **uv venv** -- no conda on the cluster |
+| Default memory | sensible per node | **1 GB** -- always pass `--mem` |
+| Max walltime | varied | 72 h on every partition |
+| CPUs per node | -- | `batch` caps at 45 |
+| MATLAB | `/usr/local/matlab/r2022a` | `module load matlab/R2024b` |
+| SPM12 | `~/fc37/Carrick/spm12` | **not installed** -- run locally instead |
+| Code sync | Mutagen | Mutagen (unchanged) |
 
-On the cluster, clone the repo using a deploy key you've uploaded to GitHub (Repo -> Settings -> Deploy keys, **write access = yes** so the push job can publish results).
+## Environment (provision once, from the login node)
 
-**Form A -- explicit `GIT_SSH_COMMAND` (no config changes):**
-
-```bash
-GIT_SSH_COMMAND='ssh -i ~/.ssh/dcm_pytorch_deploy -o IdentitiesOnly=yes' \
-    git clone git@github.com:adammanoogian/dcm_pytorch.git
-cd dcm_pytorch
-git checkout gsd/phase-16-bilinear-recovery-benchmark
-```
-
-For subsequent `git fetch` / `git push` from the cluster you'll need to re-pass `GIT_SSH_COMMAND` OR (strongly preferred for the push job) configure a persistent SSH host alias via Form B below -- otherwise `cluster/99_push_phase16_results.slurm` cannot authenticate on the compute node.
-
-**Form B -- `~/.ssh/config` host alias (persistent, recommended for long use):**
-
-```
-# ~/.ssh/config
-Host github-dcm-pytorch
-    HostName github.com
-    User git
-    IdentityFile ~/.ssh/dcm_pytorch_deploy
-    IdentitiesOnly yes
-```
-
-Then clone:
+DCCN has no conda. Jobs activate a uv-managed venv via
+`cluster/lib/cluster_env.sh`:
 
 ```bash
-git clone github-dcm-pytorch:adammanoogian/dcm_pytorch.git
-cd dcm_pytorch
-git checkout gsd/phase-16-bilinear-recovery-benchmark
+cd "$DCM_CLUSTER_ROOT"
+~/.local/bin/uv venv --python 3.10 .venv
+~/.local/bin/uv pip install --python .venv/bin/python -e '.[benchmark,dev]'
 ```
 
-With this form the push job's `git push origin ...` uses the deploy key automatically -- no environment variables required. This is the **required setup** for the push job to succeed without manually injecting `GIT_SSH_COMMAND` via `sbatch --export`.
+**Never install inside a job.** Concurrent resolvers in an array job race on the
+same venv and corrupt it (`.pth` damage, OOM). Provision once; jobs only
+activate. Override the location with `DCM_VENV=/path/to/venv`.
 
-## 2. Submit
+## Writing a job
+
+Every job sources the shared library, which handles activation, thread pinning,
+the stack import check, and the header block:
 
 ```bash
-cd dcm_pytorch
-git checkout gsd/phase-16-bilinear-recovery-benchmark
-bash cluster/submit_phase16.sh
+#SBATCH --job-name=my_job
+#SBATCH --output=cluster/logs/my_job_%j.out
+#SBATCH --error=cluster/logs/my_job_%j.err
+#SBATCH --time=02:00:00
+#SBATCH --mem=16G           # REQUIRED -- the default is 1 GB
+#SBATCH --cpus-per-task=4
+#SBATCH --partition=batch
+
+source cluster/lib/cluster_env.sh
+crlf_guard
+setup_torch_threads 4
+activate_env
+verify_torch
+print_job_header "My Job"
+
+python cluster/scripts/my_script.py
 ```
 
-This submits 2 jobs:
+`setup_matlab R2024b` additionally loads MATLAB and hard-checks `SPM12_PATH`.
 
-1. **Acceptance** (`phase16_acceptance`, ~4h wall limit, 16G, 4 CPUs, partition `comp`) -- runs `pytest tests/test_task_bilinear_benchmark.py -m slow -k acceptance`.
-2. **Push** (`push_phase16_results`, 15min) -- dependent on the acceptance job via `afterany` (runs even if acceptance fails, so logs get captured). Commits `cluster/logs/phase16_*` and `cluster/results/phase16_*` to a timestamped branch `results/phase16-acceptance-YYYYMMDD-HHMMSS`.
+## MATLAB and SPM12
 
-### Overrides
+**Run the SPM bridge on the workstation, not the cluster.** As of 2026-09-05 the
+workstation has MATLAB **R2025b with a valid licence** and a complete SPM12 at
+`C:/Users/adaman/Documents/external/spm12`. The FlexLM -15 licence failure that
+originally forced Phases 32/34/35 onto M3 no longer applies.
 
-| Variable       | Default              | Purpose                                                |
-|----------------|----------------------|--------------------------------------------------------|
-| `ENV_NAME`     | `actinf-py-scripts`  | Primary conda env name                                 |
-| `ENV_FALLBACK` | *(unset)*            | Second try if `ENV_NAME` can't satisfy project deps    |
-| `PROJECT`      | `fc37`               | Project code for `/scratch/${PROJECT}/${USER}/...`     |
-| `PUSH_TO_MAIN` | `false`              | See warning below                                      |
+The cluster has MATLAB modules but **no system SPM12**, so a cluster SPM run
+must point `SPM12_PATH` at a personal checkout; `setup_matlab` fails loudly if
+it is unset or wrong.
 
-Example overrides:
+Paths resolve from `config.py` (`MATLAB_PATH`, `SPM12_PATH`, `TAPAS_RDCM_PATH`),
+all environment-overridable. `validation/run_validation.py` and
+`validation/run_vl_validation.py` export `SPM12_PATH` into the MATLAB child, and
+every `.m` in `validation/matlab_scripts/` reads it via `getenv('SPM12_PATH')`.
+
+Note the v0.8.0 ERP parity ladders are **fixture-keyed**: they assert pure-torch
+output against frozen `.mat` files in `validation/data/` and need no MATLAB at
+all. Only *regenerating* those fixtures requires SPM12.
+
+## Code sync
+
+Local is the source of truth; Mutagen propagates edits. **Never edit files
+directly on the cluster** -- it corrupts the sync direction. See the `dccn-hpc`
+skill for `dccn-sync-init`, the ACL model, and the SSH kill switch
+(`dccn-unlock` / `dccn-lock`).
+
+The repo requires `.gitattributes` with `* text=auto eol=lf` and local
+`core.autocrlf=input`, or every text file becomes a cross-OS conflict.
+
+## Submitting and monitoring
 
 ```bash
-# Use a different env
-ENV_NAME=my_env bash cluster/submit_phase16.sh
-
-# Override scratch project code
-PROJECT=ft29 bash cluster/submit_phase16.sh
+ssh mentat "cd \$DCM_CLUSTER_ROOT && sbatch cluster/sbatch/recovery_matrix_sweep.sbatch"
+ssh mentat "squeue -u \$USER"
+ssh mentat "sacct -j <JOBID> --format=JobID,JobName%20,State,Elapsed,ExitCode -X"
+ssh mentat "tail -n 200 \$DCM_CLUSTER_ROOT/cluster/logs/<name>_<jobid>.out"
 ```
 
-The submit wrapper forwards `ENV_NAME`, `ENV_FALLBACK`, and `PROJECT` through `sbatch --export=ALL,...` automatically. You can also sbatch the slurm script directly:
+Slurm jobs are not harness-tracked. After every `sbatch`, check back twice: once
+at ~2 minutes (did it actually leave PENDING, or die instantly on a bad
+directive?) and once near the expected finish. **Read the log, not just the
+state** -- a job can report `COMPLETED` rc=0 with every task inside silently
+errored.
 
-```bash
-sbatch --export=ALL,ENV_NAME=my_env cluster/run_phase16_acceptance.slurm
-```
+## Layout
 
-**Env fallback logic:** the script tries `ENV_NAME` first, and falls back to `ENV_FALLBACK` if either (a) conda activation fails, (b) `pip install -e .[benchmark,dev]` fails inside it, or (c) the import check fails after install. Prior versions only fell back on activation failure, letting a half-provisioned env pass activate and crash later — fixed.
+| Path | Purpose |
+|---|---|
+| `cluster/lib/cluster_env.sh` | Shared activation / MATLAB / verification helpers |
+| `cluster/sbatch/` | Slurm job scripts (one per experiment) |
+| `cluster/scripts/` | Python entrypoints the sbatch files call |
+| `cluster/logs/` | Job stdout/stderr (gitignored) |
+| `cluster/results/` | Per-job JSON results (gitignored) |
 
-> **WARNING: `PUSH_TO_MAIN=true` is NOT recommended.** The push job defaults to creating a results branch so you can review before merging. Setting `PUSH_TO_MAIN=true` pushes directly to `main` via `git pull --rebase`, which **fails silently on merge conflicts** and leaves results un-pushed on the compute node -- see HPC template gotcha #4. Only use it if you're certain nobody else has pushed to `main` while the job was running.
+## Retired
 
-## 3. Monitor & retrieve results
-
-Watch the queue:
-
-```bash
-squeue -u $USER
-```
-
-Tail the live logs (replace `<JOB_ID>` with the acceptance job ID printed by `submit_phase16.sh`):
-
-```bash
-tail -f cluster/logs/phase16_<JOB_ID>.out
-tail -f cluster/logs/phase16_<JOB_ID>.err
-tail -f cluster/logs/pytest_phase16_<JOB_ID>.log
-```
-
-Inspect a specific job:
-
-```bash
-scontrol show job <JOB_ID>
-sacct -j <JOB_ID> --format=JobID,Elapsed,MaxRSS,State
-```
-
-After the push job completes, retrieve results locally:
-
-```bash
-git fetch origin
-git log --oneline origin/results/phase16-acceptance-*
-# inspect a specific branch:
-git checkout origin/results/phase16-acceptance-<timestamp>
-cat cluster/results/phase16_acceptance_*.md
-```
-
-Merge into main when satisfied:
-
-```bash
-git checkout main
-git merge origin/results/phase16-acceptance-<timestamp>
-git push origin main
-```
-
-If the acceptance test fails, the push job still runs (due to `afterany`) -- the pytest log will be on the results branch and you can diagnose before re-running.
+`run_phase16_acceptance.slurm`, `submit_phase16.sh`, and
+`99_push_phase16_results.slurm` are v0.3.0 Phase-16 M3 machinery carrying conda
+activation and in-job `pip install`. Neither works on DCCN. They are kept for
+provenance and flagged for removal by the 2026-07-15 code-organization audit
+(theme 5.2).

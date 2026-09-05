@@ -16,19 +16,17 @@
 #SBATCH --time=06:00:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
 source cluster/lib/cluster_env.sh
 crlf_guard
 
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
-
 setup_torch_threads 4
-activate_env "$ENV_NAME"
+activate_env
 
 # Package is pre-installed (editable) or found via sys.path in the
 # Python script.  NEVER run pip install inside array jobs -- N
-# concurrent resolvers race on the shared conda env (OOM + .pth
+# concurrent resolvers race on the shared venv (OOM + .pth
 # corruption).  See m3-hpc.skill convention 6.
 
 verify_torch

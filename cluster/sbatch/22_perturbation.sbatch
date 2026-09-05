@@ -32,15 +32,13 @@
 #SBATCH --time=12:00:00
 #SBATCH --output=cluster/logs/perturb_22_%j.out
 #SBATCH --error=cluster/logs/perturb_22_%j.err
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
 source cluster/lib/cluster_env.sh
 crlf_guard
 
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
-
 setup_torch_threads 4
-activate_env "$ENV_NAME"
+activate_env
 
 # Package is pre-installed (editable).  NEVER run pip install inside
 # SLURM jobs -- concurrent resolvers OOM + corrupt env.

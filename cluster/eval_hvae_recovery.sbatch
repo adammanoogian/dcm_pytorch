@@ -14,24 +14,14 @@
 #SBATCH --time=00:20:00
 #SBATCH --mem=8G
 #SBATCH --cpus-per-task=2
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
-module load miniforge3
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
 mkdir -p cluster/logs
 
-_PROJECT="${PROJECT:-fc37}"
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
-
-conda deactivate 2>/dev/null || true
-if conda activate "$ENV_NAME" 2>/dev/null; then
-    echo "Activated env: $ENV_NAME (by name)"
-elif conda activate "/scratch/${_PROJECT}/${USER}/conda/envs/${ENV_NAME}" 2>/dev/null; then
-    echo "Activated env: $ENV_NAME (scratch)"
-else
-    echo "ERROR: cannot activate env $ENV_NAME"
-    exit 1
-fi
+source cluster/lib/cluster_env.sh
+crlf_guard
+activate_env
 
 if ! python -c "import torch, pyro_dcm" 2>/dev/null; then
     echo "ERROR: import check failed"

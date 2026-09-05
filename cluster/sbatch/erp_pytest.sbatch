@@ -8,13 +8,13 @@
 # defaults to the full v0.8.0 ERP scope.
 #
 # Usage:
-#   ssh m3 'cd ~/fc37/adam/projects/dcm_pytorch && \
+#   ssh mentat 'cd $DCM_CLUSTER_ROOT && \
 #     sbatch --export=ALL,TEST_TARGET="tests/test_x.py tests/test_y.py" \
 #     cluster/sbatch/erp_pytest.sbatch'
 #
 # Outputs:
 #   cluster/logs/erp_pytest_<jobid>.{out,err}   SLURM logs (synced back via Mutagen)
-# NEVER pip install inside this job (shared conda env; concurrent resolvers
+# NEVER pip install inside this job (shared venv; concurrent resolvers
 # OOM + corrupt the env). The package is found via sys.path.
 # =============================================================================
 
@@ -24,14 +24,13 @@
 #SBATCH --time=00:30:00
 #SBATCH --mem=8G
 #SBATCH --cpus-per-task=4
-#SBATCH --partition=comp
+#SBATCH --partition=batch
 
 source cluster/lib/cluster_env.sh
 crlf_guard
 
-ENV_NAME="${ENV_NAME:-actinf-py-scripts}"
 setup_torch_threads 4
-activate_env "$ENV_NAME"
+activate_env
 verify_torch
 print_job_header "ERP pytest (v0.8.0 verification)"
 

@@ -46,7 +46,7 @@ fprintf('Start time: %s\n', datestr(now));
 try
     spm12_path = getenv('SPM12_PATH');
     if isempty(spm12_path)
-        spm12_path = 'C:/Users/aman0087/Documents/Github/spm12';
+        spm12_path = 'C:/Users/adaman/Documents/external/spm12';
     end
     addpath(spm12_path);
     if ~exist('spm', 'file')
