@@ -9,6 +9,36 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 ## Current Position
 
+### ⚙️ 2026-09-05 — Machine migration + branch reconciliation (no science changed)
+
+Work resumed after a ~12-week gap (last commit 2026-08-31). Three infrastructure
+facts now hold that did not before:
+
+1. **`main` was 93 commits stale and has been fast-forwarded.** GSD phase
+   branches are stacked and were never merged back, so `main` sat at
+   2026-06-11 (Phase 32 planning) while the real tip — all of v0.7.0 Phase 32
+   and the entire v0.8.0 ERP milestone — lived on
+   `gsd/phase-36-erp-dcm-model-mmn-demo`. Fast-forward was clean (`main` was a
+   strict ancestor; the 30 "unmerged" commits on `phase-16.1`/`phase-20` are
+   superseded rebase duplicates whose content is present at the tip). **Merge
+   phase branches back to `main` as milestones close.**
+2. **Compute moved Monash M3 → Radboud DCCN** (`mentat`). All 25 Slurm scripts
+   retargeted: `--partition=comp` → `batch`, conda → uv venv (DCCN has no
+   conda), explicit `--mem` everywhere (DCCN's default is 1 GB). Phase-16 M3
+   machinery marked RETIRED. See `cluster/README.md` and the `dccn-hpc` skill.
+   **A DCCN project allocation for this repo has NOT been identified** — the
+   remote sync root and log directory still need one before any job can run.
+3. **MATLAB + SPM12 now work LOCALLY.** This workstation has MATLAB R2025b with
+   a valid licence (verified rc=0) and a complete SPM12. The FlexLM -15 failure
+   that forced Phases 32/34/35 onto M3 is gone, so the SPM bridge should run on
+   the workstation. **DCCN has MATLAB modules but no system SPM12.** Note the
+   v0.8.0 parity ladders are fixture-keyed and need no MATLAB at all.
+
+Still open before compute can resume: a DCCN project allocation, a provisioned
+uv venv on the cluster, and a Mutagen sync session (none currently exists).
+
+---
+
 **Milestone:** v0.8.0 DCM for Evoked Responses (EEG/MEG ERP). **✅ 4/4 PLANNED PHASES COMPLETE & VERIFIED (33 ✅, 34 ✅, 35 ✅, 36 ✅; each gsd-verifier-passed). v0.8.0 CAPSTONE delivered.** Tests routed to M3 per the cluster rule (memory [[feedback-gsd-cluster-routing]]; user correction 2026-06-26). **Phase 37 (ECD Dipole Lead-Field & Frontal-Dominant Scalp MMN) added as a DEFINED follow-up** (ERPECD-01..05; ERPDCM-04 frontal-topography reclassified — LFP-unrecoverable, an ECD phenomenon; needs verified 5-source MNI coords from the user; may become v0.8.1). **Next:** `/gsd:audit-milestone` or `/gsd:complete-milestone` for v0.8.0; then `/gsd:plan-phase 37` once coords are provided.
 **Phase 35 — Single-Dipole Lead-Field, Scalp Projection & ERPDCMForward: 3/3 WAVES DONE (Plans 35-01, 35-02, 35-03). LEAD-02/03/05 gated green. `/gsd:verify-phase 35` outstanding.**
 **Phase 36 — erp_dcm_model + amortized wiring + 5-source MMN precision-sweep demo: ✅ ALL 3 PLANS DONE. 36-01 ✅ DONE (erp_dcm_model + ERPDCMPacker + ErpSummaryNet + amortized_erp_dcm_model; LAPTOP unit + M3 amortized fit green). 36-02 ✅ DONE (public MMN net + actinf_physics adapter). 36-03 ✅ DONE (gated MMN precision-sweep CAPSTONE demo).**

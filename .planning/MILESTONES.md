@@ -1,5 +1,64 @@
 # Project Milestones: Pyro-DCM
 
+## v0.8.0 DCM for Evoked Responses (EEG/MEG ERP) (Complete: 2026-06-26)
+
+**Delivered:** A complete time-domain ERP forward stack — canonical microcircuit neural mass → evoked response → single-dipole lead field → scalp ERP — verified against SPM12 at *every* stage on byte-frozen MATLAB fixtures, plus the ERP-DCM Pyro model, amortized wiring, and a 5-source auditory-MMN precision-sweep demo.
+
+**Phases completed:** 33-36 (4 phases, 12 plans), each gsd-verifier-passed
+
+**Key accomplishments:**
+
+- **SPM12 forward parity at every stage** — the strongest validation in the repo. `cmc_f` is bit-exact against `spm_fx_cmc`; the exponential-Euler integrator is bit-exact against `spm_int_L` (measured `matrix_exp` floor 8.6e-11); the multi-source network matches `spm_gen_Q` + `spm_gen_erp` at N=5; scalp projection matches `spm_lx_erp`; full-pipeline gate 6.4e-11.
+- **`utils/local_linearization.py`** — the SPM12 frozen-Jacobian exp-Euler integrator (Ozaki 1992), CMC-agnostic, fixture-verified before anything was built on it.
+- **`ERPDCMForward`** — a 4th `ForwardModel` protocol implementor, so the Phase 28 VL engine was reused unchanged.
+- **MMN mechanism shipped**: monotone precision → |MMN| attenuation via the diag→G path, delivered as a gated demo script.
+- **Parity ladders are fixture-keyed and MATLAB-independent** — they assert pure-torch output against committed `.mat` files, which is why the whole regression suite survived the M3 → DCCN move intact.
+
+**Honest limits:**
+
+- **Forward/synthetic only** — no empirical ERP data was fitted.
+- **Frontal scalp topography was NOT recovered.** ERPDCM-04 turned out to be an ECD phenomenon, unrecoverable with the single-dipole LFP lead field. Reclassified into a defined follow-up (Phase 37) rather than dropped or quietly downgraded.
+- Delay-free (`D = I`) only; the `P.M` term is unimplemented.
+
+**Stats:**
+
+- 60 commits over 2 days (2026-06-25 → 2026-06-26), `4122624` → `cb0167c`
+- 79 ERP tests green (M3 job 57904695), 11 ERP/CMC test files
+
+**What's next:** Phase 37 (ECD dipole lead field + frontal-dominant scalp MMN), **blocked on verified 5-source MNI coordinates from the user**; may become v0.8.1. The milestone has not been formally closed with `/gsd:complete-milestone`.
+
+---
+
+## v0.7.0 Variational Laplace Validation (Complete: 2026-06-12)
+
+**Delivered:** A validation-breadth milestone proving the Variational Laplace engine is trustworthy across a Cartesian product of network sizes, SNR levels and forward models — and establishing precisely where it is not.
+
+**Phases completed:** 29-32 (4 phases, 14 plans), each gsd-verifier-passed
+
+**Key accomplishments:**
+
+- **Full recovery matrix**: N{2,4} × SNR{1,3} × {spectral, task, latent-circuit}, 10 seeds per cell. **10/10 cells classified, 0 errored — 6 PASS, 4 documented identifiability limits with evidence.** No silent failures.
+- **BMR relative-evidence ranking** recovers true sparse structure 5/5 seeds at both N=2 and N=4 with a positive separation gap, and agrees with brute-force VL refits.
+- **Two hard identifiability findings** that constrain all future ground-truth design: spectral DCM cannot identify a lone off-diagonal A entry, and a feed-forward chain A produces a CSD *bit-identical* to the empty graph. Ground truth must be reciprocal.
+- **VL determinism** across all three forward models (fixed-seed, within-machine, atol 1e-8), with the cross-machine caveat documented.
+- Task DCM recovers cleanly at N=2 (sign 1.0, A-RMSE ~0.04); **task N=4 is a genuine identifiability limit** (sign 0.57, coverage 0.0), reported as a finding rather than patched away.
+
+**Honest limits:**
+
+- **The strict 5% VL-vs-SPM12 matched-free-energy gate was MISSED.** `relative_error = 0.8776`, traced to a **constant 269.895-nat offset** (M3 job 56407192). Cross-model ranking agreement was 1.0 and free-space `Ep` off-diagonals 17%/47% against a ~10% target. The miss is recorded in JSON, not hidden — but VL absolute free energy is *not* SPM-comparable, and this is the largest open scientific question in the repo.
+- **Absolute-ΔF BMR pruning remains structurally broken** (posterior std ~0.001-0.01× prior at high SNR). Only relative ranking is defensible.
+- **Posterior tempering is exploratory, not a headline claim.** T=2.0 restores coverage on task-N4 without changing the ranking, but the same T breaks positive-definiteness on task-N2 — a recorded cross-condition hazard.
+- No real data; SBI SBC calibration (2/9 parameters) deferred.
+
+**Stats:**
+
+- 76 commits over 2 days (2026-06-10 → 2026-06-12), `b833ea5` → `4122624`
+- 19/19 requirements mapped and delivered (VLINFRA, VLREC, VLBMR, VLSPM, VLROBUST)
+
+**What's next:** v0.8.0 DCM for Evoked Responses.
+
+---
+
 ## v0.6.0 Latent Circuit DCM — DCM Interpretability for Neural Data Models (Shipped: 2026-06-10, scope-cut)
 
 **Delivered:** A synthetic-validated DCM-recovery methodology plus an SPM12-grade Variational Laplace inference engine (the structured-posterior path that closed synthetic recovery), with ready — but un-run — real-data infrastructure (neural-data-model pipeline, foundation-model extractors, hybrid VAE-DCM, SBI). Real-data scientific application was audited as undelivered and **deferred to v0.7.0** (deferred, not failed).
@@ -24,6 +83,56 @@
 **Git range:** `8ed4c2d` → `1bba88c`
 
 **What's next:** v0.7.0 — VL validation matrix + the deferred real-data application (real Cam-CAN M/EEG interpretability, real foundation-model runs + cross-modal comparison, SBI SBC calibration). Seed: `.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md`.
+
+---
+
+## v0.5.0 MNE-Python Integration (Shipped: 2026-05-24)
+
+**Delivered:** M/EEG data ingestion via MNE-Python and BIDS, plus end-to-end pipeline demonstrations.
+
+**Phases completed:** 18-19 (4 plans)
+
+**Key accomplishments:**
+
+- `src/pyro_dcm/io/` — `mne_loader.py` and `bids_loader.py`, with a 17/17-must-have IO test suite
+- End-to-end pipeline demos (10/10 must-haves verified)
+- `mne` optional dependency group and pytest marker
+
+**What's next:** v0.6.0 Latent Circuit DCM.
+
+---
+
+## v0.4.0 Circuit Explorer (Shipped: 2026-05-21)
+
+**Delivered:** Interactive serialization and rendering for DCM model configs and fitted posteriors.
+
+**Phases completed:** 17 (1 plan, verified 15/15 must-haves)
+
+**Key accomplishments:**
+
+- `utils/circuit_viz.py` — CircuitViz JSON serializer plus a static circuit-explorer HTML template
+- Structural acceptance (JSON schema validity, round-trip equality, planned↔fitted toggle) rather than RMSE/coverage gates
+
+**What's next:** closed jointly with v0.3.0 in commit `76c3ced`.
+
+---
+
+## v0.3.0 Bilinear DCM Extension (Shipped: 2026-05-21)
+
+**Delivered:** The full Friston 2003 bilinear neural state equation `dx/dt = Ax + Σ_j u_j B_j x + Cu` propagated end-to-end through forward model, simulator, Pyro model and priors.
+
+**Phases completed:** 13-16 (12 plans). Phase 16.1 was inserted then **superseded**.
+
+**Key accomplishments:**
+
+- Bilinear neural state + stability monitor, stimulus utilities, bilinear simulator, B priors and masks
+- **The defining result is a negative one turned positive:** the Phase 16 recovery benchmark FAILED its RECOV-04 B-RMSE acceptance gate under SVI (B-RMSE 0.3467). Rather than tune the guide, the failure was diagnosed to SVI's first-order mean-field approximation and resolved by writing the **Variational Laplace engine**, which recovered B at RMSE 0.0170 on the same problem — proving the forward model correct.
+- That engine (`inference/variational_laplace.py`) became the backbone of v0.6.0, v0.7.0 and v0.8.0, and was retroactively formalized as Phase 28.
+- Phase 16.1 (the planned B-RMSE shrinkage diagnostic) was therefore never executed.
+
+**Stats:** 27/27 v0.3.0 requirements complete. Closed with v0.4.0 in commit `76c3ced`.
+
+**What's next:** v0.5.0 MNE-Python Integration.
 
 ---
 

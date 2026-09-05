@@ -4,12 +4,11 @@
 
 - **v0.1.0 Foundation** - Phases 1-8 (shipped 2026-04-03)
 - **v0.2.0 Cross-Backend Inference Benchmarking** - Phases 9-12 (shipped 2026-04-13)
-- **v0.3.0 Bilinear DCM Extension** - Phases 13-16 (in progress; started 2026-04-17)
-- **v0.4.0 Circuit Explorer** - Phase 17+ (defined 2026-04-24; not yet started)
-- **v0.5.0 MNE-Python Integration** - Phases 18-19 (in progress; started 2026-05-21)
+- ✅ **v0.3.0 Bilinear DCM Extension** - Phases 13-16 (shipped 2026-05-21; RECOV-04 resolved by the VL engine, Phase 16.1 superseded)
+- ✅ **v0.4.0 Circuit Explorer** - Phase 17 (shipped 2026-05-21)
+- ✅ **v0.5.0 MNE-Python Integration** - Phases 18-19 (shipped 2026-05-24)
 - ✅ **v0.6.0 Latent Circuit DCM** - Phases 20-28 (shipped 2026-06-10, scope-cut; real-data → v0.7.0)
-- 📋 **v0.7.0 Variational Laplace Validation** - Phases 29-32 (defined 2026-06-10; not yet started)
-- ✅ **v0.7.0 Variational Laplace Validation** - Phases 29-32 (complete; verified 2026-06-12)
+- ✅ **v0.7.0 Variational Laplace Validation** - Phases 29-32 (complete; verified 2026-06-12. Recovery matrix + BMR ranking passed; the strict 5% VL-vs-SPM matched-F gate was MISSED — constant 269.895-nat offset, recorded)
 - ✅ **v0.8.0 DCM for Evoked Responses (EEG/MEG ERP)** - Phases 33-36 (complete 2026-06-26; CMC ERP forward stack SPM12-parity-verified + MMN precision-sweep demo) · 📋 Phase 37 ECD follow-up defined (needs MNI coords)
 
 <details>
@@ -33,9 +32,13 @@ See `.planning/milestones/v0.2.0-ROADMAP.md` for details. 4 phases, 11 plans, 47
 
 ---
 
-## Current Milestone: v0.3.0 Bilinear DCM Extension
+## v0.3.0 Bilinear DCM Extension — SHIPPED 2026-05-21
 
-**Status:** In progress (started 2026-04-17; Phase 16.1 inserted 2026-04-24 for RECOV-04 diagnostic)
+**Status:** ✅ Shipped 2026-05-21 (commit `76c3ced`). RECOV-04's B-RMSE acceptance
+failure was resolved not by tuning SVI but by the Variational Laplace engine
+(B-RMSE 0.0170 vs SVI's 0.3467), which proved the forward model correct and
+isolated the fault to SVI's first-order mean-field approximation. **Phase 16.1
+(RECOV-04 diagnostic) was therefore superseded and never executed.**
 **Phases:** 13-16 + 16.1 (4 phases + 1 inserted)
 **Requirements covered:** 27/27 v0.3.0 requirements (Phase 16.1 may tighten or amend RECOV-04 / RECOV-07)
 
@@ -261,13 +264,14 @@ Plans:
 | 14. Stimulus Utilities & Bilinear Simulator | 2/2 | Complete | 2026-04-18 |
 | 15. Pyro Generative Model with B Priors and Masks | 3/3 | Complete | 2026-04-18 |
 | 16. 3-Region Bilinear Recovery Benchmark | 3/3 | Implementation complete; acceptance FAILED 2026-04-24 (RECOV-04) | -- |
-| 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | 0/2 | Planned | -- |
+| 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | 0/2 | ⛔ Superseded — RECOV-04 resolved by the VL engine (2026-05-21); never executed | -- |
 
 ---
 
-## Next Milestone: v0.4.0 Circuit Explorer
+## v0.4.0 Circuit Explorer — SHIPPED 2026-05-21
 
-**Status:** Defined 2026-04-24 (not yet started; may run in parallel with v0.3.0 Phase 16 cluster re-run since Phase 17 depends only on Phase 15 APIs).
+**Status:** ✅ Shipped 2026-05-21 alongside v0.3.0 (commit `76c3ced`). Phase 17
+completed 2026-04-24, verified 15/15 must-haves.
 **Phases:** 17+
 **Theme:** Interactive serialization + rendering tooling for DCM model configs and fitted posteriors. Distinct from v0.3.0's fitting/recovery scope — acceptance is structural (JSON schema validity, round-trip equality, planned↔fitted toggle semantics) rather than RECOV-style RMSE/coverage gates.
 
@@ -306,9 +310,10 @@ Plans:
 
 ---
 
-## Current Milestone: v0.5.0 MNE-Python Integration
+## v0.5.0 MNE-Python Integration — SHIPPED 2026-05-24
 
-**Status:** In progress (started 2026-05-21)
+**Status:** ✅ Shipped 2026-05-24. Phase 18 (MNE/BIDS IO, 17/17 must-haves) and
+Phase 19 (end-to-end pipeline demos, 10/10) both verified complete.
 **Phases:** 18-19 (2 phases)
 **Requirements covered:** 18/18 v0.5.0 requirements
 
@@ -416,9 +421,13 @@ Full archive: `.planning/milestones/v0.6.0-ROADMAP.md` · Audit: `.planning/mile
 
 ---
 
-## Current Milestone: v0.7.0 Variational Laplace Validation
+## v0.7.0 Variational Laplace Validation — COMPLETE 2026-06-12
 
-**Status:** Defined 2026-06-10 (not yet started; ready to plan Phase 29).
+**Status:** ✅ All 4 phases (29-32) complete and gsd-verifier-passed 2026-06-12.
+Acceptance gates 1, 2 and 4 met. Gate 3 (VL vs SPM12) is PARTIAL: cross-model
+ranking agreement 1.0 and Ep in free-parameter space 17%/47%, but the strict 5%
+matched-free-energy gate was MISSED (relative_error 0.8776, a constant
+269.895-nat offset, M3 job 56407192). Recorded, not hidden — see Phase 32.
 **Phases:** 29-32 (4 phases)
 **Requirements covered:** 19/19 v0.7.0 requirements (VLINFRA-01..05, VLREC-01..05,
 VLBMR-01..03, VLSPM-01..03, VLROBUST-01..03) mapped to exactly one phase each.
@@ -625,9 +634,14 @@ round-trip test). Independent of Phase 30; runs concurrently.
 
 ---
 
-## Current Milestone: v0.8.0 DCM for Evoked Responses (EEG/MEG ERP)
+## Current Milestone: v0.8.0 DCM for Evoked Responses (EEG/MEG ERP) — COMPLETE 2026-06-26
 
-**Status:** Defined 2026-06-25 (not yet started; ready to plan Phase 33).
+**Status:** ✅ All 4 planned phases (33-36) complete and gsd-verifier-passed
+2026-06-26; the capstone MMN precision-sweep demo shipped. 79 ERP tests green.
+📋 **Phase 37 (ECD dipole lead-field, frontal-dominant scalp MMN) remains DEFINED
+but not started — it is blocked on verified 5-source MNI coordinates from the
+user** and may become v0.8.1. The milestone has not been formally closed with
+`/gsd:complete-milestone`.
 **Phases:** 33-36 (4 phases)
 **Requirements covered:** 25/25 v0.8.0 requirements (CMC-01..07, EVOK-01..06, LEAD-01..06,
 ERPDCM-01..06) mapped to exactly one phase each.
@@ -936,7 +950,7 @@ parity gate is green).
 | 14. Stimulus Utilities & Bilinear Simulator | v0.3.0 | 2/2 | Complete | 2026-04-18 |
 | 15. Pyro Generative Model with B Priors and Masks | v0.3.0 | 3/3 | Complete | 2026-04-18 |
 | 16. 3-Region Bilinear Recovery Benchmark | v0.3.0 | 3/3 | Implementation complete; acceptance FAILED 2026-04-24 (RECOV-04) | -- |
-| 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | v0.3.0 | 0/2 | Planned | -- |
+| 16.1. RECOV-04 B-RMSE Shrinkage Diagnostic & Fix (INSERTED) | v0.3.0 | 0/2 | ⛔ Superseded by the VL engine (2026-05-21); never executed | -- |
 | 17. Circuit Visualization Module | v0.4.0 | 1/1 | Complete | 2026-04-24 |
 | 18. MNE/BIDS IO Test Suite | v0.5.0 | 2/2 | Complete (verified 17/17 must-haves) | 2026-05-21 |
 | 19. End-to-End Pipeline Demos | v0.5.0 | 2/2 | Complete (verified 10/10 must-haves) | 2026-05-24 |
