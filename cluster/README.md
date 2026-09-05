@@ -28,6 +28,35 @@ logs, and -- newly -- the **SPM12/MATLAB bridge** (see below).
 | SPM12 | `~/fc37/Carrick/spm12` | **not installed** -- run locally instead |
 | Code sync | Mutagen | Mutagen (unchanged) |
 
+## Live setup (provisioned 2026-09-05, verified end to end)
+
+| | |
+|---|---|
+| Remote root | `/home/affneu/adaman/dcm_pytorch` (network home; **no project allocation yet**) |
+| Mutagen session | `dcm-pytorch`, `two-way-safe` |
+| Cluster Python | CPython 3.10.21, uv-managed |
+| Cluster venv | `$DCM_CLUSTER_ROOT/.venv`, 1.2 GB |
+| torch | `2.14.0+cpu` -- **matches the workstation exactly** |
+| Home usage | 3.6 GB of 50 GB |
+
+Home is the remote root only because no `/project` allocation has been assigned
+yet. **Move the root into `/project/<projid>` once one exists** -- 50 GB is not
+much, and a network home is the wrong place for job outputs at scale.
+
+### Why the CPU torch wheel
+
+The GPU nodes are A100s, but the driver is **535.113.01 (CUDA 12.2 max)** while
+`pip install torch` resolves to a `+cu130` build needing CUDA 13 -- it cannot
+drive these GPUs, and costs ~4.4 GB of CUDA libraries that would never be used.
+All 24 of the 25 job scripts run on `batch` (CPU) anyway. Pinning
+`torch==2.14.0+cpu` from the PyTorch CPU index saves the space, removes a whole
+class of driver-mismatch confusion, and makes cluster and workstation
+byte-identical -- which matters, because the VL determinism contract explicitly
+carries a cross-machine caveat.
+
+If GPU work is ever needed, install a CUDA **12.x** wheel (not 13.x) into a
+separate venv and point `DCM_VENV` at it.
+
 ## Environment (provision once, from the login node)
 
 DCCN has no conda. Jobs activate a uv-managed venv via
@@ -35,8 +64,11 @@ DCCN has no conda. Jobs activate a uv-managed venv via
 
 ```bash
 cd "$DCM_CLUSTER_ROOT"
+~/.local/bin/uv python install 3.10          # cluster python3 is 3.6; modules stop at 3.4
 ~/.local/bin/uv venv --python 3.10 .venv
 ~/.local/bin/uv pip install --python .venv/bin/python -e '.[benchmark,dev]'
+~/.local/bin/uv pip install --python .venv/bin/python \
+    --index-url https://download.pytorch.org/whl/cpu --reinstall-package torch 'torch==2.14.0'
 ```
 
 **Never install inside a job.** Concurrent resolvers in an array job race on the
@@ -93,11 +125,47 @@ all. Only *regenerating* those fixtures requires SPM12.
 
 Local is the source of truth; Mutagen propagates edits. **Never edit files
 directly on the cluster** -- it corrupts the sync direction. See the `dccn-hpc`
-skill for `dccn-sync-init`, the ACL model, and the SSH kill switch
-(`dccn-unlock` / `dccn-lock`).
+skill for the ACL model and the SSH kill switch (`dccn-unlock` / `dccn-lock`).
 
-The repo requires `.gitattributes` with `* text=auto eol=lf` and local
-`core.autocrlf=input`, or every text file becomes a cross-OS conflict.
+### Do NOT create the session with stock `dccn-sync-init`
+
+Its default ignore list breaks this repo in two ways, both silent:
+
+- **`--ignore='models/'` is unanchored.** Mutagen matches at any depth, so it
+  also excludes `src/pyro_dcm/models/` -- the whole DCM model package. This
+  actually happened on M3 (2026-06-10): the remote copy froze for twelve days
+  while `mutagen sync list` cheerfully reported "Watching for changes",
+  surfacing only as a baffling `ImportError` inside a cluster job.
+- **`--ignore='*.mat'`** excludes `validation/data/*.mat`, the four byte-frozen
+  SPM12 fixtures the entire v0.8.0 parity ladder asserts against. Every parity
+  test would fail for a reason that looks like a code bug.
+
+The live session uses a deliberately **minimal** ignore list -- caches, `*.pyc`,
+`.venv/`, `.mutagen/`, nothing else. The repo is ~28 MB, so broad exclusions buy
+nothing and cost silent breakage. Ignoring `.venv/` is mandatory: a Windows venv
+(`Scripts/`) synced over a Linux venv (`bin/`) destroys both.
+
+After creating any session, verify the two traps explicitly:
+
+```bash
+ssh mentat "ls ~/dcm_pytorch/src/pyro_dcm/models/*.py | wc -l"   # expect 9
+ssh mentat "ls ~/dcm_pytorch/validation/data/*.mat"              # expect 4
+```
+
+### Line endings are a sync problem, not just a git problem
+
+Mutagen copies **working-tree bytes**, so git's index normalisation does not
+protect you: a CRLF working tree reaches the cluster as CRLF and `sbatch`
+rejects it outright (`Batch script contains DOS line breaks`). `.gitattributes`
+(`* text=auto eol=lf`) plus `core.autocrlf=input` keeps the working tree LF.
+
+Two traps when checking this from Git Bash -- both hit during the migration:
+
+- **MSYS `grep -P` strips CR in text mode** and reports a CRLF file as clean.
+  Check bytes instead: `python -c "print(b'\r\n' in open(F,'rb').read())"`.
+- **Python's `pathlib.write_text()` writes CRLF on Windows** (text mode
+  translates `\n`). Any script that rewrites repo files must use `write_bytes()`
+  or `open(..., newline="")`.
 
 ## Submitting and monitoring
 

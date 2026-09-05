@@ -12,6 +12,9 @@
 #     sbatch --export=ALL,TEST_TARGET="tests/test_x.py tests/test_y.py" \
 #     cluster/sbatch/erp_pytest.sbatch'
 #
+#   Marker expressions go in PYTEST_MARK, NEVER in TEST_TARGET:
+#     sbatch --export=ALL,TEST_TARGET=tests/,PYTEST_MARK="not spm and not mne" ...
+#
 # Outputs:
 #   cluster/logs/erp_pytest_<jobid>.{out,err}   SLURM logs (synced back via Mutagen)
 # NEVER pip install inside this job (shared venv; concurrent resolvers
@@ -34,12 +37,23 @@ activate_env
 verify_torch
 print_job_header "ERP pytest (v0.8.0 verification)"
 
-TEST_TARGET="${TEST_TARGET:-tests/test_local_linearization.py tests/test_cmc_forward.py tests/test_spm_erp_dcm_validation.py tests/test_erp_coupled_system.py tests/test_spm_erp_multisource_validation.py tests/test_export_erp_multisource.py tests/test_erp_leadfield.py tests/test_spm_erp_leadfield_validation.py tests/test_erp_dcm_model.py tests/test_amortized_erp.py}"
+TEST_TARGET="${TEST_TARGET:-tests/test_local_linearization.py tests/test_cmc_forward.py tests/test_spm_erp_dcm_validation.py tests/test_erp_coupled_system.py tests/test_spm_erp_multisource_validation.py tests/test_export_erp_multisource.py tests/test_erp_leadfield.py tests/test_spm_erp_leadfield_validation.py tests/test_erp_dcm_model.py tests/test_amortized_erp.py tests/test_export_erp_leadfield.py tests/test_mmn_reference.py}"
+
+# PYTEST_MARK is kept SEPARATE from TEST_TARGET on purpose: TEST_TARGET is
+# deliberately word-split (it is a list of paths), so a marker expression
+# passed inside it gets shredded into separate words and pytest exits 4
+# with "no tests ran". Quote-preserving markers go here instead.
+PYTEST_MARK="${PYTEST_MARK:-}"
 
 echo "TEST_TARGET=${TEST_TARGET}"
+echo "PYTEST_MARK=${PYTEST_MARK:-<none>}"
 mkdir -p cluster/logs
 
-python -m pytest ${TEST_TARGET} -q -p no:cacheprovider
+if [[ -n "$PYTEST_MARK" ]]; then
+    python -m pytest ${TEST_TARGET} -m "$PYTEST_MARK" -q -p no:cacheprovider
+else
+    python -m pytest ${TEST_TARGET} -q -p no:cacheprovider
+fi
 EXIT_CODE=$?
 
 echo ""
