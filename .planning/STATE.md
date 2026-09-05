@@ -34,8 +34,32 @@ facts now hold that did not before:
    the workstation. **DCCN has MATLAB modules but no system SPM12.** Note the
    v0.8.0 parity ladders are fixture-keyed and need no MATLAB at all.
 
-Still open before compute can resume: a DCCN project allocation, a provisioned
-uv venv on the cluster, and a Mutagen sync session (none currently exists).
+**Compute is now live and verified end to end (2026-09-05).**
+
+| | |
+|---|---|
+| Remote root | `/home/affneu/adaman/dcm_pytorch` (50 GB network home) |
+| Mutagen session | `dcm-pytorch`, two-way-safe, 0 conflicts |
+| Cluster env | uv-managed CPython 3.10.21, venv 1.2 GB, `torch 2.14.0+cpu` |
+| Workstation env | `.venv`, same versions (`torch 2.14.0+cpu`) |
+| Proof | job 55199857: **all 82 v0.8.0 ERP tests pass**, exit 0:0, partition `batch` |
+
+`torch` is pinned to the **CPU** wheel deliberately: the GPU nodes are A100s but
+the driver is 535.113.01 (CUDA 12.2 max), so the default `+cu130` build cannot
+drive them and cost 4.4 GB of dead CUDA libraries. Cluster and workstation now
+match byte-for-byte, which matters given the VL determinism cross-machine caveat.
+
+**Still open:** there is **no `/project` allocation** — the remote root sits on
+the 50 GB network home, which is fine for now (3.6 GB used) but is the wrong
+home for job outputs at scale. Move the root once an allocation exists.
+
+Three latent defects were found and fixed while bringing this up, all recorded
+in the commits: the stock `dccn-sync-init` ignore list would have silently
+excluded `src/pyro_dcm/models/` and the SPM12 `.mat` fixtures; CRLF from
+`pathlib.write_text()` made `sbatch` reject every script; and
+`test_export_erp_multisource` was overwriting a byte-frozen SPM12 fixture as a
+test side effect (surfaced only because the cluster run produced a 1-ULP
+difference that Mutagen synced back).
 
 ---
 
