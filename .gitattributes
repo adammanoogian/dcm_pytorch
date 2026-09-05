@@ -1,0 +1,24 @@
+# Cross-OS line-ending contract.
+#
+# This repo is edited on Windows and executed on Linux (DCCN cluster) with the
+# working tree mirrored by Mutagen, which syncs bytes verbatim. A CRLF working
+# tree therefore reaches the cluster as CRLF and breaks shebangs ("bash\r:
+# No such file or directory") and Slurm #SBATCH parsing. Forcing LF in both the
+# index AND the working tree is what keeps the two sides byte-identical.
+#
+# Pair this with `git config core.autocrlf input` locally (already set).
+
+* text=auto eol=lf
+
+# Binary artefacts -- never touch these. The .mat files are byte-frozen SPM12
+# parity fixtures; any normalisation would silently corrupt the v0.8.0 gates.
+*.mat  binary
+*.pt   binary
+*.pth  binary
+*.npz  binary
+*.npy  binary
+*.png  binary
+*.jpg  binary
+*.pdf  binary
+*.db    binary
+*.sqlite binary
