@@ -1,5 +1,11 @@
 # Consumer Handoff: Bilinear Task-DCM from `pyro_dcm`
 
+> **Inference path note.** This guide uses `run_svi`, the **superseded**
+> mean-field SVI path. Variational Laplace (`run_variational_laplace`) is the
+> supported engine and the one all current validation uses — see
+> [`docs/03_methods_reference/svi_status.md`](../03_methods_reference/svi_status.md).
+> New work should use VL; `scripts/demo_spectral_dcm.py` is a worked example.
+
 End-to-end example for projects that import `pyro_dcm` as a package. Written
 for [`dcm_hgf_mixed_models`](https://github.com/adammanoogian/dcm_hgf_mixed_models)
 (v0.3.0 milestone task H2A.2.1–2.2) but applies to any consumer that wants to

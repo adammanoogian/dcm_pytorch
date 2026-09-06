@@ -1,5 +1,11 @@
 # Quickstart: Pyro-DCM in 5 Minutes
 
+> **Inference path note.** This guide uses `run_svi`, the **superseded**
+> mean-field SVI path. Variational Laplace (`run_variational_laplace`) is the
+> supported engine and the one all current validation uses — see
+> [`docs/03_methods_reference/svi_status.md`](../03_methods_reference/svi_status.md).
+> New work should use VL; `scripts/demo_spectral_dcm.py` is a worked example.
+
 This tutorial walks you through the full Pyro-DCM workflow: simulate synthetic
 fMRI data, run Bayesian inference with SVI, inspect posterior distributions,
 and compare competing connectivity models. You will touch all three DCM variants

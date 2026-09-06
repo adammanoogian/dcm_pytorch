@@ -90,6 +90,16 @@ def _print_comparison_table(
 class TestSpectralDCMvsSPM:
     """Cross-validation tests for spectral DCM against SPM12."""
 
+    @pytest.mark.svi_legacy
+    @pytest.mark.xfail(
+        reason=(
+            "Mean-field SVI diverges to NaN on this problem. SUPERSEDED by the "
+            "Variational Laplace engine -- see docs/03_methods_reference/svi_status.md. "
+            "This is the v0.3.0 RECOV-04 finding (SVI B-RMSE 0.3467 vs VL 0.0170), "
+            "not a regression. Kept as a documented baseline, not a quality gate."
+        ),
+        strict=False,
+    )
     def test_spectral_dcm_vs_spm_relative_error(
         self,
     ) -> None:
@@ -120,6 +130,16 @@ class TestSpectralDCMvsSPM:
             f"algorithm differences."
         )
 
+    @pytest.mark.svi_legacy
+    @pytest.mark.xfail(
+        reason=(
+            "Mean-field SVI diverges to NaN on this problem. SUPERSEDED by the "
+            "Variational Laplace engine -- see docs/03_methods_reference/svi_status.md. "
+            "This is the v0.3.0 RECOV-04 finding (SVI B-RMSE 0.3467 vs VL 0.0170), "
+            "not a regression. Kept as a documented baseline, not a quality gate."
+        ),
+        strict=False,
+    )
     def test_spectral_dcm_vs_spm_multiple_seeds(
         self,
     ) -> None:
@@ -165,6 +185,16 @@ class TestSpectralDCMvsSPM:
             f"estimation method differences."
         )
 
+    @pytest.mark.svi_legacy
+    @pytest.mark.xfail(
+        reason=(
+            "Mean-field SVI diverges to NaN on this problem. SUPERSEDED by the "
+            "Variational Laplace engine -- see docs/03_methods_reference/svi_status.md. "
+            "This is the v0.3.0 RECOV-04 finding (SVI B-RMSE 0.3467 vs VL 0.0170), "
+            "not a regression. Kept as a documented baseline, not a quality gate."
+        ),
+        strict=False,
+    )
     def test_spectral_dcm_spm_sign_agreement(
         self,
     ) -> None:

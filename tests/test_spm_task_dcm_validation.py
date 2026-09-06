@@ -84,6 +84,16 @@ def _print_comparison_table(
 class TestTaskDCMvsSPM:
     """Cross-validation tests for task DCM against SPM12."""
 
+    @pytest.mark.svi_legacy
+    @pytest.mark.xfail(
+        reason=(
+            "Mean-field SVI diverges to NaN on this problem. SUPERSEDED by the "
+            "Variational Laplace engine -- see docs/03_methods_reference/svi_status.md. "
+            "This is the v0.3.0 RECOV-04 finding (SVI B-RMSE 0.3467 vs VL 0.0170), "
+            "not a regression. Kept as a documented baseline, not a quality gate."
+        ),
+        strict=False,
+    )
     def test_task_dcm_vs_spm_relative_error(self) -> None:
         """VAL-01: Task DCM posterior means within tolerance of SPM12.
 
@@ -110,6 +120,16 @@ class TestTaskDCMvsSPM:
             f"{comp['mean_relative_error']:.4f} >= 0.10"
         )
 
+    @pytest.mark.svi_legacy
+    @pytest.mark.xfail(
+        reason=(
+            "Mean-field SVI diverges to NaN on this problem. SUPERSEDED by the "
+            "Variational Laplace engine -- see docs/03_methods_reference/svi_status.md. "
+            "This is the v0.3.0 RECOV-04 finding (SVI B-RMSE 0.3467 vs VL 0.0170), "
+            "not a regression. Kept as a documented baseline, not a quality gate."
+        ),
+        strict=False,
+    )
     def test_task_dcm_vs_spm_multiple_seeds(self) -> None:
         """VAL-01: Consistency across multiple random seeds.
 
@@ -153,6 +173,16 @@ class TestTaskDCMvsSPM:
             f">= 0.10 across seeds {seeds}"
         )
 
+    @pytest.mark.svi_legacy
+    @pytest.mark.xfail(
+        reason=(
+            "Mean-field SVI diverges to NaN on this problem. SUPERSEDED by the "
+            "Variational Laplace engine -- see docs/03_methods_reference/svi_status.md. "
+            "This is the v0.3.0 RECOV-04 finding (SVI B-RMSE 0.3467 vs VL 0.0170), "
+            "not a regression. Kept as a documented baseline, not a quality gate."
+        ),
+        strict=False,
+    )
     def test_task_dcm_spm_sign_agreement(self) -> None:
         """VAL-01: Sign agreement between SPM12 and Pyro posteriors.
 

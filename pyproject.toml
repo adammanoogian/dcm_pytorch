@@ -90,4 +90,5 @@ markers = [
     "foundation: marks tests requiring foundation model deps (nilearn, huggingface_hub, braindecode)",
     "latent: marks tests requiring neurogym + scikit-learn (run with '-m latent', skip with '-m \"not latent\"')",
     "vl: marks tests as Variational Laplace validation (run with '-m vl', skip with '-m \"not vl\"')",
+    "svi_legacy: marks tests of the SUPERSEDED mean-field SVI path (see docs/03_methods_reference/svi_status.md)",
 ]

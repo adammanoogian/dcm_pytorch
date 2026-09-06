@@ -18,6 +18,10 @@ Produces:
     - Posterior median B matrix (J, N, N) and recovery RMSE + sign match.
     - Final SVI loss (mean of last 10 steps).
 """
+# NOTE: this demo uses run_svi, the SUPERSEDED mean-field path. VL
+# (run_variational_laplace) is the supported engine -- see
+# docs/03_methods_reference/svi_status.md and scripts/demo_spectral_dcm.py.
+
 from __future__ import annotations
 
 import sys

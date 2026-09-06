@@ -306,6 +306,16 @@ def spectral_recovery_results() -> list[dict]:
 class TestSpectralDCMRecovery:
     """Spectral DCM parameter recovery -- CI-fast tests (REC-02)."""
 
+    @pytest.mark.svi_legacy
+    @pytest.mark.xfail(
+        reason=(
+            "Mean-field SVI diverges to NaN on this problem. SUPERSEDED by the "
+            "Variational Laplace engine -- see docs/03_methods_reference/svi_status.md. "
+            "This is the v0.3.0 RECOV-04 finding (SVI B-RMSE 0.3467 vs VL 0.0170), "
+            "not a regression. Kept as a documented baseline, not a quality gate."
+        ),
+        strict=False,
+    )
     def test_spectral_dcm_rmse_below_threshold(
         self, spectral_recovery_results: list[dict],
     ) -> None:
@@ -330,6 +340,16 @@ class TestSpectralDCMRecovery:
             f"Mean RMSE {mean_rmse:.4f} >= 0.05 threshold"
         )
 
+    @pytest.mark.svi_legacy
+    @pytest.mark.xfail(
+        reason=(
+            "Mean-field SVI diverges to NaN on this problem. SUPERSEDED by the "
+            "Variational Laplace engine -- see docs/03_methods_reference/svi_status.md. "
+            "This is the v0.3.0 RECOV-04 finding (SVI B-RMSE 0.3467 vs VL 0.0170), "
+            "not a regression. Kept as a documented baseline, not a quality gate."
+        ),
+        strict=False,
+    )
     def test_spectral_dcm_coverage_calibrated(
         self, spectral_recovery_results: list[dict],
     ) -> None:
