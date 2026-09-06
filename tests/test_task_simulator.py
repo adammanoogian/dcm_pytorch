@@ -81,6 +81,7 @@ class TestSimulatorOutputStructure:
             "hemodynamic", "times_fine", "times_TR",
             "params", "stimulus",
             "B_list", "stimulus_mod",  # Phase 14 (SIM-04): bilinear forward-compat keys
+            "simulation_diverged",  # divergence flag surfaced by the simulator
         }
         assert set(result.keys()) == expected_keys
 

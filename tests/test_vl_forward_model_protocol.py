@@ -73,8 +73,11 @@ def test_spectral_residual_is_complex() -> None:
 def test_task_is_forward_model() -> None:
     """TaskDCMForward satisfies ForwardModel protocol."""
     from pyro_dcm.simulators.task_simulator import make_block_stimulus
+    from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
 
-    stim = make_block_stimulus(n_blocks=2, block_duration=5.0)
+    raw = make_block_stimulus(n_blocks=2, block_duration=5.0, rest_duration=5.0)
+    # TaskDCMForward takes a CALLABLE u(t) -> (M,), not the raw dict.
+    stim = PiecewiseConstantInput(raw["times"], raw["values"])
     c_mask = torch.ones(3, 1, dtype=torch.float64)
     t_eval = torch.linspace(0, 10, 21, dtype=torch.float64)
     fm = TaskDCMForward(stim, c_mask, t_eval)
@@ -84,8 +87,11 @@ def test_task_is_forward_model() -> None:
 def test_task_param_count() -> None:
     """TaskDCMForward param_count matches N*N + N*M."""
     from pyro_dcm.simulators.task_simulator import make_block_stimulus
+    from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
 
-    stim = make_block_stimulus(n_blocks=2, block_duration=5.0)
+    raw = make_block_stimulus(n_blocks=2, block_duration=5.0, rest_duration=5.0)
+    # TaskDCMForward takes a CALLABLE u(t) -> (M,), not the raw dict.
+    stim = PiecewiseConstantInput(raw["times"], raw["values"])
     c_mask = torch.ones(3, 1, dtype=torch.float64)
     t_eval = torch.linspace(0, 10, 21, dtype=torch.float64)
     fm = TaskDCMForward(stim, c_mask, t_eval)
@@ -95,8 +101,11 @@ def test_task_param_count() -> None:
 def test_task_pack_unpack_roundtrip() -> None:
     """TaskDCMForward pack/unpack roundtrip."""
     from pyro_dcm.simulators.task_simulator import make_block_stimulus
+    from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
 
-    stim = make_block_stimulus(n_blocks=2, block_duration=5.0)
+    raw = make_block_stimulus(n_blocks=2, block_duration=5.0, rest_duration=5.0)
+    # TaskDCMForward takes a CALLABLE u(t) -> (M,), not the raw dict.
+    stim = PiecewiseConstantInput(raw["times"], raw["values"])
     N, M = 3, 1
     c_mask = torch.ones(N, M, dtype=torch.float64)
     t_eval = torch.linspace(0, 10, 21, dtype=torch.float64)
@@ -116,8 +125,11 @@ def test_task_pack_unpack_roundtrip() -> None:
 def test_task_residual_is_real() -> None:
     """Task forward model produces real residuals."""
     from pyro_dcm.simulators.task_simulator import make_block_stimulus
+    from pyro_dcm.utils.ode_integrator import PiecewiseConstantInput
 
-    stim = make_block_stimulus(n_blocks=2, block_duration=5.0)
+    raw = make_block_stimulus(n_blocks=2, block_duration=5.0, rest_duration=5.0)
+    # TaskDCMForward takes a CALLABLE u(t) -> (M,), not the raw dict.
+    stim = PiecewiseConstantInput(raw["times"], raw["values"])
     c_mask = torch.ones(3, 1, dtype=torch.float64)
     t_eval = torch.linspace(0, 10, 21, dtype=torch.float64)
     fm = TaskDCMForward(stim, c_mask, t_eval)
@@ -198,18 +210,26 @@ def test_task_dcm_vl_recovery() -> None:
         n_blocks=5, block_duration=10.0, rest_duration=10.0,
     )
 
+    # dt_sim -> dt (renamed); dt_model was redundant -- the model timestep is
+    # supplied to TaskDCMForward below. solver="rk4" per commit c0a7616:
+    # adaptive dopri5 underflows ("underflow in dt 0.0") on torchdiffeq 0.2.5.
     sim = simulate_task_dcm(
         A_true, C_true, stim, duration=100.0, TR=2.0,
-        dt_sim=0.01, dt_model=0.5, seed=42,
+        dt=0.01, solver="rk4", seed=42,
     )
     observed_bold = sim["bold"]
-    t_eval = sim["t_eval"]
+    t_eval = sim["times_TR"]  # renamed from "t_eval"
 
     a_mask = torch.ones(N, N, dtype=torch.float64)
     c_mask = torch.zeros(N, M, dtype=torch.float64)
     c_mask[0, 0] = 1.0
 
-    fm = TaskDCMForward(stim, c_mask, t_eval, dt=0.5)
+    fm = TaskDCMForward(
+        stimulus_fn=sim["stimulus"],  # the simulator's PiecewiseConstantInput
+        c_mask=c_mask,
+        t_eval=t_eval,
+        dt=0.5,  # task VL requires dt >= 0.1 (VLROBUST-02)
+    )
     result = run_variational_laplace_generic(
         fm, observed_bold, a_mask, max_iter=64,
         prior_variance=1.0 / 64.0,
