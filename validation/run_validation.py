@@ -91,8 +91,14 @@ def check_matlab_available() -> bool:
         True if MATLAB and SPM12 are available.
     """
     try:
+        # MATLAB string literals here MUST be single-quoted. On Windows the
+        # matlab.exe launcher re-parses its command line and strips embedded
+        # double quotes, so -batch 'disp("MATLAB OK")' arrives as `disp(MATLAB`
+        # ("This statement is incomplete", rc=1). The probe then reports MATLAB
+        # as unavailable and every @pytest.mark.spm test silently SKIPS. This
+        # went unnoticed because validation previously ran on Linux (M3).
         result = subprocess.run(
-            [MATLAB_PATH, "-batch", 'disp("MATLAB OK")'],
+            [MATLAB_PATH, "-batch", "disp('MATLAB OK')"],
             capture_output=True,
             text=True,
             timeout=60,

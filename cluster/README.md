@@ -108,9 +108,35 @@ workstation has MATLAB **R2025b with a valid licence** and a complete SPM12 at
 `C:/Users/adaman/Documents/external/spm12`. The FlexLM -15 licence failure that
 originally forced Phases 32/34/35 onto M3 no longer applies.
 
-The cluster has MATLAB modules but **no system SPM12**, so a cluster SPM run
-must point `SPM12_PATH` at a personal checkout; `setup_matlab` fails loudly if
-it is unset or wrong.
+### MATLAB on DCCN (verified 2026-09-06)
+
+MATLAB **is** available and **is licensed on compute nodes** -- confirmed by an
+`srun` on `dccn-c040`/`dccn-c087`:
+
+```bash
+module load matlab/R2024b     # R2023b .. R2026a available; R2024b is default
+matlab -batch my_script       # licenses fine under Slurm (license('inuse') -> matlab)
+```
+
+`module avail 2>&1 | grep matlab/` lists the versions; `/opt` is mounted on every
+node, so `matlabroot` is `/opt/matlab/R2024b`. See the DCCN HPC wiki:
+[software via modules](https://hpc.dccn.nl/docs/cluster_howto/software-modules.html)
+and [distributed analysis with MATLAB](https://hpc.dccn.nl/docs/cluster_howto/exercise_matlab/exercise.html).
+
+**SPM12 is the only gap** -- `exist('spm','file')` returns 0 on the nodes. A
+cluster SPM run must point `SPM12_PATH` at a personal checkout; `setup_matlab`
+fails loudly if it is unset or wrong. Running the SPM bridge on the workstation
+remains preferable, since it has both MATLAB R2025b and a complete SPM12.
+
+### Windows quoting trap in MATLAB `-batch`
+
+MATLAB string literals passed to `-batch` **must be single-quoted**. On Windows
+the `matlab.exe` launcher re-parses its command line and strips embedded double
+quotes, so `-batch 'disp("MATLAB OK")'` arrives as `disp(MATLAB` and fails with
+"This statement is incomplete" (rc=1). This silently disabled the entire
+`@pytest.mark.spm` suite on this workstation -- `check_matlab_available()`
+returned False and all 12 MATLAB-dependent tests SKIPPED. It went unnoticed
+because validation previously ran on Linux (M3), where the quotes survive.
 
 Paths resolve from `config.py` (`MATLAB_PATH`, `SPM12_PATH`, `TAPAS_RDCM_PATH`),
 all environment-overridable. `validation/run_validation.py` and
