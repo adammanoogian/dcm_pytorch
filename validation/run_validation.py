@@ -231,6 +231,10 @@ def run_task_dcm_validation(
     TR = 2.0
     SNR = 5.0
 
+    # solver="rk4": the default adaptive dopri5 underflows ("underflow in
+    # dt 0.0") on torchdiffeq 0.2.5 / torch 2.x for this task setup. Same fix
+    # as commit c0a7616, which applied it to the Phase 30 recovery sweep;
+    # this validation path was missed and every task-vs-SPM test failed here.
     sim_result = simulate_task_dcm(
         A=A_true,
         C=C,
@@ -239,6 +243,7 @@ def run_task_dcm_validation(
         TR=TR,
         SNR=SNR,
         seed=seed,
+        solver="rk4",
     )
 
     bold_data = sim_result["bold"].detach().cpu().numpy()

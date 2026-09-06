@@ -137,9 +137,13 @@ def export_task_dcm_for_spm(
                 [[f"stim{i + 1}" for i in range(M)]], dtype=object
             ),
         },
-        # Dimensions
-        "n": np.array([[N]]),
-        "v": np.array([[v]]),
+        # Dimensions as float64 (int64 -> spm_Ce footgun, Phase 32 / a27828b).
+        # Without the cast MATLAB fails in run_spm_task_dcm.m:55 with
+        # "Integers can only be combined with integers of the same class"
+        # on spm_Ce(ones(1, DCM.n) * DCM.v). Every sibling exporter already
+        # carried this cast; this one was missed.
+        "n": np.array([[N]], dtype=np.float64),
+        "v": np.array([[v]], dtype=np.float64),
         # Timing
         "TE": np.array([[0.04]]),
         "delays": np.ones((1, N)) * TR / 2,
