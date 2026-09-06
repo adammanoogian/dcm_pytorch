@@ -26,7 +26,7 @@ import tempfile
 import numpy as np
 import torch
 
-from config import TAPAS_RDCM_PATH
+from config import MATLAB_PATH, TAPAS_RDCM_PATH
 from pyro_dcm.forward_models.rdcm_forward import (
     create_regressors,
     generate_bold,
@@ -75,12 +75,17 @@ def check_matlab_available() -> bool:
     bool
         True if ``matlab -batch "disp('ok')"`` returns exit code 0.
     """
-    matlab_exe = "C:/Program Files/MATLAB/R2022a/bin/matlab.exe"
-    if not os.path.isfile(matlab_exe):
-        return False
+    # Resolve from config (env-overridable) rather than hardcoding a version --
+    # the literal R2022a path here predated the machine migration and made this
+    # probe always return False, silently skipping every test that uses it.
+    #
+    # No os.path.isfile() guard: config.MATLAB_PATH is extension-less
+    # (".../bin/matlab"), which isfile() rejects on Windows even though
+    # subprocess resolves it fine via PATHEXT. The except clause below is the
+    # real guard, matching validation/run_validation.py.
     try:
         result = subprocess.run(
-            [matlab_exe, "-batch", "disp('ok')"],
+            [str(MATLAB_PATH), "-batch", "disp('ok')"],
             capture_output=True,
             text=True,
             timeout=60,
@@ -232,10 +237,8 @@ def run_rdcm_validation(
             data["y_dt"], u_dt_micro, input_path,
         )
 
-        # Run tapas via MATLAB
-        matlab_exe = (
-            "C:/Program Files/MATLAB/R2022a/bin/matlab.exe"
-        )
+        # Run tapas via MATLAB (resolved from config, env-overridable)
+        matlab_exe = str(MATLAB_PATH)
         script_path = os.path.abspath(
             "validation/matlab_scripts/run_tapas_rdcm.m"
         )
