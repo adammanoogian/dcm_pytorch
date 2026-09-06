@@ -50,6 +50,7 @@ import numpy as np
 import torch
 
 from config import MATLAB_PATH, SPM12_PATH
+from validation.matlab_bridge import run_matlab_script
 from pyro_dcm.inference.variational_laplace import run_variational_laplace
 from pyro_dcm.simulators.spectral_simulator import simulate_spectral_dcm
 from validation.compare_results import (
@@ -190,24 +191,13 @@ def _run_spm_on_csd(
         output_path=input_path,
     )
 
-    matlab_cmd = (
-        f"cd('{MATLAB_SCRIPTS_DIR}'); "
-        f"setenv('DCM_INPUT_PATH', '{input_path}'); "
-        f"setenv('DCM_OUTPUT_PATH', '{results_path}'); "
-        f"run_spm_spectral_dcm_csd_injected"
-    )
-    # Pass SPM12_PATH through to the MATLAB child. config.SPM12_PATH is the
-    # single source of truth (env-overridable); the .m file's own fallback is
-    # only a last resort. One code path serves workstation and cluster alike.
-    child_env = dict(os.environ)
-    child_env.setdefault("SPM12_PATH", str(SPM12_PATH))
-
-    result = subprocess.run(
-        [str(MATLAB_PATH), "-batch", matlab_cmd],
-        capture_output=True,
-        text=True,
-        timeout=600,
-        env=child_env,
+    # Parameters go through the child environment, never a joined -batch
+    # string: the Linux MATLAB launcher re-quotes multi-statement -batch
+    # arguments through an eval and dies with "syntax error near unexpected
+    # token '('". See validation/matlab_bridge for the full explanation.
+    result = run_matlab_script(
+        "run_spm_spectral_dcm_csd_injected",
+        {"DCM_INPUT_PATH": input_path, "DCM_OUTPUT_PATH": results_path},
     )
     if result.returncode != 0:
         msg = (

@@ -141,12 +141,47 @@ try
     DCM.M.dt  = 1/2;
     DCM.M.N   = 32;
     DCM.M.ns  = 1/DCM.Y.dt;
-    DCM.Y.X0  = sparse(spm_length(DCM.Y.csd), 0);
+    % Observation precision. spm_dcm_fmri_csd.m:234-235 sets these; this
+    % script bypasses spm_dcm_fmri_csd_data and so must set them itself.
+    % Omitting Y.Q makes spm_nlsi_GN fall back to spm_Ce(ns*ones(1,nr))
+    % (spm_nlsi_GN.m:218) -- a generic per-channel basis with N^2 = 4
+    % components -- while the Python VL engine uses the spm_dcm_csd_Q port
+    % with ONE component. The two engines then fit DIFFERENT noise models and
+    % their free energies are not comparable, which is the origin of the
+    % long-standing ~269.9-nat F offset.
+    DCM.Y.Q   = spm_dcm_csd_Q(DCM.Y.csd);
+    DCM.Y.X0  = sparse(size(DCM.Y.Q, 1), 0);
 
     % --- Variational Laplace inversion on the INJECTED CSD ---
     fprintf('Running spm_nlsi_GN on injected CSD...\n');
     Y.y = DCM.Y.csd;
+    Y.Q = DCM.Y.Q;
+
+    % --- free-energy provenance (VL-vs-SPM offset investigation) ---
+    % Y.Q is now set from spm_dcm_csd_Q (matching spm_dcm_fmri_csd.m).
+    % Record what spm_nlsi_GN sees: F's L(1) term is
+    % logdet(iS)*nq/2 - e'*iS*e/2 - ny*log(2*pi)/2, so BOTH ny and nq must
+    % match the Python side for the two free energies to be comparable.
+    fe.ny = length(spm_vec(Y.y));
+    % Component COUNT, not element count: Q may be a cell array of bases
+    % or a single numeric matrix (which is one component).
+    if ~isfield(Y, 'Q')
+        fe.nq = 0;
+    elseif iscell(Y.Q)
+        fe.nq = numel(Y.Q);
+    else
+        fe.nq = 1;
+    end
+    fe.y_size = size(Y.y);
+    fe.y_is_complex = double(~isreal(Y.y));
+    fe.n_X0_cols = size(DCM.Y.X0, 2);
+    fe.hE = full(DCM.M.hE); fe.hC = full(DCM.M.hC);
+    fprintf('FE-PROVENANCE ny=%d nq=%d complex=%d X0cols=%d\n', ...
+            fe.ny, fe.nq, fe.y_is_complex, fe.n_X0_cols);
+
     [Ep, Cp, Eh, F] = spm_nlsi_GN(DCM.M, DCM.U, Y);
+    fe.Eh = full(Eh(:))';
+    fprintf('FE-PROVENANCE Eh=%s F=%.6f\n', mat2str(fe.Eh, 8), F);
     DCM.Ep = Ep;
     DCM.Cp = Cp;
     DCM.Eh = Eh;
@@ -171,6 +206,7 @@ try
     results.Ep_A = DCM.Ep.A;              % Posterior mean A (free params)
     results.Cp = full(DCM.Cp);            % Full posterior covariance
     results.F = DCM.F;                    % Free energy
+    results.fe = fe;                      % free-energy provenance
 
     % Spectral-specific outputs
     if isfield(DCM.Ep, 'transit')

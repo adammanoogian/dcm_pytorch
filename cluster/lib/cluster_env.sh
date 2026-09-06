@@ -13,7 +13,7 @@
 #   | max walltime | varied                    | 72h on every partition        |
 #   | CPUs/node    | --                        | batch caps at 45              |
 #   | MATLAB       | /usr/local/matlab/r2022a  | `module load matlab/R2024b`   |
-#   | SPM12        | ~/fc37/Carrick/spm12      | NOT INSTALLED -- run locally   |
+#   | SPM12        | ~/fc37/Carrick/spm12      | ~/external/spm12 (personal)   |
 #
 # Usage (at top of your .sbatch file, after #SBATCH directives):
 #   source cluster/lib/cluster_env.sh
@@ -59,13 +59,11 @@ activate_env() {
 }
 
 setup_matlab() {
-    # MATLAB is available on DCCN via Environment Modules, but SPM12 is NOT
-    # installed cluster-wide. Any SPM-dependent job must supply SPM12_PATH
-    # itself (e.g. a personal checkout on project storage).
-    #
-    # NOTE: as of 2026-09-05 the DCCN *workstation* has MATLAB R2025b with a
-    # valid licence and a complete SPM12, so the SPM12 bridge is best run
-    # LOCALLY. These cluster hooks exist for jobs too long for the workstation.
+    # MATLAB is available on DCCN via Environment Modules and IS licensed on
+    # compute nodes (verified 2026-09-06 by srun on dccn-c040/c087;
+    # license('inuse') reports the matlab feature). SPM12 is not installed
+    # cluster-wide, so a personal copy lives at ~/external/spm12 -- byte-copied
+    # from the workstation, so both reference the SAME SPM12.
     local version="${1:-R2024b}"
 
     if ! module load "matlab/${version}" 2>/dev/null; then
@@ -76,15 +74,14 @@ setup_matlab() {
     export MATLAB_PATH="${MATLAB_PATH:-$(command -v matlab)}"
     echo "MATLAB: ${MATLAB_PATH} (module matlab/${version})"
 
-    if [[ -z "${SPM12_PATH:-}" ]]; then
-        echo "ERROR: SPM12_PATH is unset and DCCN has no system SPM12."
-        echo "  Point it at your own checkout, e.g.:"
-        echo "    export SPM12_PATH=\$DCM_CLUSTER_ROOT/external/spm12"
-        echo "  Or run the SPM bridge on the workstation instead (preferred)."
-        exit 1
-    fi
+    # DCCN has no system SPM12. A personal copy lives in $HOME/external/spm12
+    # (installed 2026-09-06, byte-identical to the workstation's, so cluster and
+    # workstation reference the SAME SPM12). Override with SPM12_PATH.
+    export SPM12_PATH="${SPM12_PATH:-$HOME/external/spm12}"
     if [[ ! -f "${SPM12_PATH}/spm.m" ]]; then
-        echo "ERROR: SPM12_PATH=${SPM12_PATH} does not contain spm.m"
+        echo "ERROR: no SPM12 at SPM12_PATH=${SPM12_PATH} (spm.m missing)."
+        echo "  DCCN has no system SPM12. Install a personal copy, e.g.:"
+        echo "    tar -czf - -C <local> spm12 | ssh mentat 'tar -xzf - -C ~/external'"
         exit 1
     fi
     echo "SPM12:  ${SPM12_PATH}"
