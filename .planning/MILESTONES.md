@@ -39,7 +39,7 @@
 
 - **Full recovery matrix**: N{2,4} × SNR{1,3} × {spectral, task, latent-circuit}, 10 seeds per cell. **10/10 cells classified, 0 errored — 6 PASS, 4 documented identifiability limits with evidence.** No silent failures.
 - **BMR relative-evidence ranking** recovers true sparse structure 5/5 seeds at both N=2 and N=4 with a positive separation gap, and agrees with brute-force VL refits.
-- **Two hard identifiability findings** that constrain all future ground-truth design: spectral DCM cannot identify a lone off-diagonal A entry, and a feed-forward chain A produces a CSD *bit-identical* to the empty graph. Ground truth must be reciprocal.
+- ~~**Two hard identifiability findings**: spectral DCM cannot identify a lone off-diagonal A entry, and a feed-forward chain A produces a CSD *bit-identical* to the empty graph.~~ **⚠️ RETRACTED 2026-09-06** — this was a defect in `compute_transfer_function_hemodynamic` (`pinv` of a defective eigenvector basis), not a property of spectral DCM. SPM12 separates chain from empty graph by 1.427; the port collapsed it to 9e-16. Fixed in `007b686`. The reciprocal-edge *results* below stand; the reason for choosing reciprocal edges does not. What spectral DCM can actually identify is now an open question.
 - **VL determinism** across all three forward models (fixed-seed, within-machine, atol 1e-8), with the cross-machine caveat documented.
 - Task DCM recovers cleanly at N=2 (sign 1.0, A-RMSE ~0.04); **task N=4 is a genuine identifiability limit** (sign 0.57, coverage 0.0), reported as a finding rather than patched away.
 

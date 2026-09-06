@@ -76,10 +76,22 @@ so the fresh install resolved to 2.14.0. A dedicated `.venv-t210` with
 regression and not cluster-specific -- it is pre-existing numerical fragility in
 the spectral/SVI path.
 
-This is consistent with things already known about that path: spectral DCM
-identifiability limits ([[reference-spectral-dcm-identifiability]]) and the VL
-overconfidence / eig-clamp boundary issues documented in Phases 30-31. The
-`.venv-t210` comparison venv is still on the cluster and can be deleted.
+**UPDATE 2026-09-06:** two of these eight were root-caused and fixed, and one
+turned out to be a significant defect:
+
+- `test_spectral_transfer::test_hemodynamic_transfer_lowpass` -- the
+  hemodynamic transfer function collapsed to ~1e-18 for triangular `A` because
+  `compute_transfer_function_hemodynamic` diagonalised a *defective* Jacobian.
+  Fixed with a resolvent solve (`007b686`). **This also invalidated the Phase 31
+  feed-forward identifiability finding** -- see the correction block in STATE.md.
+- `test_task_simulator::test_simulator_output_keys` -- stale expected-key set,
+  missing the simulator's `simulation_diverged` flag. Fixed (`cd06d36`).
+
+The remaining six are SVI-path convergence/NaN failures
+(`test_amortized_spectral_dcm`, `test_elbo_model_comparison`,
+`test_hybrid_vae_dcm_model`, `test_spectral_dcm_recovery`) and are the subject of
+the separate SVI retire-or-fix decision. The `.venv-t210` comparison venv is
+still on the cluster and can be deleted.
 
 ## Why this matters
 
@@ -90,7 +102,8 @@ linking to this todo so the signal is honest.
 
 ## Next step
 
-Group B first (cheap, mechanical). Group C needs a real look at whether the
+~~Group B first (cheap, mechanical).~~ **Group B is DONE** (`cd06d36`) -- it was
+four separate API drifts, not one. Group C needs a real look at whether the
 NaNs come from the eig clamp near the stability boundary, and whether the
 affected tests are asserting recovery under conditions Phase 30 already
 classified as identifiability limits.

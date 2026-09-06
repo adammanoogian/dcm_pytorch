@@ -9,6 +9,51 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 ## Current Position
 
+### ⚠️ 2026-09-06 — CORRECTION: the Phase 31 "feed-forward is unidentifiable" finding was a numerical artifact
+
+**Superseded: [31-01-D1] and [31-02-D1] below.** Their conclusion — that spectral
+DCM cannot identify a lone off-diagonal or feed-forward `A`, because the CSD is
+"bit-identical to the empty graph" — was caused by a defect in
+`compute_transfer_function_hemodynamic`, not by spectral DCM.
+
+`spectral_transfer.py` ported SPM12's `spm_dcm_mtf.m` literally, diagonalising the
+5N x 5N hemodynamic Jacobian and inverting the eigenvectors with `pinv`. That
+Jacobian is **defective** (repeated eigenvalues, too few independent eigenvectors)
+whenever `A` is triangular — diagonal or feed-forward. `pinv` then silently drops
+the deficient modes.
+
+**This was NOT inherited from SPM12.** Running SPM12's own formula on the identical
+Jacobian in MATLAB R2025b:
+
+| | cond(v) | \|H\| at f0 | max\|H_chain - H_empty\| |
+|---|---|---|---|
+| SPM12 (`eig 'nobalance'`) | 1.4e13 | 2.39530 | **1.42720** |
+| `torch.linalg.eig` (the port) | 1.4e48 | 1.999e-18 | 9.29e-16 |
+| resolvent solve (the fix) | — | 2.39440 | **1.42977** |
+
+The decisive corroboration is already in `[31-02-D1]`: it records rel-diff **8e-32
+for `hemodynamic=True` vs 0.23 neural-only**. Those are two different code paths —
+the neural-only one never used the broken eigendecomposition. That contrast was read
+as a property of the hemodynamic model; it was the bug.
+
+Fixed 2026-09-06 (commit `007b686`) by using the resolvent form
+`dgdx @ (i*2*pi*w*I - dfdx)^-1 @ dfdu`, conditioned at ~21 where the
+eigendecomposition was at 1e48. Well-conditioned (coupled) `A` is unchanged to
+3e-15, so **Phase 30, 31 and 32 numerical results all stand** — reciprocal-edge `A`
+is well-conditioned and was never affected.
+
+**What is now unknown, and needs re-running (not yet done):**
+- What spectral DCM can *actually* identify. Feed-forward ground truth was excluded
+  on false grounds and should be re-tested.
+- **BMR is the likely blast radius.** Reduced models are sparser by construction, so
+  exhaustive pruning evaluates exactly the degenerate triangular regime. Every
+  single-prune ΔF computed through the hemodynamic forward on a near-diagonal
+  reduced model may be wrong.
+- The VLBMR-01/02 *results* (reciprocal ground truth, 5/5 recovery, Spearman ρ=1.0)
+  are unaffected, but the stated *reason* for choosing reciprocal edges is void.
+
+---
+
 ### ⚙️ 2026-09-05 — Machine migration + branch reconciliation (no science changed)
 
 Work resumed after a ~12-week gap (last commit 2026-08-31). Three infrastructure
@@ -308,8 +353,8 @@ deferred, NOT failed). User-approved both decisions 2026-06-10.
 - **[31-03-D1] `temper_vl_posterior` cannot break PD by positive scaling alone; the guard fires only on an already-indefinite input.** A positive scalar times a PD matrix stays PD, so an "over-large T" never breaks a clean posterior. The laptop PD-guard test (`tests/test_bmr_tempering_calibration.py`) therefore feeds a deliberately indefinite covariance (a symmetric matrix with one negative eigenvalue) so the Cholesky genuinely fails, asserting the message names the shape `(3,3)` and `tempering_factor=100.0`. The realistic PD break is captured on the cluster as the C2c cross-condition mode (T=2.0 calibrated on task-N4 breaks PD on task-N2). The plan's "over-large T that breaks PD" is realized exactly this way.
 - **[31-03-D2] Chosen T is the smallest coverage-RAISING candidate even when the coarse ladder overshoots the band (in_band=False).** On the task-N4 stress re-fit seed, the (1,2,5,10,20,50,100) ladder jumps from coverage 0.875 (T=1) straight to 1.0 (T=2), so no candidate lands inside [0.90,0.98]; `select_tempering_factor` returns the closest-to-target (T=2.0, coverage 1.0) with `in_band=False` and never raises. The band [0.90,0.98] is a documented EXPLORATORY choice (research Open Question 3), not a validated schedule; a finer ladder would be needed to hit it exactly. Reported, not gated. The tempered top-K is identical to the untempered ([12,11,3,14,7,13]) — mild tempering preserves the BMR structure.
 - **[31-03-D3] Cross-condition non-PD (C2c) is RECORDED as a structured result, not raised.** The first M3 run (job 56396691) aborted with status=error when T=2.0 broke PD on the held-out task-N2 posterior. Fixed (Rule 1, in the Task 2 cluster script): the held-out untempered ranking is computed unconditionally and only the tempered path is wrapped in a `ValueError` guard, recording `cross_condition_non_pd=true` / `topk_preserved=false` / `non_pd_message`, so the already-successful stress-cell calibration persists and the job finishes status=ok (job 56397206). The C2c is the scientifically interesting outcome (a T tuned on one condition is not PD-safe on another) — surfaced as data, never lost as a crash. Tempering remains EXPLORATORY; absolute delta-F never gated.
-- **[31-02-D1] VLBMR-02 COMPLETE (2/2) — reciprocal-edge ground truth makes the brute-force VL-refit present>absent gate pass.** `tests/test_bmr_vs_vl_refit.py` (`@pytest.mark.vl`, commits bc0e33f Task 1, ac69897 Task 2; 1 passed ~35-41s laptop, ruff+mypy clean). The plan's prescribed SPARSE single-edge spectral ground truth was UNIDENTIFIABLE and the brute-force gate failed: (a) the **hemodynamic** spectral forward (`spectral_dcm_forward(hemodynamic=True)`, default) is insensitive to single off-diagonal A entries on a near-diagonal base (CSD diff ≈0; rel-diff 8e-32 vs 0.23 neural-only) → sparse/chain A → A_free collapses to 0, all ΔF degenerate (SAME phenomenon as 31-01-D1); (b) a denser non-reciprocal A fit is non-identifiable/rotated (true A[1,0]=0.4 recovers A_free[idx3]≈0; mass lands on A[1,2]/A[0,1]; overconfident posterior loads the "absent" edges) so the brute-force refit ranked absent>present (C1/S3 + 29-02-D1). **Fix (adopted 31-01-D1's identifiability pattern):** RECIPROCAL-edge ground truth (0↔1 + 1↔2 present at 0.3/0.25, 0↔2 absent). With it A is recoverable and BOTH methods rank present>absent with worst single-prune-model agreement and Spearman ρ=1.0 (BMR present -3.54e6 < absent -2.43e6; brute-force present -5.89 < absent -2.26). Worst-model gate restricted to the like-for-like single-prune subset (two-prune model reported but excluded — S3/C1 dimensionality confound). RANK-only, never absolute-ΔF equality. `test_bmr_vs_elbo.py` (SVI) untouched. Reciprocal-edge spectral ground truth is now the shared identifiability pattern across 31-01 + 31-02. **Carry-forward:** brute-force present>absent ordering is fragile on non-identifiable spectral ground truth; any task/latent cross-model confirmation must use identifiable topology + route to M3 (`@pytest.mark.slow`, >3-min laptop).
-- **[31-01-D1] A feed-forward chain is UNIDENTIFIABLE by spectral DCM; VLBMR-01 ground truth uses RECIPROCAL edges.** The plan's feed-forward chain (N=2 `[(1,0)]`, N=4 `[(1,0),(2,1),(3,2)]`) produces a stationary CSD bit-identical to the empty graph (`||csd_chain-csd_zero||/||csd_zero|| = 0.0`), so VL collapses A_free to exactly zero and every single-prune delta-F is 0.0 (the spurious top-K `[3,7,11]` is float sign-noise = the transpose of the true edges, NOT an index bug — the S4 round-trip guard held). Switched to reciprocal edges (N=2 `[(0,1),(1,0)]` K=2; N=4 reciprocal chain K=6); recovery is 5/5. Real spectral-DCM identifiability property, carried forward to 31-03. Builder, plumbing, gate semantics, and the never-absolute-delta-F contract unchanged.
+- **[31-02-D1] ⚠️ PARTLY SUPERSEDED 2026-09-06 — the 'hemodynamic forward is insensitive to single off-diagonal entries' diagnosis was the transfer-function defect (8e-32 vs 0.23 neural-only is buggy-vs-working code path). Results stand; reasoning does not.** VLBMR-02 COMPLETE (2/2) — reciprocal-edge ground truth makes the brute-force VL-refit present>absent gate pass.** `tests/test_bmr_vs_vl_refit.py` (`@pytest.mark.vl`, commits bc0e33f Task 1, ac69897 Task 2; 1 passed ~35-41s laptop, ruff+mypy clean). The plan's prescribed SPARSE single-edge spectral ground truth was UNIDENTIFIABLE and the brute-force gate failed: (a) the **hemodynamic** spectral forward (`spectral_dcm_forward(hemodynamic=True)`, default) is insensitive to single off-diagonal A entries on a near-diagonal base (CSD diff ≈0; rel-diff 8e-32 vs 0.23 neural-only) → sparse/chain A → A_free collapses to 0, all ΔF degenerate (SAME phenomenon as 31-01-D1); (b) a denser non-reciprocal A fit is non-identifiable/rotated (true A[1,0]=0.4 recovers A_free[idx3]≈0; mass lands on A[1,2]/A[0,1]; overconfident posterior loads the "absent" edges) so the brute-force refit ranked absent>present (C1/S3 + 29-02-D1). **Fix (adopted 31-01-D1's identifiability pattern):** RECIPROCAL-edge ground truth (0↔1 + 1↔2 present at 0.3/0.25, 0↔2 absent). With it A is recoverable and BOTH methods rank present>absent with worst single-prune-model agreement and Spearman ρ=1.0 (BMR present -3.54e6 < absent -2.43e6; brute-force present -5.89 < absent -2.26). Worst-model gate restricted to the like-for-like single-prune subset (two-prune model reported but excluded — S3/C1 dimensionality confound). RANK-only, never absolute-ΔF equality. `test_bmr_vs_elbo.py` (SVI) untouched. Reciprocal-edge spectral ground truth is now the shared identifiability pattern across 31-01 + 31-02. **Carry-forward:** brute-force present>absent ordering is fragile on non-identifiable spectral ground truth; any task/latent cross-model confirmation must use identifiable topology + route to M3 (`@pytest.mark.slow`, >3-min laptop).
+- **[31-01-D1] ⚠️ SUPERSEDED 2026-09-06 — numerical artifact, see the correction at the top of Current Position.** ~~A feed-forward chain is UNIDENTIFIABLE by spectral DCM; VLBMR-01 ground truth uses RECIPROCAL edges.** The plan's feed-forward chain (N=2 `[(1,0)]`, N=4 `[(1,0),(2,1),(3,2)]`) produces a stationary CSD bit-identical to the empty graph (`||csd_chain-csd_zero||/||csd_zero|| = 0.0`), so VL collapses A_free to exactly zero and every single-prune delta-F is 0.0 (the spurious top-K `[3,7,11]` is float sign-noise = the transpose of the true edges, NOT an index bug — the S4 round-trip guard held). Switched to reciprocal edges (N=2 `[(0,1),(1,0)]` K=2; N=4 reciprocal chain K=6); recovery is 5/5. Real spectral-DCM identifiability property, carried forward to 31-03. Builder, plumbing, gate semantics, and the never-absolute-delta-F contract unchanged.
 - **[31-01-D2] N=2 saturated-reciprocal has no absent prunable edge → `separation_after_rank==K` cut is degenerate, asserted conditionally.** With both off-diagonals present (`K == N*(N-1)`) there is no essential/non-essential boundary, so the cut lands at rank 1, not K. Gated that assertion on `has_absent_edges = K < N*(N-1)`; recovery + positive separation_gap asserted unconditionally. N=4 (K=6 < 12) exercises the full cut==K gate.
 - **[31-01-D3] BMR separation_gap magnitudes (1e4–1e6 nats) are RELATIVE-ranking signal only.** They reflect VL Laplace overconfidence (pitfall C1); correctly NOT gated as absolute thresholds. This is the overconfidence regime tempering (31-03) targets.
 - **[30-03-D1] `classify_cell` is pass-or-documented-limit, never silent (VLREC-04).** A cell PASSES iff every PRESENT check (RMSE_A <= 0.05, masked sign >= 0.80, coverage_95 >= 0.85) passes; a check whose metric is `None` is SKIPPED (`pass=None`), never auto-failed; a failing cell returns `status="identifiability_limit"` WITH an evidence block (shrinkage/coverage/RMSE IQR/convergence) — it NEVER raises. The classifier raises only on structurally malformed input (a contracted key absent). Thresholds are provisional documented defaults (no Fisher-info bound yet); SHRINKAGE_SOFT_TARGET 0.7 is informational evidence only (low shrinkage = expected Laplace overconfidence, job 55772525), never a gate.
