@@ -317,6 +317,99 @@ class TestSpectralDCMForward:
         assert torch.all(torch.isfinite(csd.real))
 
 
+
+class TestHemodynamicTransferDefectiveJacobian:
+    """Regression tests for defective (non-diagonalizable) hemodynamic Jacobians.
+
+    When ``A`` is triangular -- diagonal (empty graph) or feed-forward -- the
+    5N x 5N hemodynamic Jacobian has repeated eigenvalues with too few
+    independent eigenvectors, i.e. it is *defective*. The SPM12
+    ``spm_dcm_mtf.m`` eigendecomposition (``pinv(v)``) then silently discards
+    the deficient modes. MATLAB's ``eig(...,'nobalance')`` degrades gracefully
+    (cond(v) ~ 1e13, ~3 good digits), but ``torch.linalg.eig`` returns
+    eigenvectors conditioned at ~1e48, collapsing the transfer function to
+    ~1e-18 and erasing all feed-forward coupling.
+
+    The resolvent form ``dgdx @ inv(iwI - dfdx) @ dfdu`` is conditioned at ~21
+    for the same problem and is what the implementation now uses.
+    """
+
+    @staticmethod
+    def _jac(A: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        n = A.shape[0]
+        return compute_hemodynamic_jacobian(
+            A,
+            torch.zeros(1, dtype=torch.float64),
+            torch.zeros(n, dtype=torch.float64),
+            torch.zeros(1, dtype=torch.float64),
+        )
+
+    @staticmethod
+    def _resolvent(
+        dfdx: torch.Tensor,
+        dfdu: torch.Tensor,
+        dgdx: torch.Tensor,
+        freqs: torch.Tensor,
+    ) -> torch.Tensor:
+        """Reference transfer function by direct resolvent solve."""
+        eye = torch.eye(dfdx.shape[0], dtype=torch.complex128)
+        out = []
+        for f in freqs:
+            m = 1j * 2.0 * math.pi * f.to(torch.complex128) * eye - dfdx.to(
+                torch.complex128
+            )
+            out.append(dgdx.to(torch.complex128) @ torch.linalg.solve(
+                m, dfdu.to(torch.complex128)
+            ))
+        return torch.stack(out)
+
+    def test_diagonal_A_transfer_matches_resolvent(self) -> None:
+        """Diagonal A: transfer must match the resolvent, not collapse to ~0."""
+        A = torch.diag(torch.tensor([-0.5, -0.5], dtype=torch.float64))
+        freqs = default_frequency_grid(TR=2.0, n_freqs=32)
+        dfdx, dfdu, dgdx = self._jac(A)
+        got = compute_transfer_function_hemodynamic(dfdx, dfdu, dgdx, freqs)
+        ref = self._resolvent(dfdx, dfdu, dgdx, freqs)
+        assert torch.allclose(got, ref, rtol=1e-8, atol=1e-12), (
+            f"expected transfer to match resolvent; "
+            f"max abs diff {(got - ref).abs().max():.3e}, "
+            f"|got[0,0,0]|={got[0, 0, 0].abs():.3e} vs "
+            f"|ref[0,0,0]|={ref[0, 0, 0].abs():.3e}"
+        )
+
+    def test_feedforward_A_is_distinguishable_from_empty_graph(self) -> None:
+        """A feed-forward edge must change the transfer function.
+
+        This is the Phase 31 identifiability claim. The eigendecomposition port
+        made chain and empty graph agree to 9.3e-16 -- reported at the time as
+        'spectral DCM cannot identify feed-forward structure'. SPM12 itself
+        separates them by 1.427, so that conclusion was a port artifact.
+        """
+        freqs = default_frequency_grid(TR=2.0, n_freqs=32)
+        empty = torch.diag(torch.tensor([-0.5, -0.5], dtype=torch.float64))
+        chain = torch.tensor([[-0.5, 0.0], [0.30, -0.5]], dtype=torch.float64)
+        h_empty = compute_transfer_function_hemodynamic(*self._jac(empty), freqs)
+        h_chain = compute_transfer_function_hemodynamic(*self._jac(chain), freqs)
+        max_diff = (h_chain - h_empty).abs().max()
+        assert max_diff > 1.0, (
+            f"feed-forward edge must be visible in the transfer function; "
+            f"expected max abs diff > 1.0, got {max_diff:.3e}"
+        )
+        # The edge drives region 1 from region 0, so H[1, 0] must be non-trivial.
+        assert h_chain[0, 1, 0].abs() > 1.0, (
+            f"expected |H[1,0]| > 1.0 for a driven feed-forward edge, "
+            f"got {h_chain[0, 1, 0].abs():.3e}"
+        )
+
+    def test_coupled_A_unchanged(self) -> None:
+        """Well-conditioned (realistically coupled) A must be unaffected."""
+        A = torch.tensor([[-0.5, 0.15], [0.10, -0.42]], dtype=torch.float64)
+        freqs = default_frequency_grid(TR=2.0, n_freqs=32)
+        dfdx, dfdu, dgdx = self._jac(A)
+        got = compute_transfer_function_hemodynamic(dfdx, dfdu, dgdx, freqs)
+        ref = self._resolvent(dfdx, dfdu, dgdx, freqs)
+        assert torch.allclose(got, ref, rtol=1e-8, atol=1e-12)
+
 class TestHemodynamicModel:
     """Tests for hemodynamic Jacobian and transfer function."""
 

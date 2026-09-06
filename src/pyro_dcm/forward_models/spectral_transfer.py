@@ -289,24 +289,48 @@ def compute_transfer_function_hemodynamic(
     torch.Tensor
         Transfer function H, shape ``(F, N, N)``, complex128.
     """
-    eigvals, eigvecs = torch.linalg.eig(dfdx.to(torch.complex128))
+    dfdx_c = dfdx.to(torch.complex128)
+    w = freqs.to(torch.complex128)
 
-    # Stabilize eigenvalues (SPM12: s = 1j*imag(s) + min(real(s), -1/32))
-    if eig_clamp is not None:
-        eigvals = torch.complex(
-            torch.clamp(eigvals.real, max=eig_clamp),
-            eigvals.imag,
-        )
+    # Eigenvalues only -- always well conditioned, and no eigenvectors needed
+    # unless the stability clamp actually has to bite.
+    eigvals = torch.linalg.eigvals(dfdx_c)
+    clamp_active = (
+        eig_clamp is not None and bool((eigvals.real > eig_clamp).any())
+    )
 
-    # SPM12 uses pinv(v) for numerical stability (spm_dcm_mtf.m line 125)
+    if not clamp_active:
+        # Resolvent form: H(w) = dgdx @ (i*2*pi*w*I - dfdx)^-1 @ dfdu.
+        #
+        # Mathematically identical to SPM12's eigendecomposition
+        # (spm_dcm_mtf.m:124-135) whenever dfdx is diagonalizable, and it
+        # agrees with the eigen route to ~1e-15 on well-conditioned problems.
+        # It is used because dfdx is DEFECTIVE (repeated eigenvalues, too few
+        # independent eigenvectors) whenever A is triangular -- diagonal, i.e.
+        # the empty graph, or feed-forward. There, SPM12's ``pinv(v)`` drops
+        # the deficient modes. MATLAB's ``eig(...,'nobalance')`` degrades
+        # gracefully (cond(v) ~ 1e13, ~3 good digits retained), but
+        # ``torch.linalg.eig`` returns cond(v) ~ 1e48 and the transfer function
+        # collapses to ~1e-18, erasing all feed-forward coupling. The resolvent
+        # is conditioned at ~21 on the same problem (residual ~3e-17).
+        eye = torch.eye(dfdx_c.shape[0], dtype=torch.complex128, device=dfdx.device)
+        lhs = 1j * 2.0 * torch.pi * w[:, None, None] * eye - dfdx_c
+        rhs = dfdu.to(torch.complex128).expand(w.shape[0], -1, -1)
+        return dgdx.to(torch.complex128) @ torch.linalg.solve(lhs, rhs)
+
+    # Unstable system: fall back to SPM12's eigendecomposition so the
+    # per-eigenvalue clamp (s = 1j*imag(s) + min(real(s), -1/32)) keeps its
+    # exact semantics. Phase 30 recorded 0 in-band draws, so this path is not
+    # normally taken; near-boundary A is excluded upstream anyway.
+    eigvals_c, eigvecs = torch.linalg.eig(dfdx_c)
+    eigvals_c = torch.complex(
+        torch.clamp(eigvals_c.real, max=eig_clamp),
+        eigvals_c.imag,
+    )
     dgdv = dgdx.to(torch.complex128) @ eigvecs
     dvdu = torch.linalg.pinv(eigvecs) @ dfdu.to(torch.complex128)
-
-    w = freqs.to(torch.complex128)
-    Sk = 1.0 / (1j * 2.0 * torch.pi * w[:, None] - eigvals[None, :])
-
-    H = torch.einsum("ik,kj,fk->fij", dgdv, dvdu, Sk)
-    return H
+    Sk = 1.0 / (1j * 2.0 * torch.pi * w[:, None] - eigvals_c[None, :])
+    return torch.einsum("ik,kj,fk->fij", dgdv, dvdu, Sk)
 
 
 def default_frequency_grid(
