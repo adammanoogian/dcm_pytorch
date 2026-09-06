@@ -33,8 +33,9 @@ paths bit-exact).
 **v0.7.0 Variational Laplace Validation complete (2026-06-12).** The VL engine is now
 validated across an N×SNR recovery matrix (spectral/task/latent-circuit), BMR relative-ranking
 recovers true circuit structure (vs brute-force ELBO), and VL was cross-validated against MATLAB
-SPM12 `spm_nlsi_GN` (model-ranking agreement 1.0; free energy equal up to a constant ~270-nat
-offset — a documented forward-model divergence, not an engine bug). All four phases (29-32)
+SPM12 `spm_nlsi_GN` (model-ranking agreement 1.0; free energy within ~10% after matching the
+noise model — the original ~270-nat "forward-model divergence" was 80% our own
+MATLAB bridge omitting `Y.Q`; see the 2026-09-06 correction in STATE.md). All four phases (29-32)
 passed verification. The framework remains an **fMRI / spectral DCM**; it has no time-domain
 evoked-response (EEG/MEG ERP) capability yet — that is the v0.8.0 milestone.
 

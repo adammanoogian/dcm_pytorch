@@ -9,6 +9,45 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 ## Current Position
 
+### ✅ 2026-09-06 — RESOLVED (mostly): the ~270-nat VL-vs-SPM free-energy offset
+
+The offset was **substantially an artifact of our own MATLAB bridge**, not a
+forward-model divergence.
+
+`spm_dcm_fmri_csd.m:234` sets `DCM.Y.Q = spm_dcm_csd_Q(DCM.Y.csd)` before
+inversion. `run_spm_spectral_dcm_csd_injected.m` bypasses
+`spm_dcm_fmri_csd_data` to inject a Python-computed CSD and **never set `Y.Q`**,
+so `spm_nlsi_GN.m:218` fell back to `spm_Ce(ns*ones(1,nr))` — a generic
+per-channel basis with **N² = 4** components — while the VL engine used its
+`spm_dcm_csd_Q` port with **1**. The two engines were fitting different noise
+models, so their free energies were never comparable (`L(1)` carries
+`logdet(iS)·nq/2`; `L(3)` is the hyperparameter KL over an nq-dim `h`).
+
+Measured on DCCN (job 55204286), N=2 reciprocal-asymmetric matched problem:
+
+| | `Y.Q` unset | `Y.Q = spm_dcm_csd_Q` |
+|---|---|---|
+| SPM F | 307.5470 | **525.4313** |
+| VL F | 577.4417 | 577.4417 |
+| offset | **269.895 nats** | **52.010 nats** |
+| relative_error | 0.8776 | **0.0990** |
+| SPM `Eh` | 4 values | 1 value (8.2459) |
+| ranking agreement | 1.0 | 1.0 |
+
+Found via new free-energy provenance exported by the bridge (`results.fe`:
+`ny`, `nq`, `y_size`, X0 columns, `hE`/`hC`, `Eh`). `ny` (128) and the
+hyperpriors (`hE`=8, `hC`=1/128) matched all along — only `nq` differed, which
+is what pointed at `Y.Q`.
+
+**Still open:** a real **52.0-nat / 9.9%** residual. The strict 5% gate stays
+red, correctly. Whatever remains is now a genuine engine/forward-model
+difference rather than a setup mismatch, and it is a far smaller target.
+
+Reproduced identically on the workstation and DCCN, and the offset was
+bit-stable across M3/R2022a, workstation/R2025b and DCCN/R2024b before the fix.
+
+---
+
 ### ⚠️ 2026-09-06 — CORRECTION: the Phase 31 "feed-forward is unidentifiable" finding was a numerical artifact
 
 **Superseded: [31-01-D1] and [31-02-D1] below.** Their conclusion — that spectral
