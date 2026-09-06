@@ -20,7 +20,12 @@ class BenchmarkConfig:
     variant : str
         DCM variant: ``"task"``, ``"spectral"``, or ``"rdcm"``.
     method : str
-        Inference method: ``"svi"``, ``"amortized"``, or ``"vb"``.
+        Inference method. ``"vl"`` (Variational Laplace) is the SPM12-equivalent
+        engine and the one the v0.7.0 recovery matrix and all current validation
+        use. ``"svi"``, ``"amortized"`` and ``"vb"`` are the earlier paths --
+        ``"svi"`` in particular is superseded (v0.3.0 RECOV-04: mean-field SVI
+        could not recover B, VL could). Registered runners are the keys of
+        ``benchmarks.runners.RUNNER_REGISTRY``.
     n_datasets : int
         Number of synthetic datasets to generate.
     n_regions : int
