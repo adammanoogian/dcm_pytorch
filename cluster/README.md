@@ -101,6 +101,34 @@ python cluster/scripts/my_script.py
 
 `setup_matlab R2024b` additionally loads MATLAB and hard-checks `SPM12_PATH`.
 
+## Slow suites: shard, never run serially
+
+A slow suite is an **array job**, not a long job. Serial runs that overrun their
+walltime are killed mid-suite and pytest prints no summary -- you get nothing
+for the compute. Measured 2026-09-06: the `slow` suite is 48 tests averaging
+~26 min, so serially it managed **9 tests in 3h54m** against a 6 h limit.
+Sharded over 8 tasks it is ~6 tests each.
+
+```bash
+sbatch --array=0-7 --export=ALL,PYTEST_MARK='slow and not spm and not tapas'        cluster/sbatch/pytest_sharded.sbatch
+```
+
+The array size is the shard count. Test `i` goes to shard `i % NSHARDS`
+(striped, not blocked -- adjacent tests in a file have similar cost, so
+contiguous blocks pile the expensive ones into one shard).
+
+**Check the coverage gate before believing a green run:**
+
+```bash
+grep -h 'SHARD RESULT' cluster/logs/pytest_shard_<arrayjob>_*.out
+```
+
+The `assigned=` values must sum to `total=`. If they do not, a shard ran nothing
+and the green is false.
+
+Estimate first: `pytest --collect-only -q | grep -c ::` times a measured
+per-test cost. Over ~half the walltime means shard it.
+
 ## MATLAB and SPM12
 
 **Run the SPM bridge on the workstation, not the cluster.** As of 2026-09-05 the
