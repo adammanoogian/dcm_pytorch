@@ -179,6 +179,25 @@ try
     fprintf('FE-PROVENANCE ny=%d nq=%d complex=%d X0cols=%d\n', ...
             fe.ny, fe.nq, fe.y_is_complex, fe.n_X0_cols);
 
+    % --- forward-model probe (VL-vs-SPM residual investigation) ---
+    % Evaluate SPM's own generative function at the PRIOR MEAN and at a fixed
+    % probe point, so the Python side can compare predictions parameter-for-
+    % parameter. If the two forwards disagree here, every downstream difference
+    % (Ep, F) follows from that and not from the inversion.
+    % Capture the FULL decomposition, not just y: S is the transfer
+    % function, Gu the neuronal fluctuation CSD, Gn the observation
+    % noise CSD. Comparing these separately localises any scale
+    % discrepancy to one factor instead of the composite prediction.
+    [fe.pred_pE, fe.w_pE, fe.S_pE, fe.Gu_pE, fe.Gn_pE] = ...
+        feval(DCM.M.IS, pE, DCM.M, DCM.U);
+    pProbe = pE;
+    pProbe.A = pE.A;
+    pProbe.A(1,2) = 0.15; pProbe.A(2,1) = 0.10;
+    fe.pred_probe = feval(DCM.M.IS, pProbe, DCM.M, DCM.U);
+    fe.probe_A = pProbe.A;
+    fe.pE_A = pE.A;
+    fe.pE_transit = pE.transit; fe.pE_decay = pE.decay; fe.pE_epsilon = pE.epsilon;
+
     [Ep, Cp, Eh, F] = spm_nlsi_GN(DCM.M, DCM.U, Y);
     fe.Eh = full(Eh(:))';
     fprintf('FE-PROVENANCE Eh=%s F=%.6f\n', mat2str(fe.Eh, 8), F);
