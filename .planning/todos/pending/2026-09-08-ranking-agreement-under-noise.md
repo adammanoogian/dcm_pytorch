@@ -156,3 +156,90 @@ variance -> SVD reduction path lives in `_run_vl_generic` and is shared by ALL
 forwards, so the mechanism is not obviously spectral-specific. This is a
 DIFFERENT mechanism from `2026-06-09-vl-overconfidence-for-bmr`; do not merge
 them.
+
+
+---
+
+## UPDATE 2026-09-08 (later): forward and convergence BOTH exonerated
+
+### 1. Not the forward (job 55235592)
+
+Comparing our forward at the prior mean against SPM's `pred_pE`, going through
+the VL engine's OWN packing (`theta = prior_mean`, A block = `a_mask/128`,
+which is exactly what SPM exports as `pE.A`) so no convention mapping is
+assumed:
+
+| mask | ratio mean | max abs diff |
+|---|---|---|
+| full_reciprocal (CONTROL) | 0.998336 | 1.33e-02 |
+| single_direction (TEST) | 0.998484 | 1.61e-02 |
+| diagonal_only | 0.998660 | 1.38e-02 |
+
+A **uniform** ~0.17% deviation across all three masks. There is no
+feed-forward-specific forward divergence, so the forward cannot explain a
+15-28% F gap that appears only on `single_direction`.
+
+**A prior probe (55235562) is VOID** -- it tried to rebuild SPM's transfer
+function from the exported `pE_A` and its control came back at 6.47 where
+1.000000 was required. SPM's `pE.A` is the raw prior, before `spm_fx_fmri`
+applies its self-inhibition parameterisation. Ignore its numbers entirely.
+
+### 2. Not convergence
+
+VL fitted at `max_iter` 64 / 256 / 1024 on `single_direction`:
+
+```
+seed   SPM F     VL@64     VL@256    VL@1024   iters   gap
+ 42  125.0511  106.6919  106.6919  106.6919    16   -18.36
+ 43  223.8669  161.8360  161.8360  161.8360    16   -62.03
+ 44  291.2369  241.5480  241.5480  241.5480    17   -49.69
+ 45  285.5854  285.1748  285.1748  285.1748    16    -0.41
+ 46  260.0095  187.6822  187.6822  187.6822    16   -72.33
+```
+
+Identical to every digit across a 16x iteration budget, `converged=True`
+throughout, and `max F over trace` matches the reported F -- so VL is not
+stopping short and not accepting a worse iterate than one it had visited.
+
+### 3. Setup verified on both sides
+
+`export_to_mat.py` writes `DCM["a"] = a_mask`; the bridge installs
+`DCM.M.pE`/`DCM.M.pC` from `spm_dcm_fmri_priors(DCM.a, ...)`. SPM really is
+fitting the reduced model. The mask is not being silently ignored.
+
+### 4. The reframing: VL may be the CORRECT side
+
+`single_direction` prunes `A[0,1]`, whose **true value is 0.15** -- the larger
+of the two couplings. Pruning a real connection should cost evidence.
+
+| seed | VL dF (full - single) | SPM dF |
+|---|---|---|
+| 42 | 32.41 | 13.76 |
+| 43 | 64.11 | 3.54 |
+| 44 | 53.08 | **-1.30** |
+| 45 | 45.22 | 37.69 |
+| 46 | 80.85 | 16.39 |
+
+VL is consistently large (32-81 nats). SPM is erratic (-1.3 to 37.7), and on
+seed 44 reports that the model **without** the true 0.15 connection is BETTER
+than the one with it. That is implausible on data generated with that
+connection present.
+
+Combined with two independent results pointing the same way -- VL is 2.82x
+closer to ground truth on the off-diagonals (5/5 seeds), and VL attains the
+higher free energy on the full model -- the evidence leans toward **SPM
+under-fitting the reduced models**, not VL being wrong.
+
+**Held deliberately as a hypothesis, not a conclusion.** SPM12 is the reference
+implementation and the claim "our port beats SPM" demands more than five seeds
+on one N=2 problem. What has been *established* is narrower and solid: the gap
+is not the forward, not the iteration budget, and not a mis-specified mask.
+
+## Decisive next test
+
+Compare each engine's **reduced-model `Ep` against ground truth**, and the
+residual norm `|y - g(Ep)|` each achieves on the same data. If SPM's
+reduced-model `Ep` is far from truth AND its residual is larger than VL's while
+its F is higher, SPM's reduced-model free energy is not tracking its own fit
+quality and the hypothesis is confirmed. This needs the bridge to export
+per-scenario `Ep`, which it currently does only for the full model.
