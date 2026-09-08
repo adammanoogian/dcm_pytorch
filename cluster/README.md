@@ -110,8 +110,17 @@ for the compute. Measured 2026-09-06: the `slow` suite is 48 tests averaging
 Sharded over 8 tasks it is ~6 tests each.
 
 ```bash
-sbatch --array=0-7 --export=ALL,PYTEST_MARK='slow and not spm and not tapas'        cluster/sbatch/pytest_sharded.sbatch
+# 16 shards, not 8 -- see the sizing note below
+sbatch --array=0-15 --export=ALL,PYTEST_MARK='slow and not spm and not tapas'        cluster/sbatch/pytest_sharded.sbatch
 ```
+
+**Sizing (measured 2026-09-06, job 55204160).** At 8 shards (6 tests each) two
+shards still hit the 6 h TIMEOUT, leaving 12 of 48 tests unaccounted. The slow
+suite has a long tail -- some individual tests exceed an hour -- so size for the
+*worst* shard, not the mean. 16 shards (3 tests each) or a longer `--time` is
+the working configuration. The `SHARD RESULT` coverage line is what makes an
+unfinished shard visible instead of silent; a TIMEOUT prints no result at all,
+so **missing SHARD RESULT lines are themselves the signal**.
 
 The array size is the shard count. Test `i` goes to shard `i % NSHARDS`
 (striped, not blocked -- adjacent tests in a file have similar cost, so
