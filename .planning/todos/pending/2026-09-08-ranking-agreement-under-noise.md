@@ -97,3 +97,62 @@ models, this is the regime that matters most and it is the one least tested.
    whether one of them failed to converge on that mask.
 3. Only then revisit the `>=0.80` ranking gate and the `close_call_nats`
    default. Both are premature while reduced-model F is ungated.
+
+
+---
+
+## UPDATE 2026-09-08: the divergence is ONE scenario -- `single_direction`
+
+The per-scenario gate (`a30a781`) landed and job 55235094 shows the reduced-model
+divergence is not spread across models. It is concentrated entirely in the
+feed-forward mask.
+
+| seed | full_reciprocal | single_direction | diagonal_only |
+|---|---|---|---|
+| 42 | 0.0021 OK | **0.1468 MISS** | 0.0060 OK |
+| 43 | 0.0064 OK | **0.2771 MISS** | 0.0472 OK |
+| 44 | 0.0162 OK | **0.1706 MISS** | 0.0386 OK |
+| 45 | 0.0220 OK | 0.0014 OK | 0.0199 OK |
+| 46 | 0.0285 OK | **0.2782 MISS** | 0.0302 OK |
+
+4/5 seeds fail on `single_direction`, and **always in the same direction**: VL's
+free energy is BELOW SPM's, by 18.4, 62.0, 49.7 and 72.3 nats. A consistent sign
+across seeds is a bias, not noise.
+
+`single_direction` is `eye` plus a single off-diagonal (`mask[1,0] = 1`), i.e. a
+**feed-forward** structure. Note `diagonal_only` (also triangular) PASSES, so
+this is not triangularity as such -- it is the single-off-diagonal case.
+
+### This also explains seed 44's ranking disagreement
+
+Seed 44's disagreeing pair was (0,1) = full_reciprocal vs single_direction, with
+`vl_delta = +53.08` against `spm_delta = -1.30`. VL underestimates
+single_direction's F by ~49.7 nats on that seed, which is very nearly the whole
+53-nat gap. The ranking disagreement is a *consequence* of the single_direction
+divergence, not an independent finding.
+
+### The gap in the evidence
+
+The forward-parity result that established agreement to **4e-14** (job 55234376)
+was run on the **full reciprocal A only**. The forward has NEVER been checked on
+a triangular mask. And the feed-forward regime is exactly where
+`compute_transfer_function_hemodynamic` was defective before `007b686` -- the bug
+behind the retracted Phase 31 "feed-forward is unidentifiable" finding. The
+resolvent fix improved the conditioning, but parity in that regime was never
+verified.
+
+**Probe submitted: job 55235473** runs the forward-parity comparison under all
+three masks, with `full_reciprocal` as an explicit control that must reproduce
+1.000000. If the control matches and `single_direction` does not, this is a
+forward-model divergence in the feed-forward regime, not an optimiser problem.
+
+### Why this matters beyond the parity suite
+
+Reduced models are sparse by construction, so **BMR evaluates exactly this
+regime**. If VL systematically underestimates F for feed-forward masks, every
+spectral prune delta-F is biased. Whether this reaches task/latent BMR too is
+unknown and must be checked rather than assumed: the a_mask -> zeroed prior
+variance -> SVD reduction path lives in `_run_vl_generic` and is shared by ALL
+forwards, so the mechanism is not obviously spectral-specific. This is a
+DIFFERENT mechanism from `2026-06-09-vl-overconfidence-for-bmr`; do not merge
+them.
