@@ -124,7 +124,12 @@ def mar2csd(
         # CSD = H * Sigma * H^H
         csd[fi] = H @ noise_cov @ H.conj().T
 
-    return csd
+    # SPM12 spm_mar2csd.m final line: csd = 2*csd/ns, with ns = 2*freqs(end)
+    # the sampling rate. Omitting it leaves the reconstructed CSD too small by
+    # 2/ns -- a factor of 4 on the standard fMRI grid (freqs[-1] = 0.25 Hz),
+    # which made the VL spectral forward predict exactly 1/4 of SPM's CSD at
+    # identical parameters. The factor is NOT a constant: it tracks fs.
+    return 2.0 * csd / fs
 
 
 def csd2ccf(
