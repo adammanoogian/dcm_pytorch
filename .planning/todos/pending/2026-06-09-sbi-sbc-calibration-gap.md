@@ -159,3 +159,42 @@ claim.
   this problem even with a correct forward) and stop spending on it.
 
 Either way this is the last SBI compute until something changes upstream.
+
+
+## Observed during the 2026-09-08 re-run (job 55235108): dead input features
+
+`sbi` warns during training:
+
+```
+UserWarning: Data has constant values in dimension(s)
+[288, 292, 296, 297, 301, 305, ... 571, 572, 573, 574, 575].
+These dimensions carry no information and will be mapped to zero after z-scoring.
+```
+
+Roughly 100 of the ~576 input features are **structurally constant**, and every
+listed index is at or above 288 -- i.e. entirely in the second half of the
+vector, which is the imaginary block (the embedding stacks real then imaginary
+parts of the flattened CSD).
+
+Two distinct redundancies, both structural rather than data-dependent:
+
+1. **Imaginary parts of the auto-spectra are identically zero.** A CSD's
+   diagonal is real by construction, so those imaginary features are always 0.
+2. **The CSD is Hermitian**: `CSD[w,i,j] = conj(CSD[w,j,i])`. Feeding all `N^2`
+   complex entries therefore supplies each off-diagonal twice. Only the real
+   diagonal plus the upper triangle is independent -- for `N=3`, 9 independent
+   real numbers per frequency rather than the 18 currently fed.
+
+So the network is being trained on a representation that is roughly **2x
+redundant and carries ~100 dead dimensions**. `sbi` zeroes the constant ones, so
+they are inert rather than actively harmful, and this is NOT by itself an
+explanation for the SBC failure -- do not record it as one. But it is a real
+defect in the feature design, it wastes embedding capacity, and it is worth
+fixing regardless of how the re-run turns out.
+
+Fix: feed only the independent components (real diagonal + upper-triangle real
+and imaginary parts). This shrinks the input from `2*F*N^2` to `F*N^2` with no
+information loss.
+
+**Applies even if amortized work is parked** -- record it so the next person
+does not rediscover it.
