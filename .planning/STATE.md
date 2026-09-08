@@ -9,6 +9,37 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 ## Current Position
 
+### ⚠️ 2026-09-08 — mar2csd 2/ns fix landed; end-to-end F agreement REGRESSED, unexplained
+
+`mar2csd` omitted SPM12's final `csd = 2*csd/ns` (`spm_mar2csd.m`), so the
+reconstructed CSD was too small by `2/ns` — a factor of 4 on the standard fMRI
+grid. Fixed in `bd2448d`, with `tests/test_mar_csd.py` written failing first.
+
+Evidence the forward correction is right: SPM's own toolbox round-trips a
+synthetic CSD at gain **0.9855** where ours managed **0.2464**; and at the prior
+mean the components `S`, `Gu`, `Gn` already matched SPM at ratio **1.000000**
+(job 55207377) — only the composite was off, by exactly this scale.
+
+**But the VL-vs-SPM free energy got further apart, not closer:**
+
+| | VL F | SPM F | relative_error |
+|---|---|---|---|
+| before | 577.4417 | 525.4313 | 0.0990 |
+| after | 399.9960 | 515.9795 | **0.2248** |
+
+Known confound: the injected CSD is produced by `simulate_spectral_dcm`, which
+uses the forward that changed — so the **data moved too** and the two rows are
+not the same problem. Unexplained: SPM F barely shifted (525→516) while VL F
+fell sharply (577→400), which a symmetric ×4 on both sides would not predict.
+
+**Not resolved.** See
+`.planning/todos/pending/2026-09-08-mar-normalisation-followup.md`. The decisive
+check — does the composite prediction now match SPM at ratio 1.000000, as its
+components do — needs the cluster and eduVPN was down. **Do not freeze the 1:1
+SPM parity fixtures until this settles**; they would bake in a moving number.
+
+---
+
 ### ✅ 2026-09-06 — RESOLVED (mostly): the ~270-nat VL-vs-SPM free-energy offset
 
 The offset was **substantially an artifact of our own MATLAB bridge**, not a
