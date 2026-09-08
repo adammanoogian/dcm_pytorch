@@ -9,34 +9,64 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 ## Current Position
 
-### ⚠️ 2026-09-08 — mar2csd 2/ns fix landed; end-to-end F agreement REGRESSED, unexplained
+### ✅ 2026-09-08 — RESOLVED: the mar2csd fix is correct; the "F regression" was not one
 
-`mar2csd` omitted SPM12's final `csd = 2*csd/ns` (`spm_mar2csd.m`), so the
-reconstructed CSD was too small by `2/ns` — a factor of 4 on the standard fMRI
-grid. Fixed in `bd2448d`, with `tests/test_mar_csd.py` written failing first.
+`mar2csd` omitted SPM12's final `csd = 2*csd/ns` (`spm_mar2csd.m`), leaving the
+reconstructed CSD too small by `2/ns` — a factor of 4 on the standard fMRI grid.
+Fixed in `bd2448d`. The apparent end-to-end regression that followed
+(relative_error 0.0990 -> 0.2248) is **an artifact of comparing free energies
+computed on differently-normalised data**, not a worse fit.
 
-Evidence the forward correction is right: SPM's own toolbox round-trips a
-synthetic CSD at gain **0.9855** where ours managed **0.2464**; and at the prior
-mean the components `S`, `Gu`, `Gn` already matched SPM at ratio **1.000000**
-(job 55207377) — only the composite was off, by exactly this scale.
+**The forward now matches SPM exactly** (DCCN job 55234376). Feeding SPM's own
+exported `S_pE`/`Gu_pE`/`Gn_pE` back through our assembly and round-trip, against
+SPM's own composite `pred_pE`:
 
-**But the VL-vs-SPM free energy got further apart, not closer:**
+| check | ratio (ours/SPM) | max abs diff |
+|---|---|---|
+| pre-round-trip assembly | 1.000000 | 0.000e+00 |
+| **composite post-round-trip** | **1.000000** | **4.043e-14** |
 
-| | VL F | SPM F | relative_error |
+Before the fix this composite was **0.250000**. Note the round-trip gain is 0.9808
+(range 0.62..1.07), **not** 1.0 — a MAR(7) projection is genuinely lossy, and SPM's
+round-trip returns the identical numbers. The earlier "should return ~1.0"
+expectation was wrong; the 0.246 figure was diagnostic only because it was constant.
+
+**The VL free-energy drop is exactly the data-rescaling term.** Reverting `mar2csd`
+to its buggy form (so data and forward move together, as before the fix) reproduces
+both recorded F values exactly, at the same iteration count (9), both converged:
+
+```
+data scale (fixed/buggy)  4.00000000 at every element
+F_buggy - F_fixed         177.445678
+ny*ln(4), ny=128          177.445678   residual -2.8e-14
+```
+
+**Why the old 52-nat agreement was meaningless.** Before the fix, VL fit
+quarter-scale data with a quarter-scale forward — self-consistent, F inflated by
+the +177.45 units term. SPM's forward never had the bug, so it fit quarter-scale
+data with a correct forward. Data rescaling alone moves any Gaussian evidence by
+-ny*ln(4) = -177.45; SPM's F moved only -9.45, so SPM's fit improved by **+168.0
+nats** once the data stopped being 4x too small. The old +52.01 gap was the
+accidental near-cancellation of those two. It was never a measure of engine
+agreement.
+
+**Still open — and now a real number: a 116.0-nat / 22.5% inversion-level gap.**
+
+| | VL F | SPM F | gap |
 |---|---|---|---|
-| before | 577.4417 | 525.4313 | 0.0990 |
-| after | 399.9960 | 515.9795 | **0.2248** |
+| before fix (data 1/4 scale) | 577.4417 | 525.4313 | +52.01 |
+| after fix (data true scale) | 399.9960 | 515.9795 | **-115.98** |
 
-Known confound: the injected CSD is produced by `simulate_spectral_dcm`, which
-uses the forward that changed — so the **data moved too** and the two rows are
-not the same problem. Unexplained: SPM F barely shifted (525→516) while VL F
-fell sharply (577→400), which a symmetric ×4 on both sides would not predict.
+Identical injected CSD, identical `Y.Q`/`nq`, forward agreeing to 4e-14, and the
+same free-parameter set on both sides — so the discrepancy is in the **inversion**.
+Prime suspect: the hyperprior `hE = -log(var(spm_vec(y))) + 4`, where our port
+takes `var` of the real part but SPM takes it of the complex vector; it is the one
+data-scale-dependent constant entering F. Next step is to export SPM's three-term
+`L` decomposition and diff it term by term. See
+`.planning/todos/pending/2026-09-08-mar-normalisation-followup.md`.
 
-**Not resolved.** See
-`.planning/todos/pending/2026-09-08-mar-normalisation-followup.md`. The decisive
-check — does the composite prediction now match SPM at ratio 1.000000, as its
-components do — needs the cluster and eduVPN was down. **Do not freeze the 1:1
-SPM parity fixtures until this settles**; they would bake in a moving number.
+**Forward-parity fixtures can now be frozen.** Do NOT freeze an F-level fixture —
+0.2248 is a known-red number expected to move.
 
 ---
 
