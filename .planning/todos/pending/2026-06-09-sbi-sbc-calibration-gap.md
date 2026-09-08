@@ -86,3 +86,50 @@ the calibrated inference path is VL. Carry both the structural-calibration fix (
 prior / reparam) and the real-M/EEG demo to **v0.7.0 Phase D (SBI reconciliation)** in
 `.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md`, where the framing decision is "fix SBC vs. scope
 SBI as an optional benchmark against calibrated VL."
+
+
+---
+
+## ⚠️ 2026-09-08: root cause #2 may be an artifact -- the training data was corrupted
+
+`sbi_spectral.py:156` calls `spectral_dcm_forward(A, freqs, a, b, c,
+eig_clamp=eig_clamp)` **without** passing `hemodynamic`, so it defaults to
+`True`. Every one of the 50,000 training simulations therefore went through
+`compute_transfer_function_hemodynamic`.
+
+That function was **defective until `007b686` (2026-09-06)**: it diagonalised a
+Jacobian that is defective (repeated eigenvalues, too few independent
+eigenvectors) whenever `A` is triangular or near-degenerate, and `pinv` silently
+dropped the deficient modes -- collapsing `|H|` to ~1e-18. Job 55772094 (the
+SBC run) predates the fix.
+
+**Why this bears directly on root cause #2.** That root cause says off-diagonals
+up to +/-3 sigma push `A` past the stability boundary, where "different `A_free`
+map to near-identical CSD => locally unidentifiable". But the near-degenerate
+regime is *precisely* where the eigendecomposition was broken. An unknown subset
+of the training simulations had a **corrupted** CSD, not a
+genuinely-unidentifiable one, and the corruption was selective (it hit exactly
+the boundary draws) rather than a uniform rescale that NPE could absorb.
+
+This is the same mistake already retracted once in this repo: the Phase 31
+"feed-forward is unidentifiable" finding was caused by this identical bug and is
+recorded as retracted in `STATE.md`. The SBI "structural miscalibration"
+conclusion rests on the same broken forward and must be re-tested before it is
+believed.
+
+(The `mar2csd` 2/ns error also applied, but that is a uniform factor of 4 on
+every simulation and would not by itself break calibration.)
+
+**Also note:** the SBI path does NOT use `compute_csd_precision`, so the
+2026-09-08 Q-norm fix is irrelevant here.
+
+## Re-run submitted
+
+Same configuration as the capacity-fixed run (50k sims, 8 transforms, 128
+hidden, 500 epochs, 200 SBC) on the FIXED forward. This is the cheapest
+decisive test: if SBC still fails at ~2/9, root cause #2 stands and the
+stable-region-prior experiments are warranted. If it improves materially, the
+"structural" conclusion was an artifact and this todo needs rewriting.
+
+Do not run the reparameterisation experiments until this lands -- they were
+designed against a diagnosis that may not survive.
