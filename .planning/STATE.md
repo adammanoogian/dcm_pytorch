@@ -42,10 +42,13 @@ fixed in `a44b46c` but whose *values* were never checked.
 The full arc: **269.9 nats** (bridge never set `Y.Q`) -> **52** -> an honest
 **116** once the `mar2csd` units artifact was removed -> **1.90**.
 
-**BLAST RADIUS — not yet re-run.** `compute_csd_precision` feeds both VL paths,
-so **every spectral VL free energy changes**. Stale until re-run: the Phase 30
-recovery matrix F values, Phase 23/31 BMR delta-F, and all recorded Phase 32
-parity numbers. Parameter recovery and model *ranking* should be far less
+**BLAST RADIUS — SPECTRAL ONLY.** Checked, not assumed: only
+`SpectralDCMForward` calls `compute_csd_precision`; the task, latent-circuit and
+ERP forwards all build an identity precision. So the stale set is the **4
+spectral cells** of the Phase 30 recovery matrix plus the Phase 32 parity numbers
+(already re-measured). Phase 23/31 BMR is **not** affected — both BMR scripts run
+on task/latent forwards — and neither is the VL-overconfidence-for-BMR todo,
+which was measured on the latent circuit and is a separate bug. Parameter recovery and model *ranking* should be far less
 affected (ranking held at 1.0 across every regime of this bug), but that is an
 expectation, not a measurement. Tracked in
 `.planning/todos/pending/2026-09-08-vl-f-blast-radius.md`.
