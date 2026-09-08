@@ -150,6 +150,11 @@ def main() -> int:
                     res["matched_f_comparison"]["relative_error"]
                 ),
                 "offdiag_free_params": off,
+                # Persist the FULL ranking block, not just the rate. A bare
+                # agreement rate cannot be interpreted: a disagreement on a
+                # near-tie and one on a well-separated pair look identical.
+                # Job 55234748 seed 44 returned 0.667 with no way to tell.
+                "ranking": res["ranking"],
             })
             print(
                 f"  vl_F={res['vl_F']:.3f} spm_F={res['spm_F']:.3f} "

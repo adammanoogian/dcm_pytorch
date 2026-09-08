@@ -186,6 +186,7 @@ def compare_posterior_means(
 
 def compare_model_ranking(
     scenarios: list[dict],
+    close_call_nats: float = 1.0,
 ) -> dict:
     """Compare model ranking between SPM free energy and Pyro ELBO.
 
@@ -200,6 +201,10 @@ def compare_model_ranking(
         - ``'spm_F'``: float, SPM free energy (higher = better).
         - ``'pyro_elbo'``: float, Pyro ELBO (higher = better).
           This is the negative of the SVI loss.
+    close_call_nats : float, optional
+        Evidence separation below which a disagreement is a near-tie
+        rather than a conflict. A pair is a close call when BOTH engines
+        separate the two models by less than this. Default 1.0.
 
     Returns
     -------
@@ -207,14 +212,27 @@ def compare_model_ranking(
         - ``'agreement_rate'``: float, fraction of pairs with matching
           ranking. Agreement >= 0.80 is the pass criterion.
         - ``'pairwise_results'``: list of dicts with details for each
-          pair comparison.
+          pair comparison, including ``spm_delta``, ``pyro_delta``,
+          ``min_abs_separation`` and ``is_close_call``.
         - ``'total_pairs'``: int, total number of pairwise comparisons.
         - ``'agreements'``: int, number of agreeing pairs.
+        - ``'disagreements_close'``: int, disagreements on near-ties.
+        - ``'disagreements_separated'``: int, disagreements where at
+          least one engine was confident. These are the serious ones.
+
+    Notes
+    -----
+    The bare agreement rate is not interpretable on its own. A
+    disagreement on models separated by 0.2 nats is a coin-flip; one on
+    models separated by 40 nats is a real conflict. Job 55234748 seed 44
+    returned 0.667 with no way to tell which it was.
     """
     n = len(scenarios)
     pairwise: list[dict] = []
     agreements = 0
     total_pairs = 0
+    disagreements_close = 0
+    disagreements_separated = 0
 
     for i in range(n):
         for j in range(i + 1, n):
@@ -224,16 +242,33 @@ def compare_model_ranking(
             )
             match = spm_prefers_i == pyro_prefers_i
 
+            spm_delta = float(scenarios[i]["spm_F"] - scenarios[j]["spm_F"])
+            pyro_delta = float(
+                scenarios[i]["pyro_elbo"] - scenarios[j]["pyro_elbo"]
+            )
+            # Conservative read of how close the call was: a pair is only a
+            # near-tie if BOTH engines found the two models hard to separate.
+            min_sep = min(abs(spm_delta), abs(pyro_delta))
+            is_close = bool((not match) and min_sep < close_call_nats)
+
             pairwise.append({
                 "i": i,
                 "j": j,
                 "spm_prefers_i": bool(spm_prefers_i),
                 "pyro_prefers_i": bool(pyro_prefers_i),
                 "agree": bool(match),
+                "spm_delta": spm_delta,
+                "pyro_delta": pyro_delta,
+                "min_abs_separation": min_sep,
+                "is_close_call": is_close,
             })
 
             if match:
                 agreements += 1
+            elif is_close:
+                disagreements_close += 1
+            else:
+                disagreements_separated += 1
             total_pairs += 1
 
     rate = agreements / total_pairs if total_pairs > 0 else 0.0
@@ -243,6 +278,9 @@ def compare_model_ranking(
         "pairwise_results": pairwise,
         "total_pairs": total_pairs,
         "agreements": agreements,
+        "disagreements_close": disagreements_close,
+        "disagreements_separated": disagreements_separated,
+        "close_call_nats": close_call_nats,
     }
 
 
