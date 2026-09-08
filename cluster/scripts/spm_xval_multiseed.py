@@ -155,6 +155,9 @@ def main() -> int:
                 # near-tie and one on a well-separated pair look identical.
                 # Job 55234748 seed 44 returned 0.667 with no way to tell.
                 "ranking": res["ranking"],
+                # Reduced-model F divergence is invisible to the
+                # full-model matched-F gate (seed 44, job 55234938).
+                "scenario_f_comparison": res.get("scenario_f_comparison"),
             })
             print(
                 f"  vl_F={res['vl_F']:.3f} spm_F={res['spm_F']:.3f} "

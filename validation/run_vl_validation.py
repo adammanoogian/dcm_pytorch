@@ -59,6 +59,7 @@ from pyro_dcm.simulators.spectral_simulator import (
 from validation.compare_results import (
     compare_free_energies,
     compare_model_ranking,
+    compare_scenario_free_energies,
     compute_free_param_comparison,
     load_spm_results,
 )
@@ -404,13 +405,20 @@ def run_vl_spectral_dcm_validation(
             observed_csd, freqs, mask, output_dir, tag=name,
         )
         scenarios.append(
-            {"spm_F": float(spm_k["F"]), "pyro_elbo": vl_f_k}
+            {"name": name, "spm_F": float(spm_k["F"]), "pyro_elbo": vl_f_k}
         )
     ranking = compare_model_ranking(scenarios)
+    # Gate matched-F on EVERY scenario, not just the full model. Reduced-model
+    # free energies were previously computed here for ranking and discarded, so
+    # a large reduced-model divergence passed every gate (job 55234938 seed 44:
+    # full-model rel err 0.0162, reduced-model divergence ~54 nats). BMR and
+    # structure selection run on reduced models.
+    scenario_f = compare_scenario_free_energies(scenarios)
 
     return {
         "ep_comparison": ep_comparison,
         "matched_f_comparison": matched_f_comparison,
+        "scenario_f_comparison": scenario_f,
         "ranking": ranking,
         "vl_A_free": vl_a_free,
         "spm_Ep_A": spm_ep_a,

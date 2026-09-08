@@ -147,6 +147,22 @@ def main() -> int:
             f"within_tolerance (5%): {f_cmp['within_tolerance']} "
             f"[VL F={f_cmp['vl_free_energy']:.4f}, SPM F={f_cmp['spm_F']:.4f}]"
         )
+        sf = result.get("scenario_f_comparison")
+        if sf:
+            print(
+                f"  Per-scenario matched-F: "
+                f"all_within_tolerance={sf['all_within_tolerance']} "
+                f"worst={sf['worst_scenario']} "
+                f"({sf['worst_relative_error']:.4f}), "
+                f"{sf['n_scenarios_failing']}/{len(sf['per_scenario'])} failing"
+            )
+            for row in sf["per_scenario"]:
+                print(
+                    f"      {row['name']:>12s}: VL={row['vl_F']:12.4f} "
+                    f"SPM={row['spm_F']:12.4f} "
+                    f"rel={row['relative_error']:.4f} "
+                    f"{'OK' if row['within_tolerance'] else 'MISS'}"
+                )
         print(
             f"  Ranking agreement_rate (>=0.80): "
             f"{ranking['agreement_rate']:.4f} "

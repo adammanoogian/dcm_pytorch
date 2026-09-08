@@ -184,6 +184,73 @@ def compare_posterior_means(
     }
 
 
+def compare_scenario_free_energies(
+    scenarios: list[dict],
+    rel_tolerance: float = 0.05,
+) -> dict:
+    """Compare VL and SPM free energy on EVERY model scenario.
+
+    The matched-F gate historically checked only the full model. Reduced-model
+    free energies were computed for the ranking sweep and then discarded, so a
+    large divergence on a reduced model passed every gate: job 55234938 seed 44
+    had a full-model relative error of 0.0162 (inside the 5% gate) alongside a
+    ~54-nat divergence on a reduced model. Bayesian Model Reduction and every
+    structure-selection claim operate on reduced models, so that is the regime
+    that matters most and it was the least tested.
+
+    Parameters
+    ----------
+    scenarios : list of dict
+        Each dict must have:
+
+        - ``'spm_F'``: float, SPM free energy for this ``a_mask``.
+        - ``'pyro_elbo'``: float, VL free energy for the same ``a_mask``.
+        - ``'name'``: str, optional scenario label. Defaults to the index.
+    rel_tolerance : float, optional
+        Relative tolerance ``|vl - spm| / |spm|``. Default 0.05, matching the
+        strict matched-F gate.
+
+    Returns
+    -------
+    dict
+        - ``'per_scenario'``: list of dicts with ``name``, ``spm_F``,
+          ``vl_F``, ``absolute_difference``, ``relative_error`` and
+          ``within_tolerance``.
+        - ``'all_within_tolerance'``: bool, True only if every scenario passes.
+        - ``'worst_scenario'``: str, the scenario with the largest relative
+          error (not merely the first failure).
+        - ``'worst_relative_error'``: float.
+        - ``'n_scenarios_failing'``: int.
+        - ``'rel_tolerance'``: float, echoed for provenance.
+    """
+    per: list[dict] = []
+    for idx, sc in enumerate(scenarios):
+        spm_f = float(sc["spm_F"])
+        vl_f = float(sc["pyro_elbo"])
+        abs_diff = abs(vl_f - spm_f)
+        rel = abs_diff / max(abs(spm_f), 1e-12)
+        per.append({
+            "name": str(sc.get("name", idx)),
+            "spm_F": spm_f,
+            "vl_F": vl_f,
+            "absolute_difference": vl_f - spm_f,
+            "relative_error": rel,
+            "within_tolerance": bool(rel <= rel_tolerance),
+        })
+
+    failing = [r for r in per if not r["within_tolerance"]]
+    worst = max(per, key=lambda r: r["relative_error"]) if per else None
+
+    return {
+        "per_scenario": per,
+        "all_within_tolerance": len(failing) == 0,
+        "worst_scenario": worst["name"] if worst else None,
+        "worst_relative_error": worst["relative_error"] if worst else 0.0,
+        "n_scenarios_failing": len(failing),
+        "rel_tolerance": rel_tolerance,
+    }
+
+
 def compare_model_ranking(
     scenarios: list[dict],
     close_call_nats: float = 1.0,
