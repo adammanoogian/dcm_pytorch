@@ -65,3 +65,61 @@ but "VL recovers ground truth better than SPM" is NOT established from n=1.
    and report VL-vs-truth and SPM-vs-truth side by side, not only VL-vs-SPM.
 3. Export SPM's iteration count / convergence flag from the bridge to test the
    "SPM stopped short" reading directly.
+
+
+---
+
+## UPDATE 2026-09-08: answered at n=5 under real sampling noise (job 55234748)
+
+`_offdiag_free_param_errors` in `spm_xval_multiseed.py` already computed exactly
+what this todo's "next step 2" asked for -- off-diagonal only, with EACH engine's
+error against ground truth. No new code was needed; the data was already there.
+
+### VL is closer to ground truth, and it is not marginal
+
+Mean |relative error| on the free off-diagonal couplings, against `A_true`:
+
+| seed | VL | SPM | |
+|---|---|---|---|
+| 42 | 0.0535 | 0.1107 | VL closer |
+| 43 | 0.4111 | 0.5893 | VL closer |
+| 44 | 0.3620 | 0.9072 | VL closer |
+| 45 | 0.0666 | 0.7378 | VL closer |
+| 46 | 0.0602 | 0.3442 | VL closer |
+
+- **VL mean 0.1907 vs SPM 0.5378 -- 2.82x better.**
+- VL closer on **5/5 seeds** and **9/10 individual off-diagonal elements** (the
+  one exception is seed 43's first coupling: VL 0.4185 vs SPM 0.3681).
+
+This upgrades the earlier n=1 observation to a real, replicated finding.
+
+### The VL-vs-SPM relative-error metric is confirmed unusable
+
+`vl_vs_spm_rel_error` reaches **9.10** (seed 44) and **19.80** (seed 45) -- and
+in both cases precisely because SPM's estimate collapsed toward zero (0.01826
+and 0.00505 against a truth of 0.15 and 0.10). The denominator vanishes; the
+number says nothing about agreement. This is direct evidence for the defect
+diagnosed on the single-seed run, now seen in the mechanism rather than inferred.
+
+Note the near-zero guard in `compare_posterior_means` does NOT catch this: its
+`near_zero_threshold = 0.01` is applied to the **reference (SPM) estimate**, so
+it never fires when SPM reports 0.067 for a parameter whose true value is 0. The
+guard keys on the wrong quantity.
+
+### Correction to an earlier claim in this todo
+
+The "VL recovers the off-diagonals to 0.6% and 0.9%" figures were measured on
+the **analytic, noise-free** CSD. Under m=64 sampling noise VL's off-diagonal
+error reaches 0.49 on individual elements. Both engines degrade substantially
+with realistic noise; the sub-1% recovery is an artifact of noiseless data and
+must not be quoted as typical performance.
+
+## Revised next step
+
+1. Fix `compare_posterior_means`: key the near-zero branch on whether the
+   parameter is near-zero for EITHER engine (or on ground truth when available),
+   not on the reference estimate alone.
+2. Consider retiring the VL-vs-SPM Ep gate in favour of two vs-truth gates. Both
+   engines being compared to truth is interpretable; comparing two estimates of
+   a weakly-identified parameter to each other is not.
+3. Characterise the noise-level dependence: sweep `XVAL_CSD_AVERAGES`.
