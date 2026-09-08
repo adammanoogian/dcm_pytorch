@@ -2,7 +2,7 @@
 created: 2026-09-05T22:30
 title: 12 pre-existing test failures (8 numerical NaN + 4 stale API), not migration-caused
 area: testing / numerical stability
-priority: medium
+priority: done
 files:
   - tests/test_vl_forward_model_protocol.py
   - tests/test_spectral_dcm_recovery.py
@@ -107,3 +107,39 @@ four separate API drifts, not one. Group C needs a real look at whether the
 NaNs come from the eig clamp near the stability boundary, and whether the
 affected tests are asserting recovery under conditions Phase 30 already
 classified as identifiability limits.
+
+
+---
+
+## ✅ CLOSED 2026-09-08: core suite is green
+
+DCCN job 55234485, same marker expression as the original 2026-09-05 triage
+(job 55199993), at commit `d77ab53`:
+
+```
+769 passed, 160 deselected, 3 xfailed, 3 warnings in 1444.22s (0:24:04)
+SUITE EXIT=0
+```
+
+**18 failed -> 0 failed.** How each group closed:
+
+- **A. Missing sklearn (6)** -- resolved 2026-09-05 by installing
+  `scikit-learn>=1.3` on both machines.
+- **B. Stale API (4)** -- fixed in `cd06d36`.
+- **C. Numerical / NaN (8)**:
+  - `test_spectral_transfer::test_hemodynamic_transfer_lowpass` -- defective
+    Jacobian, fixed by the resolvent solve in `007b686`.
+  - `test_task_simulator::test_simulator_output_keys` -- stale key set, `cd06d36`.
+  - 3 remaining SVI-path tests marked `xfail` under the new `svi_legacy` marker
+    in `f39357e` (SVI closed out as a documented baseline, not the supported
+    path). These are the 3 xfailed above.
+  - `test_amortized_spectral_dcm` (2) and
+    `test_elbo_model_comparison::test_spectral_dcm_correct_model_wins` were
+    never `xfail`-marked and now **pass on their own**. Confirmed they are
+    collected under the marker expression, so this is a real pass and not a
+    silent deselect. Most likely fixed by the Q-regularisation-norm correction
+    in `d77ab53`, which changed the spectral precision these tests depend on --
+    plausible but NOT separately verified.
+
+The "12 permanently-red tests on main" situation this todo was opened about no
+longer exists.

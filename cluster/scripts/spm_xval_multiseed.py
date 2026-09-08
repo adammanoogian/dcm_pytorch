@@ -173,6 +173,35 @@ def main() -> int:
         summary["ranking_agreement_all_seeds"] = ranking_rates
         summary["ranking_agreement_min"] = float(min(ranking_rates))
 
+        # Degeneracy guard. simulate_spectral_dcm is DETERMINISTIC: it computes
+        # the analytic CSD from A and the noise PARAMETERS, and its ``seed``
+        # only calls torch.manual_seed, which nothing downstream consumes. So
+        # every seed here can fit the identical problem, and
+        # ``f_offset_is_constant`` then reports True for a sweep of size one
+        # dressed up as a replication (job 55234529: 5 seeds, offset std 0.0,
+        # all five F values equal to 6 decimals).
+        #
+        # Flag it loudly rather than letting a vacuous "constant offset" be read
+        # as evidence. Verified 2026-09-08.
+        distinct_f = len({round(x, 9) for x in f_offsets})
+        summary["n_distinct_offsets"] = distinct_f
+        summary["seeds_are_degenerate"] = bool(
+            len(f_offsets) > 1 and distinct_f == 1
+        )
+        if summary["seeds_are_degenerate"]:
+            summary["f_offset_is_constant"] = None
+            summary["degeneracy_warning"] = (
+                f"All {len(f_offsets)} seeds produced an IDENTICAL offset "
+                f"({f_offsets[0]:.9f}). simulate_spectral_dcm ignores its seed, "
+                "so this is one problem fitted N times, NOT N independent "
+                "replications. f_offset_is_constant is meaningless here and has "
+                "been set to null. To vary the problem, vary A (e.g. "
+                "make_stable_A_spectral(n, seed=...)) or add sampling noise."
+            )
+            print("\n" + "!" * 70)
+            print("DEGENERATE SEED SWEEP: " + summary["degeneracy_warning"])
+            print("!" * 70)
+
     payload = {
         "status": "ok",
         "job_id": job_id,
