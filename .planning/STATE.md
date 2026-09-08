@@ -9,6 +9,38 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 ## Current Position
 
+### 🅿️ 2026-09-08 — Amortized inference PARKED (SBC survives the forward fix)
+
+SBI/NPE, the amortized guides and the hybrid VAE-DCM are parked — unmaintained
+and not gating anything, exactly as SVI was parked in `f39357e`. Not deleted,
+not deprecated. User decision; VL is the supported path.
+
+The deciding run (job 55235108) was worth doing because it **refuted a specific
+hypothesis** rather than just re-confirming a failure. Two real forward-model
+bugs had corrupted every SBI training simulation — the defective
+eigendecomposition in `compute_transfer_function_hemodynamic` (`007b686`, the
+same bug behind the retracted Phase 31 feed-forward finding) and the `mar2csd`
+`2/ns` omission (`bd2448d`). The SBI todo's "root cause #2" blamed
+stability-boundary degeneracy, which is exactly the regime that bug corrupted,
+so the hypothesis was that the miscalibration was an artifact.
+
+With both bugs fixed and flow capacity actually wired through: **3/9 parameters
+pass, against 2/9 before.** Noise, not improvement, for a 200-trial KS test over
+9 parameters. NPE miscalibration here is robust to flow capacity AND to both
+forward bugs — a property of NPE on this problem, not a downstream symptom.
+
+Note this *weakens* root cause #2's evidence rather than confirming it: the
+original diagnosis was made on contaminated data. The conclusion survives; the
+stated reason no longer has support.
+
+Status doc: `docs/03_methods_reference/amortized_inference_status.md`. It also
+records an unrelated defect found during the run — the SBI input features are
+~2x redundant with ~100 structurally-dead dimensions (a CSD's diagonal is real,
+and the CSD is Hermitian, so all `N^2` complex entries double-count every
+off-diagonal). Not an explanation for the SBC failure; `sbi` zeroes them.
+
+---
+
 ### ✅ 2026-09-08 — SOLVED: the VL-vs-SPM free-energy gap is 1.90 nats (was 269.9)
 
 `spm_dcm_csd_Q.m` closes with `Q = inv(Q + norm(Q,1)*speye(size(Q))/32)`.

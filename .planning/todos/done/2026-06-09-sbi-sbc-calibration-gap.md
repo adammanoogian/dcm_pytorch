@@ -2,7 +2,7 @@
 created: 2026-06-09T23:30
 title: Phase 26 SBI-03 SBC calibration fails (2/9 params)
 area: sbi-spectral-dcm
-priority: medium
+priority: parked
 files:
   - cluster/logs/sbi_spectral_55772094.out
   - results/sbi_spectral_55772094/sbc_ranks.pt
@@ -198,3 +198,61 @@ information loss.
 
 **Applies even if amortized work is parked** -- record it so the next person
 does not rediscover it.
+
+
+---
+
+## PARKED 2026-09-08: the diagnosis survives the forward fix
+
+Job 55235108 -- 50k sims, 8 transforms, 128 hidden, 500 epochs, 200 SBC trials,
+on the FIXED forward:
+
+```
+  param_0  KS 0.2950  p 0.0000  FAIL
+  param_1  KS 0.3310  p 0.0000  FAIL
+  param_2  KS 0.1900  p 0.0000  FAIL
+  param_3  KS 0.1850  p 0.0000  FAIL
+  param_4  KS 0.0610  p 0.4293  PASS
+  param_5  KS 0.2110  p 0.0000  FAIL
+  param_6  KS 0.0880  p 0.0850  PASS
+  param_7  KS 0.2990  p 0.0000  FAIL
+  param_8  KS 0.0850  p 0.1049  PASS
+
+  SBC summary: 3/9 parameters pass
+  Speed criterion (<1s): PASS
+```
+
+**2/9 -> 3/9 is noise**, not improvement, for a 200-trial KS test over 9
+parameters.
+
+### The hypothesis that prompted this run is REFUTED
+
+The block above this one argued the SBC failure might be an artifact of
+`compute_transfer_function_hemodynamic`'s defective eigendecomposition, since
+root cause #2 blamed the stability-boundary regime -- exactly where that bug
+bit. With the bug fixed (`007b686`), the `mar2csd` normalisation fixed
+(`bd2448d`), and flow capacity actually wired through, calibration is unchanged.
+
+So NPE miscalibration here is robust to flow capacity AND to both forward-model
+bugs. It is a property of NPE on this problem, not a downstream symptom. That is
+a real negative result and the reason this run was worth doing.
+
+Note this also *weakens* root cause #2's supporting evidence rather than
+confirming it: the regime it blamed was also the regime the broken
+eigendecomposition was corrupting, so the original diagnosis was made on
+contaminated data. The conclusion (miscalibration is structural) survives; the
+stated *reason* is no longer evidenced.
+
+### Disposition
+
+Per the user decision recorded above, **all amortized inference work is
+parked**: SBI/NPE, the amortized guides, and the hybrid VAE-DCM. Not deleted,
+not deprecated -- unmaintained and not gating anything, exactly as SVI was
+parked in `f39357e`.
+
+Status doc: `docs/03_methods_reference/amortized_inference_status.md`, which
+also records the unrelated ~2x-redundant / ~100-dead-dimension input-feature
+defect found during this run, so it is not rediscovered.
+
+No test changes: the core suite is green and no SBI test asserts calibration
+(SBC runs as a cluster job, not a test).
