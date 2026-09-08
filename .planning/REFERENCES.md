@@ -373,3 +373,18 @@ If you cannot cite a reference for a computation, STOP and find one before codin
 | `sbi_spectral.py` | REF-090, REF-091 | NPE for spectral DCM |
 | `dcm_encoder_net.py` | REF-110 | VAE encoder for hybrid DCM |
 | `variational_laplace.py` | REF-040 | SPM12 Gauss-Newton VL |
+
+### REF-111: Camba-Mendez & Kapetanios (2005)
+**Title:** Estimating the Rank of the Spectral Density Matrix
+**Journal:** Journal of Time Series Analysis, 26(1), 37-48
+**DOI:** 10.1111/j.1467-9892.2005.00389.x
+**Used for:**
+- The asymptotic distribution of sample cross-spectra that `spm_dcm_csd_Q.m`
+  is built on: the scaled difference between the sample density and the
+  predicted density is asymptotically complex normal, with covariance `Q/h`
+  and `h = 2m + 1` degrees of freedom for `m` averages
+- `pyro_dcm.inference.csd_precision.compute_csd_precision` (the precision)
+- `pyro_dcm.simulators.spectral_simulator.sample_csd_realisation` (the
+  matching complex-Wishart sampling model)
+
+Metadata verified verbatim against Crossref 2026-09-08.

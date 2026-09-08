@@ -105,12 +105,20 @@ def main() -> int:
     job_id = os.environ.get("SLURM_JOB_ID", "local")
     seeds_csv = os.environ.get("XVAL_SEEDS", "42,43,44,45,46")
     seeds = [int(s) for s in seeds_csv.split(",") if s.strip()]
+    # simulate_spectral_dcm is deterministic, so without a finite-sample draw
+    # every seed fits the identical problem and this sweep replicates nothing
+    # (job 55234529). Default to 64 segment averages; set XVAL_CSD_AVERAGES=0
+    # to restore the old analytic-CSD behaviour deliberately.
+    csd_averages: int | None = int(os.environ.get("XVAL_CSD_AVERAGES", "64"))
+    if csd_averages is not None and csd_averages <= 0:
+        csd_averages = None
 
     out_dir = CLUSTER_RESULTS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"spm_xval_multiseed_{job_id}.json"
 
     print(f"Multi-seed VL-vs-SPM12 cross-validation; seeds={seeds}")
+    print(f"  csd_averages={csd_averages} (None = analytic CSD, seeds degenerate)")
 
     per_seed: list[dict] = []
     f_offsets: list[float] = []
@@ -121,6 +129,7 @@ def main() -> int:
         try:
             res = run_vl_spectral_dcm_validation(
                 seed=seed, n_regions=2, max_iter=64,
+                csd_averages=csd_averages,
             )
             vl_a_free = np.asarray(res["vl_A_free"])
             spm_ep_a = np.asarray(res["spm_Ep_A"])

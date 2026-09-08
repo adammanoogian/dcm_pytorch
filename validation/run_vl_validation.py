@@ -52,7 +52,10 @@ import torch
 from config import MATLAB_PATH, SPM12_PATH
 from validation.matlab_bridge import run_matlab_script
 from pyro_dcm.inference.variational_laplace import run_variational_laplace
-from pyro_dcm.simulators.spectral_simulator import simulate_spectral_dcm
+from pyro_dcm.simulators.spectral_simulator import (
+    sample_csd_realisation,
+    simulate_spectral_dcm,
+)
 from validation.compare_results import (
     compare_free_energies,
     compare_model_ranking,
@@ -260,6 +263,7 @@ def run_vl_spectral_dcm_validation(
     seed: int = 42,
     n_regions: int = 2,
     max_iter: int = 64,
+    csd_averages: int | None = None,
     output_dir: str | None = None,
 ) -> dict:
     """Cross-validate the VL engine against SPM12 on a matched spectral problem.
@@ -279,6 +283,13 @@ def run_vl_spectral_dcm_validation(
         Random seed for the spectral simulation. Default 42.
     n_regions : int, optional
         Number of brain regions. Default 2 (the identifiable reciprocal pair).
+    csd_averages : int or None, optional
+        If given, replace the analytic CSD with a finite-sample realisation
+        drawn from ``m = csd_averages`` segment averages, so that ``seed``
+        actually varies the problem. ``simulate_spectral_dcm`` is deterministic
+        and ignores its seed, so WITHOUT this every seed fits the identical
+        problem (see ``sample_csd_realisation``). Defaults to None, which keeps
+        the analytic CSD and the historical single-seed gate behaviour.
     max_iter : int, optional
         VL Gauss-Newton iteration cap. Default 64.
     output_dir : str or None, optional
@@ -327,6 +338,13 @@ def run_vl_spectral_dcm_validation(
     # --- Step 2: simulate the CSD both engines fit -------------------------
     sim = simulate_spectral_dcm(a_true, TR=_TR, n_freqs=_N_FREQS, seed=seed)
     observed_csd = sim["csd"].to(torch.complex128)
+    if csd_averages is not None:
+        # simulate_spectral_dcm is deterministic, so the seed above changes
+        # nothing. Draw a finite-sample realisation instead -- the same CSD is
+        # then fitted by BOTH engines, so the comparison stays matched.
+        observed_csd = sample_csd_realisation(
+            observed_csd, n_averages=csd_averages, seed=seed,
+        )
     freqs = sim["freqs"].double()
     a_mask_full = torch.ones(n, n, dtype=torch.float64)
 

@@ -20,6 +20,8 @@ References
 
 from __future__ import annotations
 
+import math
+
 import torch
 
 from pyro_dcm.forward_models.spectral_noise import (
@@ -163,6 +165,115 @@ def simulate_spectral_dcm(
             "n_freqs": n_freqs,
         },
     }
+
+
+def sample_csd_realisation(
+    csd: torch.Tensor,
+    n_averages: int,
+    seed: int | None = None,
+) -> torch.Tensor:
+    """Draw a finite-sample realisation of a cross-spectral density.
+
+    ``simulate_spectral_dcm`` returns the ANALYTIC CSD and is deterministic, so
+    varying its ``seed`` changes nothing. Real CSD estimates are averages over a
+    finite number of segments, and ``spm_dcm_csd_Q`` assumes exactly that: the
+    scaled difference between the sample density and the predicted density is
+    asymptotically complex normal with ``h = 2m + 1`` degrees of freedom for
+    ``m`` averages [REF-111].
+
+    For ``m`` independent segments the smoothed periodogram satisfies
+    ``m * Ghat(w) ~ CW_N(m, G(w))`` (complex Wishart). Equivalently, draw
+    ``m`` vectors ``z_k ~ CN(0, G(w))`` and average their outer products:
+    ``Ghat(w) = sum_k z_k z_k^H / m``. This is unbiased (``E[Ghat] = G``)
+    and its variance falls as ``1/m``. Each frequency is drawn
+    independently.
+
+    Parameters
+    ----------
+    csd : torch.Tensor
+        Analytic cross-spectral density, shape ``(F, N, N)``, complex128.
+        Each frequency slice must be Hermitian positive semi-definite.
+    n_averages : int
+        Number of segment averages ``m``. Must be at least ``N`` for a
+        full-rank estimate; larger values give a tighter realisation
+        (variance falls as ``1/m``).
+    seed : int or None, optional
+        Seed for the draw. The same seed reproduces the same realisation.
+
+    Returns
+    -------
+    torch.Tensor
+        Sampled CSD, shape ``(F, N, N)``, complex128. Hermitian and positive
+        semi-definite at every frequency.
+
+    Raises
+    ------
+    ValueError
+        If ``n_averages`` is below the number of regions, or if a frequency
+        slice is not positive semi-definite to within numerical tolerance.
+
+    References
+    ----------
+    [REF-111] Camba-Mendez, G., & Kapetanios, G. (2005). Estimating the Rank of
+    the Spectral Density Matrix. Journal of Time Series Analysis, 26(1), 37-48.
+    The asymptotic result ``spm_dcm_csd_Q.m`` is built on.
+
+    See Also
+    --------
+    simulate_spectral_dcm : Produces the analytic CSD this draws around.
+    pyro_dcm.inference.csd_precision.compute_csd_precision : Consumes a sample
+        spectral density and assumes this sampling model.
+    """
+    n_freqs, n_regions, _ = csd.shape
+    if n_averages < n_regions:
+        msg = (
+            f"n_averages must be at least the number of regions for a "
+            f"full-rank estimate: got n_averages={n_averages}, "
+            f"n_regions={n_regions}"
+        )
+        raise ValueError(msg)
+
+    generator = torch.Generator(device=csd.device)
+    if seed is not None:
+        generator.manual_seed(seed)
+
+    # Hermitian part: the analytic CSD is Hermitian in exact arithmetic, but
+    # the MAR round-trip leaves O(1e-16) asymmetry. Symmetrising here keeps the
+    # eigendecomposition real-valued; it does NOT paper over a real asymmetry,
+    # which the PSD check below would still catch.
+    hermitian = (csd + csd.conj().transpose(-2, -1)) / 2
+
+    eigvals, eigvecs = torch.linalg.eigh(hermitian)
+    scale = hermitian.abs().max()
+    tol = -1e-10 * torch.clamp(scale, min=1.0)
+    if bool((eigvals < tol).any()):
+        worst = eigvals.min().item()
+        msg = (
+            f"csd is not positive semi-definite: smallest eigenvalue "
+            f"{worst:.6e}, tolerance {tol.item():.6e} (scale {scale:.6e}). "
+            f"A CSD must be PSD at every frequency."
+        )
+        raise ValueError(msg)
+
+    # Factor L with L @ L^H = G, from the clamped eigendecomposition.
+    root = eigvecs @ torch.diag_embed(
+        torch.clamp(eigvals, min=0.0).to(csd.dtype).sqrt(),
+    )
+
+    # z ~ CN(0, G): standard complex normal has real and imaginary parts of
+    # variance 1/2 each, so E[z z^H] = L L^H = G.
+    real = torch.randn(
+        n_freqs, n_regions, n_averages,
+        generator=generator, dtype=torch.float64, device=csd.device,
+    )
+    imag = torch.randn(
+        n_freqs, n_regions, n_averages,
+        generator=generator, dtype=torch.float64, device=csd.device,
+    )
+    white = torch.complex(real, imag) / math.sqrt(2.0)
+
+    z = root @ white
+    return z @ z.conj().transpose(-2, -1) / n_averages
 
 
 def make_stable_A_spectral(
