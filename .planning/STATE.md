@@ -47,7 +47,35 @@ so **every spectral VL free energy changes**. Stale until re-run: the Phase 30
 recovery matrix F values, Phase 23/31 BMR delta-F, and all recorded Phase 32
 parity numbers. Parameter recovery and model *ranking* should be far less
 affected (ranking held at 1.0 across every regime of this bug), but that is an
-expectation, not a measurement. Official cross-validation job 55234501 pending.
+expectation, not a measurement. Tracked in
+`.planning/todos/pending/2026-09-08-vl-f-blast-radius.md`.
+
+**Official gates now (job 55234501, seed 42):**
+
+| gate | result |
+|---|---|
+| Matched-F relative_error (5%) | **0.0037 PASS** — first time |
+| Ranking agreement (>=0.80) | **1.0000 PASS** (3/3) |
+| Ep free-space (10%) | **FAIL** max 1.0481, mean 0.8565 |
+
+Ep is the only remaining miss, and it is two problems at once: the metric divides
+by near-zero diagonal entries (A_free's diagonal is a log-deviation from a fixed
+-0.5, correct value ~0 on both sides), and the off-diagonals genuinely disagree —
+with **VL the closer to truth**: A[0,1] truth 0.15 → VL 0.14913 (0.6%) vs SPM
+0.07281 (51.5%); A[1,0] truth 0.10 → VL 0.10089 (0.9%) vs SPM 0.17001 (70.0%).
+VL also attains the higher F. One seed, one N=2 problem — not established. See
+`2026-09-08-ep-gate-metric-and-residual.md`.
+
+**Core suite is GREEN** (job 55234485, same marker expression as the 2026-09-05
+triage): **769 passed, 160 deselected, 3 xfailed, 0 failed**, exit 0. The
+"12 permanently-red tests on main" situation is gone.
+
+**Caution — `spm_xval_multiseed` cannot replicate.** `simulate_spectral_dcm` is
+deterministic and ignores its `seed` (verified: max|csd_seed − csd_42| = 0 for
+all seeds), so job 55234529's five "seeds" fit one problem five times and
+reported `f_offset_is_constant = True` vacuously. A loud guard now flags this
+(`b7a7e7f`); how the problem *should* vary is an open scientific choice in
+`2026-09-08-degenerate-seed-sweep.md`.
 
 ---
 
