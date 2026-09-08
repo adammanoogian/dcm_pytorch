@@ -59,10 +59,14 @@ agreement.
 
 Identical injected CSD, identical `Y.Q`/`nq`, forward agreeing to 4e-14, and the
 same free-parameter set on both sides — so the discrepancy is in the **inversion**.
-Prime suspect: the hyperprior `hE = -log(var(spm_vec(y))) + 4`, where our port
-takes `var` of the real part but SPM takes it of the complex vector; it is the one
-data-scale-dependent constant entering F. Next step is to export SPM's three-term
-`L` decomposition and diff it term by term. See
+The hyperprior is NOT a suspect: the validation harness passes `hyperprior_mean=8.0`
+/ `hyperprior_precision=128.0` explicitly, so `_run_vl_generic` sets `hE = full(nh, 8)`,
+matching SPM's exported `fe.hE = 8`. (The `-log(var(y)) + 4` fallback that takes `var`
+of the real part only lives in `_run_variational_laplace_legacy`, which is not called
+on this path -- but it IS a real deviation from SPM's complex `var` and should be fixed
+before anything relies on the fallback.) Next step is to export SPM's three-term `L`
+decomposition and diff it term by term; also verify our `_spm_logdet` reproduces SPM's
+pseudo-determinant, and compare iteration counts and final `Ep`. See
 `.planning/todos/pending/2026-09-08-mar-normalisation-followup.md`.
 
 **Forward-parity fixtures can now be frozen.** Do NOT freeze an F-level fixture —

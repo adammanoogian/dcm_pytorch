@@ -97,15 +97,27 @@ parameter count -- both engines carry
 
 So it is in the inversion. Candidates, untested:
 
-1. The hyperprior. `hE = -log(var(spm_vec(y))) + 4` in SPM vs our port's
-   `torch.var(y_vec.real)` -- SPM takes the variance of the *complex* vector.
-   With the data now 4x larger this term moved, and it is the one place a
-   data-scale-dependent constant enters F.
-2. The `L(2)` parameter-KL and `L(3)` hyperprior-KL terms individually. The
-   bridge already exports `Eh`; export SPM's `L` breakdown as well and compare
-   term by term rather than on the total.
-3. Convergence: VL stops at 9 iterations. Confirm SPM's iteration count and
+1. The `L` terms individually. The bridge already exports `Eh`; export SPM's
+   three-term `L` breakdown as well and compare term by term rather than on the
+   total. This is the highest-value next measurement.
+2. `_spm_logdet`. SPM's `spm_logdet` is a *pseudo*-determinant that discards
+   near-zero eigenvalues; `L(1)` carries `spm_logdet(iS)*nq/2`. If our port
+   takes a true log-determinant the difference is a large constant. Verify
+   against SPM on the same matrix.
+3. Complex-data handling in `L(1)`: SPM computes `real(e'*iS*e)` with `'` as
+   the conjugate transpose, and `ny = length(spm_vec(y))` counts 128 *complex*
+   elements. Confirm the port matches on both.
+4. Convergence: VL stops at 9 iterations. Confirm SPM's iteration count and
    final `Ep` on the same data.
+
+**Ruled out -- do not re-investigate:** the hyperprior. The harness passes
+`hyperprior_mean=8.0` / `hyperprior_precision=128.0` explicitly, so
+`_run_vl_generic` sets `hE = full(nh, 8)`, matching SPM's exported `fe.hE = 8`.
+The `-log(var(y)) + 4` fallback lives only in `_run_variational_laplace_legacy`,
+which is not called here. Separately: that fallback takes `torch.var` of the
+*real part* while SPM takes MATLAB `var` of the *complex* vector
+(= var(real) + var(imag)). A real deviation, but inert on this path -- worth
+fixing before anything depends on the fallback.
 
 ## Next step
 
