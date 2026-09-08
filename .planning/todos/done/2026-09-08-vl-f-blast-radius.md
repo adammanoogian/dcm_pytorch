@@ -2,7 +2,7 @@
 created: 2026-09-08T17:30
 title: Re-run every recorded spectral VL free energy after the Q-norm fix
 area: inference / benchmarks / model-selection
-priority: high
+priority: done
 files:
   - src/pyro_dcm/inference/csd_precision.py
   - benchmarks/recovery_matrix_grid.py
@@ -62,3 +62,53 @@ than the Q norm changed and needs investigating before the new matrix is trusted
 2. Nothing else needs re-running. Items 2 and 3 of the original draft (BMR
    re-run, VL-overconfidence re-check) are withdrawn -- both are
    identity-precision paths.
+
+
+---
+
+## ✅ CLOSED 2026-09-08: re-run complete, prediction held exactly
+
+Sweep job 55234625, all 10 cells present (0-9, full coverage verified against
+the per-cell JSONs rather than assumed from exit codes).
+
+**The task/latent-unchanged prediction held exactly.** Only the 4 spectral cells
+moved; the 4 task and 2 latent cells are **numerically identical** to the
+baseline at `df1e0ce`. That is an independent confirmation of the
+spectral-only blast-radius correction: `compute_csd_precision` is called by
+`SpectralDCMForward` alone, and the identity-precision forwards were untouched.
+
+| cell | rmse_a_median | shrinkage_median |
+|---|---|---|
+| spectral N=2 snr=1 | +0.000341 | +0.025315 |
+| spectral N=2 snr=3 | -0.001886 | +0.026423 |
+| spectral N=4 snr=1 | +0.000117 | +0.001844 |
+| spectral N=4 snr=3 | -0.000340 | +0.002984 |
+
+`sign_recovery_masked`, `coverage_95` and `convergence_rate` are unchanged (all
+1.0), and **no cell changed status**. Summary counts are identical: 10 cells,
+6 pass, 4 identifiability-limit, 0 errored.
+
+### What this settles
+
+- **Parameter recovery is robust to the Q fix.** RMSE moves are tiny and
+  bidirectional -- noise-level, not a systematic shift. The expectation
+  recorded earlier ("recovery and ranking should be far less affected") is now
+  measured, not assumed.
+- **No re-classification.** The pass / identifiability-limit verdicts stand, so
+  the Phase 30 conclusions do not need revisiting.
+- **Posteriors got slightly wider** (shrinkage up ~12% relative at N=2, ~6-10%
+  at N=4). Consistent with removing an over-regularised Q: the observation
+  precision was distorted, and correcting it changed the posterior width. This
+  is a *spectral* effect and does NOT touch
+  `2026-06-09-vl-overconfidence-for-bmr`, which was measured on the latent
+  circuit (identity precision) and whose cells came back bit-identical here.
+
+### Gotcha for the next person
+
+`recovery_matrix_aggregate.py` globs `cluster/results/recovery_matrix_*.json`
+by default and will silently mix historical runs -- the first attempt harvested
+**30 cells** across three separate sweeps. Scope it with
+`RECOVERY_RESULTS_GLOB` (here: `'cluster/results/recovery_matrix_552346*_*.json'`).
+Note also that array tasks each get their OWN job id, so per-cell files are
+named `recovery_matrix_<task_jobid>_<cell>.json`, not `<arrayjobid>_<cell>` --
+a `ls` on the array job id finds almost nothing and looks like a silent drop.

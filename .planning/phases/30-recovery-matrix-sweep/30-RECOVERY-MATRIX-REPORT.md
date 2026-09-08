@@ -8,10 +8,10 @@ Every cell receives an explicit verdict (VLREC-04): a cell either meets the docu
 
 | cell | variant | N | SNR | RMSE_A med | RMSE_A IQR | sign(masked) | cov95 | shrink | R2/region | conv | verdict |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 0 | spectral | 2 | 1 | 0.001401 | 0.0002216–0.002454 | 1 | 1 | 0.2109 | — | 1 | PASS |
-| 1 | spectral | 2 | 3 | 0.01293 | 0.008822–0.01874 | 1 | 1 | 0.2082 | — | 1 | PASS |
-| 2 | spectral | 4 | 1 | 0.0007489 | 0.0005442–0.0009596 | 1 | 1 | 0.03181 | — | 1 | PASS |
-| 3 | spectral | 4 | 3 | 0.0009865 | 0.0004575–0.0015 | 1 | 1 | 0.02902 | — | 1 | PASS |
+| 0 | spectral | 2 | 1 | 0.001743 | 0.000345–0.003181 | 1 | 1 | 0.2362 | — | 1 | PASS |
+| 1 | spectral | 2 | 3 | 0.01105 | 0.008092–0.01874 | 1 | 1 | 0.2346 | — | 1 | PASS |
+| 2 | spectral | 4 | 1 | 0.0008663 | 0.0005421–0.001025 | 1 | 1 | 0.03365 | — | 1 | PASS |
+| 3 | spectral | 4 | 3 | 0.0006463 | 0.0003786–0.001166 | 1 | 1 | 0.032 | — | 1 | PASS |
 | 4 | task | 2 | 1 | 0.047 | 0.03467–0.1269 | 1 | 0.75 | 0.6778 | — | 0.9 | IDENT-LIMIT |
 | 5 | task | 2 | 3 | 0.03779 | 0.02522–0.1186 | 1 | 0.875 | 0.5913 | — | 0.9 | PASS |
 | 6 | task | 4 | 1 | 0.08439 | 0.07703–0.09541 | 0.5714 | 0 | nan | — | 0.4 | IDENT-LIMIT |
@@ -22,9 +22,9 @@ Every cell receives an explicit verdict (VLREC-04): a cell either meets the docu
 ## Identifiability limits (with evidence)
 
 - **cell 4 (task N=2 SNR=1.0)** — identifiability limit: failed checks coverage_95(observed=0.75, threshold=0.85)
-- **cell 6 (task N=4 SNR=1.0)** — identifiability limit: failed checks rmse_a(observed=0.08439457226128762, threshold=0.05), sign_recovery_masked(observed=0.5714285969734192, threshold=0.8), coverage_95(observed=0.0, threshold=0.85)
-- **cell 7 (task N=4 SNR=3.0)** — identifiability limit: failed checks rmse_a(observed=0.07936537473949129, threshold=0.05), sign_recovery_masked(observed=0.5714285969734192, threshold=0.8), coverage_95(observed=0.0, threshold=0.85)
-- **cell 8 (latent_circuit N=4 SNR=1.0)** — identifiability limit: failed checks rmse_a(observed=0.0501132010042016, threshold=0.05); skipped (metric None): coverage_95
+- **cell 6 (task N=4 SNR=1.0)** — identifiability limit: failed checks rmse_a(observed=0.08439457226129399, threshold=0.05), sign_recovery_masked(observed=0.5714285969734192, threshold=0.8), coverage_95(observed=0.0, threshold=0.85)
+- **cell 7 (task N=4 SNR=3.0)** — identifiability limit: failed checks rmse_a(observed=0.07936537473929879, threshold=0.05), sign_recovery_masked(observed=0.5714285969734192, threshold=0.8), coverage_95(observed=0.0, threshold=0.85)
+- **cell 8 (latent_circuit N=4 SNR=1.0)** — identifiability limit: failed checks rmse_a(observed=0.050113201003849694, threshold=0.05); skipped (metric None): coverage_95
 
 ## No silent failures — errored cells
 
@@ -36,10 +36,10 @@ Ground-truth `A` was drawn with max-real-eigenvalue EXCLUDED from the near-stabi
 
 | cell | variant | N | SNR | max-eig (max) | max-eig (min) | in-band | shrink | cov95 |
 |---|---|---|---|---|---|---|---|---|
-| 0 | spectral | 2 | 1 | -0.2978 | -0.5 | 0 | 0.2109 | 1 |
-| 1 | spectral | 2 | 3 | -0.2978 | -0.5 | 0 | 0.2082 | 1 |
-| 2 | spectral | 4 | 1 | -0.2897 | -0.4331 | 0 | 0.03181 | 1 |
-| 3 | spectral | 4 | 3 | -0.2897 | -0.4331 | 0 | 0.02902 | 1 |
+| 0 | spectral | 2 | 1 | -0.2978 | -0.5 | 0 | 0.2362 | 1 |
+| 1 | spectral | 2 | 3 | -0.2978 | -0.5 | 0 | 0.2346 | 1 |
+| 2 | spectral | 4 | 1 | -0.2897 | -0.4331 | 0 | 0.03365 | 1 |
+| 3 | spectral | 4 | 3 | -0.2897 | -0.4331 | 0 | 0.032 | 1 |
 | 4 | task | 2 | 1 | -0.5 | -0.5 | 0 | 0.6778 | 0.75 |
 | 5 | task | 2 | 3 | -0.5 | -0.5 | 0 | 0.5913 | 0.875 |
 | 6 | task | 4 | 1 | -0.1965 | -0.4892 | 0 | nan | 0 |
@@ -49,10 +49,10 @@ Ground-truth `A` was drawn with max-real-eigenvalue EXCLUDED from the near-stabi
 
 **Overconfident / non-injective regime.** Shrinkage soft target is 0.7 (RECOV-07); very-low shrinkage is the EXPECTED Laplace overconfidence signal (job 55772525), documented here as evidence, NOT flagged as a bug. Cells with shrinkage below the soft target:
 
-- cell 0 (spectral N=2 SNR=1.0) — shrinkage 0.2109 (< 0.7)
-- cell 1 (spectral N=2 SNR=3.0) — shrinkage 0.2082 (< 0.7)
-- cell 2 (spectral N=4 SNR=1.0) — shrinkage 0.03181 (< 0.7)
-- cell 3 (spectral N=4 SNR=3.0) — shrinkage 0.02902 (< 0.7)
+- cell 0 (spectral N=2 SNR=1.0) — shrinkage 0.2362 (< 0.7)
+- cell 1 (spectral N=2 SNR=3.0) — shrinkage 0.2346 (< 0.7)
+- cell 2 (spectral N=4 SNR=1.0) — shrinkage 0.03365 (< 0.7)
+- cell 3 (spectral N=4 SNR=3.0) — shrinkage 0.032 (< 0.7)
 - cell 4 (task N=2 SNR=1.0) — shrinkage 0.6778 (< 0.7)
 - cell 5 (task N=2 SNR=3.0) — shrinkage 0.5913 (< 0.7)
 - cell 8 (latent_circuit N=4 SNR=1.0) — shrinkage 0.502 (< 0.7)
