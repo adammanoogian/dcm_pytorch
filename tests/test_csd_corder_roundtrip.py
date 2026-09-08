@@ -90,3 +90,63 @@ def test_compute_csd_precision_block_structure_not_transposed() -> None:
     assert torch.isfinite(precision[pos_10, pos_10].abs())
     # The asymmetric input must not be symmetrized into equal off-diagonal slots.
     assert precision[pos_01, pos_10] != precision[pos_10, pos_01]
+
+
+@pytest.mark.vl
+def test_compute_csd_precision_uses_induced_one_norm() -> None:
+    """The Q regulariser is MATLAB's induced 1-norm, not an entrywise sum.
+
+    ``spm_dcm_csd_Q.m`` closes with
+    ``Q = inv(Q + norm(Q,1)*speye(size(Q))/32)``. MATLAB ``norm(Q,1)`` is the
+    INDUCED matrix 1-norm -- the maximum absolute column sum. It is NOT
+    ``torch.norm(Q, p=1)``, which for a 2-D tensor is the entrywise sum of
+    magnitudes and is larger by up to a factor of the row count.
+
+    Getting this wrong over-regularises Q, which enters the free energy through
+    ``L(1) = spm_logdet(iS)*nq/2 - ...`` and cost ~124 nats against SPM12 on the
+    N=2 spectral parity problem (DCCN job 55234464). It is also data-scale
+    dependent, so it moves whenever the CSD is rescaled.
+
+    Reconstructs the pre-regularisation Q independently and asserts the builder
+    inverted it with the induced norm.
+    """
+    num_freqs, num_regions = 3, 3
+    csd = _asymmetric_csd(num_freqs, num_regions)
+    n = num_regions
+    dim = num_freqs * n * n
+
+    idx = torch.arange(dim)
+    j_idx = idx % n
+    i_idx = (idx // n) % n
+    q_raw = torch.zeros(dim, dim, dtype=csd.dtype)
+    for w_f in range(num_freqs):
+        block = torch.arange(w_f * n * n, (w_f + 1) * n * n)
+        i_b, j_b = i_idx[block], j_idx[block]
+        csd_w = csd[w_f]
+        q_raw[block.unsqueeze(1), block.unsqueeze(0)] = (
+            csd_w[i_b][:, i_b] * csd_w[j_b][:, j_b]
+        )
+
+    induced = q_raw.abs().sum(dim=0).max()
+    entrywise = torch.norm(q_raw, p=1).real
+
+    # The fixture must actually discriminate between the two norms.
+    assert entrywise > induced * 1.5, (
+        f"fixture cannot discriminate the norms: entrywise={entrywise:.6e} "
+        f"vs induced={induced:.6e}"
+    )
+
+    eye = torch.eye(dim, dtype=q_raw.dtype)
+    expected = torch.linalg.inv(q_raw + induced * eye / 32)
+    wrong = torch.linalg.inv(q_raw + entrywise * eye / 32)
+
+    actual = compute_csd_precision(csd)[0][0]
+
+    err_expected = (actual - expected).abs().max().item()
+    err_wrong = (actual - wrong).abs().max().item()
+    assert err_expected < 1e-8, (
+        "compute_csd_precision did not use MATLAB's induced 1-norm "
+        f"(max abs column sum). max|actual - expected| = {err_expected:.6e}, "
+        f"but max|actual - entrywise_variant| = {err_wrong:.6e}. Expected the "
+        f"induced norm {induced:.6e}, entrywise is {entrywise:.6e}."
+    )

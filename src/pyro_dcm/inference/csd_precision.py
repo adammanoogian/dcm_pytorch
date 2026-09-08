@@ -80,8 +80,17 @@ def compute_csd_precision(
         # Place into global Q
         Q[global_idx.unsqueeze(1), global_idx.unsqueeze(0)] = block
 
-    # Regularize and invert: Q = inv(Q + ||Q||_1 * I / 32)
-    norm_1 = torch.norm(Q, p=1).real if Q.is_complex() else torch.norm(Q, p=1)
+    # Regularize and invert, matching spm_dcm_csd_Q.m's closing line:
+    #     Q = inv(Q + norm(Q,1)*speye(size(Q))/32)
+    # MATLAB's norm(Q,1) is the INDUCED matrix 1-norm -- the maximum absolute
+    # column sum. It is NOT torch.norm(Q, p=1), which for a 2-D tensor is the
+    # entrywise sum of magnitudes and is larger by up to a factor of the row
+    # count (8.66x on the N=2 parity problem). Using the entrywise sum
+    # over-regularises Q, and since Q enters the free energy through
+    # L(1) = spm_logdet(iS)*nq/2 - ..., it cost ~124 nats against SPM12
+    # (DCCN job 55234464). It is data-scale dependent, so it also moves
+    # whenever the CSD is rescaled.
+    norm_1 = Q.abs().sum(dim=0).max()
     Q_reg = Q + norm_1 * torch.eye(Qn, dtype=Q.dtype, device=device) / 32
     Q_inv = torch.linalg.inv(Q_reg)
 

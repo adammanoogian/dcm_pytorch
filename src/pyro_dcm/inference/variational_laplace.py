@@ -252,6 +252,16 @@ class VariationalLaplaceResult:
         Number of parameters in the SVD-reduced space. Useful for
         callers that need to construct ``initial_p`` vectors for
         multi-restart optimization.
+    h_post : torch.Tensor or None
+        Log-precision hyperparameters at the accepted iterate, shape
+        ``(nh,)``. Directly comparable to the ``Eh`` output of SPM12
+        ``spm_nlsi_GN.m``.
+    free_energy_terms : list[tuple[float, float, float]]
+        The three free-energy terms ``(L1, L2, L3)`` at each iteration,
+        index-aligned with ``free_energy`` (``F = L1 + L2 + L3``).
+        Mirrors the ``L`` output of SPM12 ``spm_nlsi_GN.m`` lines
+        438-440, so the two engines can be compared term by term
+        rather than only on the total.
     """
 
     theta_post: dict[str, torch.Tensor] = field(default_factory=dict)
@@ -262,6 +272,10 @@ class VariationalLaplaceResult:
     predicted_csd: torch.Tensor | None = None
     predicted_output: torch.Tensor | None = None
     n_reduced_params: int = 0
+    h_post: torch.Tensor | None = None
+    free_energy_terms: list[tuple[float, float, float]] = field(
+        default_factory=list,
+    )
 
 
 def _pack_params(
@@ -1221,6 +1235,7 @@ def _run_vl_generic(
         )
         F_val = L_1 + L_2 + L_3
         result.free_energy.append(F_val)
+        result.free_energy_terms.append((L_1, L_2, L_3))
 
         if F_val > C_F or iteration < 3:
             C_p = p.clone()
@@ -1262,6 +1277,7 @@ def _run_vl_generic(
     if is_complex:
         result.predicted_csd = result_data["predicted_output"]
     result.sigma_post = Cp_full
+    result.h_post = C_h.clone()
 
     return result
 

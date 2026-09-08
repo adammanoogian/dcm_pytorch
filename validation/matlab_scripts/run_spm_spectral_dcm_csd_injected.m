@@ -198,9 +198,26 @@ try
     fe.pE_A = pE.A;
     fe.pE_transit = pE.transit; fe.pE_decay = pE.decay; fe.pE_epsilon = pE.epsilon;
 
-    [Ep, Cp, Eh, F] = spm_nlsi_GN(DCM.M, DCM.U, Y);
+    % L is spm_nlsi_GN's three-term free-energy decomposition
+    % (spm_nlsi_GN.m:438-440):
+    %   L(1) = spm_logdet(iS)*nq/2 - real(e'*iS*e)/2 - ny*log(8*atan(1))/2
+    %   L(2) = spm_logdet(ipC*Cp)/2 - p'*ipC*p/2
+    %   L(3) = spm_logdet(ihC*Ch)/2 - d'*ihC*d/2
+    % Exporting it lets the Python side diff F term by term instead of
+    % only on the total, which is what localising the residual needs.
+    [Ep, Cp, Eh, F, L] = spm_nlsi_GN(DCM.M, DCM.U, Y);
     fe.Eh = full(Eh(:))';
+    fe.L  = full(L(:))';
+    % spm_nlsi_GN's OWN nq (line 221) is ny/length(Q{1}) -- the Kronecker
+    % replication count, NOT the number of Q components fe.nq records.
+    % Both are 1 here; export both so the comparison stays unambiguous.
+    if iscell(Y.Q)
+        fe.nq_nlsi = fe.ny / length(Y.Q{1});
+    else
+        fe.nq_nlsi = fe.ny / length(Y.Q);
+    end
     fprintf('FE-PROVENANCE Eh=%s F=%.6f\n', mat2str(fe.Eh, 8), F);
+    fprintf('FE-PROVENANCE L=%s nq_nlsi=%g\n', mat2str(fe.L, 10), fe.nq_nlsi);
     DCM.Ep = Ep;
     DCM.Cp = Cp;
     DCM.Eh = Eh;
