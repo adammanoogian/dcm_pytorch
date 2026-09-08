@@ -9,6 +9,48 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 ## Current Position
 
+### ✅ 2026-09-08 — SOLVED: the VL-vs-SPM free-energy gap is 1.90 nats (was 269.9)
+
+`spm_dcm_csd_Q.m` closes with `Q = inv(Q + norm(Q,1)*speye(size(Q))/32)`.
+MATLAB's `norm(Q,1)` is the **induced** matrix 1-norm (maximum absolute column
+sum). Our port used `torch.norm(Q, p=1)`, which for a 2-D tensor is the
+**entrywise** sum of magnitudes — 8.66x larger on the N=2 parity problem
+(2.654e+01 vs 3.064e+00). Q was therefore heavily over-regularised. Fixed in
+`d77ab53`, failing test written first.
+
+Q enters F through `L(1) = spm_logdet(iS)*nq/2 - ...`, which is why it was worth
+~124 nats. The norm scales with the data, so the error was **data-scale
+dependent** — which is exactly why the gap moved when the `mar2csd` 2/ns fix
+rescaled the CSD, and why it had looked like an unexplained regression.
+
+**How it was localised.** The bridge now exports `spm_nlsi_GN`'s three-term `L`
+and `VariationalLaplaceResult` carries the matching terms, so F is diffed term
+by term instead of only on the total (jobs 55234464 then 55234483):
+
+| term | VL before | VL after | SPM | after: VL - SPM |
+|---|---|---|---|---|
+| L(1) | 431.4539 | 554.9928 | 553.9302 | **+1.06** |
+| L(2) | -17.1732 | -23.2957 | -24.4940 | +1.20 |
+| L(3) | -14.2848 | -13.8165 | -13.4566 | -0.36 |
+| **F** | 399.9960 | **517.8806** | 515.9795 | **+1.90** |
+
+`relative_error` **0.2248 -> 0.0037**, inside the strict 5% gate. With `ny`, `nq`
+and the hyperparameter already matching (SPM `Eh`=8.4554, VL `h`=8.4612), `L(1)`
+could only diverge through `iS` — i.e. through Q, whose component *count* was
+fixed in `a44b46c` but whose *values* were never checked.
+
+The full arc: **269.9 nats** (bridge never set `Y.Q`) -> **52** -> an honest
+**116** once the `mar2csd` units artifact was removed -> **1.90**.
+
+**BLAST RADIUS — not yet re-run.** `compute_csd_precision` feeds both VL paths,
+so **every spectral VL free energy changes**. Stale until re-run: the Phase 30
+recovery matrix F values, Phase 23/31 BMR delta-F, and all recorded Phase 32
+parity numbers. Parameter recovery and model *ranking* should be far less
+affected (ranking held at 1.0 across every regime of this bug), but that is an
+expectation, not a measurement. Official cross-validation job 55234501 pending.
+
+---
+
 ### ✅ 2026-09-08 — RESOLVED: the mar2csd fix is correct; the "F regression" was not one
 
 `mar2csd` omitted SPM12's final `csd = 2*csd/ns` (`spm_mar2csd.m`), leaving the

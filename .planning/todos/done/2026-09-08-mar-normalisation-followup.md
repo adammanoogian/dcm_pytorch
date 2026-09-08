@@ -1,9 +1,9 @@
 ---
 created: 2026-09-08T00:30
 updated: 2026-09-08T16:10
-title: VL-vs-SPM free energy differs by 116 nats on a forward that matches to 4e-14
+title: SOLVED -- VL-vs-SPM free energy gap closed to 1.90 nats (Q regularisation norm)
 area: spectral / SPM parity
-priority: high
+priority: done
 files:
   - src/pyro_dcm/forward_models/mar_csd.py
   - src/pyro_dcm/forward_models/spectral_transfer.py
@@ -135,3 +135,39 @@ a known-red number that this todo expects to move.
 
 - forward parity (cluster): `~/probes/mar_fwd_parity.{py,sbatch}`, job 55234376
 - units term (laptop): scratchpad `mar_scale_probe.py`
+
+
+---
+
+## ✅ CLOSED 2026-09-08: root cause was the Q regularisation norm
+
+The 116-nat gap was `spm_dcm_csd_Q`'s regulariser. `spm_dcm_csd_Q.m` closes with
+`Q = inv(Q + norm(Q,1)*speye(size(Q))/32)`; MATLAB's `norm(Q,1)` is the
+**induced** matrix 1-norm (max absolute column sum), but our port used
+`torch.norm(Q, p=1)`, the **entrywise** sum of magnitudes -- 8.66x larger here
+(2.654e+01 vs 3.064e+00). Q was heavily over-regularised. Fixed in `d77ab53`,
+failing test first (`test_compute_csd_precision_uses_induced_one_norm`).
+
+Localised by exporting `spm_nlsi_GN`'s three-term `L` from the bridge and adding
+matching `free_energy_terms` / `h_post` to `VariationalLaplaceResult`, so F could
+be diffed term by term (jobs 55234464, then 55234483 after the fix):
+
+| term | VL before | VL after | SPM | after: VL - SPM |
+|---|---|---|---|---|
+| L(1) | 431.4539 | 554.9928 | 553.9302 | **+1.06** |
+| L(2) | -17.1732 | -23.2957 | -24.4940 | +1.20 |
+| L(3) | -14.2848 | -13.8165 | -13.4566 | -0.36 |
+| **F** | 399.9960 | **517.8806** | 515.9795 | **+1.90** |
+
+`relative_error` 0.2248 -> **0.0037**, inside the strict 5% gate.
+
+Because the norm scales with the data, the error was data-scale dependent --
+which is precisely why the gap moved when the `mar2csd` 2/ns fix rescaled the
+CSD, and why it presented as an unexplained regression.
+
+Both original questions are answered: the forward matches SPM to 4e-14, and the
+inversion now matches to 1.90 nats.
+
+**Follow-up work is tracked separately** in
+`2026-09-08-vl-f-blast-radius.md` -- every spectral VL free energy changed and
+the recorded recovery-matrix / BMR / parity numbers are stale.
