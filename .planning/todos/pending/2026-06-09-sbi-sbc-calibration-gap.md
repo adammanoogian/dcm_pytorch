@@ -133,3 +133,29 @@ stable-region-prior experiments are warranted. If it improves materially, the
 
 Do not run the reparameterisation experiments until this lands -- they were
 designed against a diagnosis that may not survive.
+
+
+## DECISION 2026-09-08 (user): this re-run is the last attempt
+
+If job 55235108 does not materially improve SBC calibration, **all amortized
+inference work goes on the back burner** -- SBI/NPE, the amortized guides, and
+the hybrid VAE-DCM. Not deleted, not deprecated: parked, the way SVI was in
+`f39357e`.
+
+The rationale is the same one that retired SVI as a quality gate. Variational
+Laplace is the supported, calibrated engine; it backs v0.6.0, the v0.7.0
+recovery matrix and the v0.8.0 ERP stack, and as of `d77ab53` it agrees with
+SPM12 to 1.90 nats. Amortized inference was always an optional speed-up, and
+this todo's own "pragmatic stance" already said it should not back a scientific
+claim.
+
+**Decision rule:**
+
+- SBC materially improves (well beyond 2/9) -> the old "structural" diagnosis
+  was an artifact of the broken forward; rewrite this todo and continue.
+- SBC still fails at ~2/9 -> the diagnosis survives the forward fix, the problem
+  is real and deeper than a bug, and amortized work is parked. Record the
+  negative result properly (it is a genuine finding: NPE does not calibrate on
+  this problem even with a correct forward) and stop spending on it.
+
+Either way this is the last SBI compute until something changes upstream.
