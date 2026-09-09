@@ -97,3 +97,29 @@ def test_loader_densifies_sparse_matlab_fields(tmp_path) -> None:
             "np.ndarray; downstream float() conversion will fail"
         )
     assert np.allclose(np.asarray(out["Ep_a"], dtype=float).ravel(), [0.5, 0.6])
+
+
+def test_residual_norm_handles_flat_and_shaped_predictions() -> None:
+    """A flat (ny,) prediction and an (F, N, N) observation must compare.
+
+    ``ForwardModel.predict`` returns a flat vector while the observed CSD is
+    ``(F, N, N)``. Comparing them without flattening raised
+    "The size of tensor a (2) must match the size of tensor b (128)" and lost
+    all five seeds of DCCN job 55242771.
+    """
+    import torch
+
+    from validation.run_vl_validation import _residual_norm
+
+    observed = torch.arange(8, dtype=torch.float64).reshape(2, 2, 2) + 0j
+    flat = observed.reshape(-1).clone()
+    flat[0] += 3.0
+
+    assert _residual_norm(observed, flat) == 3.0
+    assert _residual_norm(observed, flat.reshape(2, 2, 2)) == 3.0
+    assert _residual_norm(observed, None) is None
+
+    import pytest as _pytest
+
+    with _pytest.raises(ValueError, match="shape mismatch"):
+        _residual_norm(observed, torch.zeros(5, dtype=torch.complex128))

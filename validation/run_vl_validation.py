@@ -231,7 +231,18 @@ def _residual_norm(
     """
     if predicted is None:
         return None
-    return float((observed - predicted).abs().pow(2).sum().sqrt().item())
+    # ForwardModel.predict returns a FLAT (ny,) vector while observed_csd is
+    # (F, N, N). Comparing them directly broadcasts into nonsense or raises;
+    # flatten both so the norm is over the same elements either way.
+    obs = observed.reshape(-1)
+    pred = predicted.reshape(-1)
+    if obs.shape != pred.shape:
+        msg = (
+            f"residual shape mismatch: observed has {obs.numel()} elements, "
+            f"predicted has {pred.numel()}"
+        )
+        raise ValueError(msg)
+    return float((obs - pred).abs().pow(2).sum().sqrt().item())
 
 
 def _spm_residual_via_our_forward(
