@@ -61,7 +61,10 @@ def load_spm_results(mat_path: str) -> dict:
     # Optional fields
     optional_fields = [
         "Ep_C", "Cp", "y_predicted", "R",
-        "Ep_transit", "Ep_decay", "Hc", "Hz",
+        "Ep_transit", "Ep_decay", "Ep_epsilon", "Hc", "Hz",
+        # Noise parameters, needed to re-evaluate SPM's Ep through another
+        # forward model on the same footing as the VL estimate.
+        "Ep_a", "Ep_b", "Ep_c",
     ]
     for field in optional_fields:
         try:
@@ -181,6 +184,97 @@ def compare_posterior_means(
         "mean_relative_error": float(element_errors.mean()),
         "within_tolerance": all_within,
         "element_errors": element_errors,
+    }
+
+
+def flag_free_energy_fit_inconsistency(
+    rows: list[dict],
+    f_tolerance: float = 1.0,
+    residual_tolerance: float = 1e-9,
+) -> dict:
+    """Flag scenarios where the higher free energy comes with the worse fit.
+
+    Free energy trades data fit against complexity, so a higher ``F`` with a
+    larger residual is normally legitimate -- the simpler model is being
+    rewarded. That defence does not apply here: both engines fit the **same
+    model under the same mask**, so the complexity term is identical and only
+    the fit and the approximation to it can differ. An engine reporting the
+    higher ``F`` while achieving the larger residual is therefore reporting a
+    free energy that does not track its own fit quality.
+
+    Residuals must be computed with the SAME forward model for both engines,
+    or this comparison measures forward differences instead.
+
+    Parameters
+    ----------
+    rows : list of dict
+        One entry per scenario with ``name``, ``vl_F``, ``spm_F``,
+        ``vl_residual`` and ``spm_residual``. A ``None`` residual marks the
+        scenario unknown rather than consistent.
+    f_tolerance : float, optional
+        Free-energy difference below which the two engines are treated as
+        tied and the scenario is not flagged. Default 1.0 nat.
+    residual_tolerance : float, optional
+        Residual difference below which the fits are treated as tied.
+        Default 1e-9.
+
+    Returns
+    -------
+    dict
+        - ``'per_scenario'``: per-scenario dicts with ``higher_f_engine``,
+          ``lower_residual_engine`` and ``inconsistent`` (``None`` when a
+          residual is missing).
+        - ``'n_inconsistent'``, ``'n_unknown'``: counts.
+        - ``'inconsistent_scenarios'``: names, for a quick readout.
+    """
+    per: list[dict] = []
+    n_inconsistent = 0
+    n_unknown = 0
+    names: list[str] = []
+
+    for row in rows:
+        vl_f, spm_f = float(row["vl_F"]), float(row["spm_F"])
+        vl_r, spm_r = row.get("vl_residual"), row.get("spm_residual")
+        name = str(row.get("name", len(per)))
+
+        higher_f = None
+        if abs(vl_f - spm_f) > f_tolerance:
+            higher_f = "vl" if vl_f > spm_f else "spm"
+
+        lower_r = None
+        if vl_r is not None and spm_r is not None:
+            if abs(float(vl_r) - float(spm_r)) > residual_tolerance:
+                lower_r = "vl" if float(vl_r) < float(spm_r) else "spm"
+
+        if vl_r is None or spm_r is None:
+            inconsistent: bool | None = None
+            n_unknown += 1
+        elif higher_f is None or lower_r is None:
+            inconsistent = False
+        else:
+            inconsistent = higher_f != lower_r
+            if inconsistent:
+                n_inconsistent += 1
+                names.append(name)
+
+        per.append({
+            "name": name,
+            "vl_F": vl_f,
+            "spm_F": spm_f,
+            "vl_residual": None if vl_r is None else float(vl_r),
+            "spm_residual": None if spm_r is None else float(spm_r),
+            "higher_f_engine": higher_f,
+            "lower_residual_engine": lower_r,
+            "inconsistent": inconsistent,
+        })
+
+    return {
+        "per_scenario": per,
+        "n_inconsistent": n_inconsistent,
+        "n_unknown": n_unknown,
+        "inconsistent_scenarios": names,
+        "f_tolerance": f_tolerance,
+        "residual_tolerance": residual_tolerance,
     }
 
 

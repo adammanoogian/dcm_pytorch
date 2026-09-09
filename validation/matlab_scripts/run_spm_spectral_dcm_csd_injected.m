@@ -240,6 +240,14 @@ end
 % --- Save results (identical block to run_spm_spectral_dcm.m) ---
 try
     results.Ep_A = DCM.Ep.A;              % Posterior mean A (free params)
+    % Full posterior parameter set. Ep_A alone is not enough to re-evaluate
+    % SPM's fit through another forward: the noise (a,b,c) and hemodynamic
+    % (transit,decay,epsilon) parameters are needed too. Without them the two
+    % engines' Ep cannot be scored on the same footing.
+    if isfield(DCM.Ep, 'a'), results.Ep_a = DCM.Ep.a; end
+    if isfield(DCM.Ep, 'b'), results.Ep_b = DCM.Ep.b; end
+    if isfield(DCM.Ep, 'c'), results.Ep_c = DCM.Ep.c; end
+    if isfield(DCM.Ep, 'epsilon'), results.Ep_epsilon = DCM.Ep.epsilon; end
     results.Cp = full(DCM.Cp);            % Full posterior covariance
     results.F = DCM.F;                    % Free energy
     results.fe = fe;                      % free-energy provenance

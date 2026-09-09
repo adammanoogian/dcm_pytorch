@@ -46,6 +46,8 @@ from __future__ import annotations
 import os
 import subprocess
 
+import logging
+
 import numpy as np
 import torch
 
@@ -58,6 +60,7 @@ from pyro_dcm.simulators.spectral_simulator import (
 )
 from validation.compare_results import (
     compare_free_energies,
+    flag_free_energy_fit_inconsistency,
     compare_model_ranking,
     compare_scenario_free_energies,
     compute_free_param_comparison,
@@ -81,6 +84,8 @@ _PRIOR_MEAN_A_DIVISOR = 128.0
 _EDGE_0_TO_1 = 0.15
 _EDGE_1_TO_0 = 0.10
 _SELF_CONNECTION = -0.5
+
+log = logging.getLogger(__name__)
 
 _TR = 2.0
 _N_FREQS = 32
@@ -215,14 +220,114 @@ def _run_spm_on_csd(
     return load_spm_results(results_path)
 
 
+def _residual_norm(
+    observed: torch.Tensor, predicted: torch.Tensor | None,
+) -> float | None:
+    """Frobenius norm of the complex residual, or None if unavailable.
+
+    Returns ``None`` rather than a sentinel so a missing prediction is reported
+    as unknown by :func:`flag_free_energy_fit_inconsistency` instead of being
+    silently scored as a perfect or a terrible fit.
+    """
+    if predicted is None:
+        return None
+    return float((observed - predicted).abs().pow(2).sum().sqrt().item())
+
+
+def _spm_residual_via_our_forward(
+    observed_csd: torch.Tensor,
+    freqs: torch.Tensor,
+    a_mask: torch.Tensor,
+    n_regions: int,
+    spm_result: dict,
+) -> float | None:
+    """Score SPM's posterior mean through OUR forward model.
+
+    Both engines' residuals must come from the SAME forward, or the comparison
+    measures forward differences rather than fit quality. The two forwards agree
+    to ~0.17% uniformly across masks (DCCN job 55235592), so evaluating SPM's
+    ``Ep`` here is fair.
+
+    Returns ``None`` if SPM did not export the full parameter set -- the noise
+    (``a``, ``b``, ``c``) and hemodynamic (``transit``, ``decay``, ``epsilon``)
+    terms are all required, and guessing any of them would fabricate a fit.
+
+    Parameters
+    ----------
+    observed_csd : torch.Tensor
+        Observed CSD, shape ``(F, N, N)``, complex128.
+    freqs : torch.Tensor
+        Frequency grid, shape ``(F,)``.
+    a_mask : torch.Tensor
+        Structural mask for this scenario, shape ``(N, N)``.
+    n_regions : int
+        Number of regions.
+    spm_result : dict
+        Output of :func:`validation.compare_results.load_spm_results`.
+
+    Returns
+    -------
+    float or None
+        Residual Frobenius norm, or None when the parameter set is incomplete.
+    """
+    required = ("Ep_A", "Ep_a", "Ep_b", "Ep_c", "Ep_transit", "Ep_decay")
+    missing = [k for k in required if k not in spm_result]
+    if missing:
+        log.warning(
+            "SPM residual unavailable: missing posterior fields %s. "
+            "Re-export from the bridge; not substituting priors.", missing,
+        )
+        return None
+
+    from pyro_dcm.inference.vl_forward_models import SpectralDCMForward
+
+    n = n_regions
+    theta = torch.zeros(
+        n * n + 2 + 2 + n + n + 1 + 1, dtype=torch.float64,
+    )
+    theta[: n * n] = torch.as_tensor(
+        np.asarray(spm_result["Ep_A"], dtype=np.float64), dtype=torch.float64,
+    ).reshape(-1)
+    off = n * n
+    theta[off:off + 2] = torch.as_tensor(
+        np.asarray(spm_result["Ep_a"], dtype=np.float64).ravel()[:2],
+        dtype=torch.float64,
+    )
+    off += 2
+    theta[off:off + 2] = torch.as_tensor(
+        np.asarray(spm_result["Ep_b"], dtype=np.float64).ravel()[:2],
+        dtype=torch.float64,
+    )
+    off += 2
+    theta[off:off + n] = torch.as_tensor(
+        np.asarray(spm_result["Ep_c"], dtype=np.float64).ravel()[:n],
+        dtype=torch.float64,
+    )
+    off += n
+    theta[off:off + n] = torch.as_tensor(
+        np.asarray(spm_result["Ep_transit"], dtype=np.float64).ravel()[:n],
+        dtype=torch.float64,
+    )
+    off += n
+    theta[off] = float(np.asarray(spm_result["Ep_decay"]).ravel()[0])
+    off += 1
+    if "Ep_epsilon" in spm_result:
+        theta[off] = float(np.asarray(spm_result["Ep_epsilon"]).ravel()[0])
+
+    predicted = SpectralDCMForward().predict(
+        theta, observed_csd, n, freqs=freqs, a_mask=a_mask,
+    )
+    return _residual_norm(observed_csd, predicted)
+
+
 def _fit_vl_free_energy(
     observed_csd: torch.Tensor,
     freqs: torch.Tensor,
     a_mask: torch.Tensor,
     n_regions: int,
     max_iter: int,
-) -> float:
-    """Fit the VL engine under a given ``a_mask`` and return ``free_energy[-1]``.
+) -> tuple[float, object]:
+    """Fit the VL engine under an ``a_mask``; return ``(free_energy[-1], result)``.
 
     Used by the cross-model ranking sweep: each reduced-model scenario re-fits
     the SAME ``observed_csd`` under a different structural ``a_mask`` and yields
@@ -257,7 +362,7 @@ def _fit_vl_free_energy(
         hyperprior_precision=_HYPERPRIOR_PRECISION,
         prior_mean_a_offset=a_mask / _PRIOR_MEAN_A_DIVISOR,
     )
-    return float(result.free_energy[-1])
+    return float(result.free_energy[-1]), result
 
 
 def run_vl_spectral_dcm_validation(
@@ -398,15 +503,27 @@ def run_vl_spectral_dcm_validation(
     }
     scenarios: list[dict] = []
     for name, mask in scenario_masks.items():
-        vl_f_k = _fit_vl_free_energy(
+        vl_f_k, vl_res_k = _fit_vl_free_energy(
             observed_csd, freqs, mask, n, max_iter,
         )
         spm_k = _run_spm_on_csd(
             observed_csd, freqs, mask, output_dir, tag=name,
         )
-        scenarios.append(
-            {"name": name, "spm_F": float(spm_k["F"]), "pyro_elbo": vl_f_k}
+        # Score BOTH engines' posterior means through OUR forward, so the
+        # residuals are comparable. Using each engine's own forward would
+        # measure forward differences instead of fit quality.
+        vl_resid = _residual_norm(observed_csd, vl_res_k.predicted_csd)
+        spm_resid = _spm_residual_via_our_forward(
+            observed_csd, freqs, mask, n, spm_k,
         )
+        scenarios.append({
+            "name": name,
+            "spm_F": float(spm_k["F"]),
+            "pyro_elbo": vl_f_k,
+            "vl_residual": vl_resid,
+            "spm_residual": spm_resid,
+            "spm_Ep_A": np.asarray(spm_k["Ep_A"]).tolist(),
+        })
     ranking = compare_model_ranking(scenarios)
     # Gate matched-F on EVERY scenario, not just the full model. Reduced-model
     # free energies were previously computed here for ranking and discarded, so
@@ -414,11 +531,23 @@ def run_vl_spectral_dcm_validation(
     # full-model rel err 0.0162, reduced-model divergence ~54 nats). BMR and
     # structure selection run on reduced models.
     scenario_f = compare_scenario_free_energies(scenarios)
+    fit_consistency = flag_free_energy_fit_inconsistency([
+        {
+            "name": sc["name"],
+            "vl_F": sc["pyro_elbo"],
+            "spm_F": sc["spm_F"],
+            "vl_residual": sc.get("vl_residual"),
+            "spm_residual": sc.get("spm_residual"),
+        }
+        for sc in scenarios
+    ])
 
     return {
         "ep_comparison": ep_comparison,
         "matched_f_comparison": matched_f_comparison,
         "scenario_f_comparison": scenario_f,
+        "fit_consistency": fit_consistency,
+        "scenarios": scenarios,
         "ranking": ranking,
         "vl_A_free": vl_a_free,
         "spm_Ep_A": spm_ep_a,
