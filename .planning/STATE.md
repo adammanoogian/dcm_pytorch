@@ -9,6 +9,35 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 ## Current Position
 
+### ✅ 2026-09-09 — ERP/MEG parity RE-VERIFIED on DCCN (was resting on M3 provenance)
+
+The v0.8.0 claim "SPM12-parity-verified at every stage" rested on M3 job
+57904695 — pre-migration, and the parity ladders are marked `spm`+`slow` so they
+are **deselected from the routine core suite** and had not been re-run since.
+The fixtures are byte-frozen and committed, so no MATLAB is needed.
+
+Re-run on DCCN (job 55243845, 8 files): **63 passed, 0 failed in 36 s.** The two
+remaining ERP files (`test_export_erp_leadfield`, `test_export_erp_multisource`)
+pass locally: 5 passed. So the ERP stack is green **now**, not just historically.
+
+The count differs from the "79 ERP tests" figure recorded for job 57904695
+because that run selected a different (larger) file set — not because tests
+disappeared. Prefer 63+5 over 79 when quoting current evidence, and cite job
+55243845.
+
+**Scope of the ERP parity claim, stated precisely** (it is narrower than
+"parity-verified" implies):
+
+- It is **forward-model parity only**. `run_spm_erp_dcm.m` exercises
+  `spm_fx_cmc` and `spm_int_L`; it never calls `spm_nlsi_GN`. There is **no
+  inversion-level ERP comparison** against SPM.
+- ERP has **no parameter-recovery benchmark**: it is absent from the recovery
+  matrix (`spectral`, `task`, `latent_circuit` only) and has no runner in
+  `benchmarks/runners/`. We know the forward reproduces SPM to 1e-10..1e-12; we
+  do not know what the ERP model can recover.
+
+---
+
 ### ✅ 2026-09-09 — SPM is the weaker engine on reduced models; BMR diagnosis overturned
 
 Three results, all on the spectral/SPM parity path.
