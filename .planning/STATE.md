@@ -9,6 +9,49 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 ## Current Position
 
+### ✅ 2026-09-09 — SPM is the weaker engine on reduced models; BMR diagnosis overturned
+
+Three results, all on the spectral/SPM parity path.
+
+**1. SPM's reduced-model free energy does not track its own fit** (job 55242892).
+Both engines' posterior means scored through OUR forward so residuals are
+comparable (the forwards agree to a uniform 0.17%, job 55235592). Of 15
+scenario-fits (5 seeds × 3 masks), **7 are inconsistent — the engine reporting
+the higher F achieves the worse fit — and all 7 are SPM.** VL is never on the
+wrong side, and holds the lower residual in 13/15. `single_direction` is
+inconsistent on 4/5 seeds; the exception (seed 45) is also the only seed where
+the two F values agreed. Since both engines fit the same model under the same
+mask on the same data, the complexity term is identical and the fit-vs-complexity
+trade-off cannot explain it. With the earlier eliminations (not the forward, not
+the iteration budget, not a mis-specified mask) and VL landing 2.82× closer to
+truth, **VL is the more trustworthy engine on reduced models.** Scope: the
+injected-CSD spectral path, 5 seeds, one N=2 problem — no claim about SPM12
+generally.
+
+**2. The Ep gate metric was broken by construction** (`168f2f8`). Its near-zero
+guard keyed on SPM's estimate rather than the parameter, so it never fired for
+the A_free diagonal (a log-deviation from a fixed −0.5, true value 0) when SPM
+returned −0.067. A 0.068 absolute disagreement was reported as relative error
+1.0085. Now keyed on ground truth when available, else requiring that neither
+estimate is near zero. Mean falls 0.8565 → 0.3929; the gate still fails, which
+is correct — the off-diagonal disagreement is real.
+
+**3. Absolute BMR is suppressed by the reduced-prior variance, not posterior
+overconfidence** (jobs 55242781, 55242955). Two recorded premises are measured
+false: shrinkage is 0.024–0.273 (median ~0.12), not ~0.001; and a **1024×**
+covariance inflation moves ΔF by ~3.5 nats against magnitudes of 1e5–1e6, so
+tempering is not a viable fix. The real cause is that
+`reduced_cov[idx,idx] = 1e-8` encodes "exactly zero with near-infinite
+precision", penalising any nonzero posterior mean by ~`mean²/red_var`. At
+`red_var = 1e-3` absolute pruning separates all 9 absent edges from the true
+chain on 2/3 seeds. **`red_var` must not be tuned to maximise separation** — that
+is circular; it is a statement about the smallest effect of interest and needs
+justifying first. Seed 44 does not separate at any tested value and that looks
+like a real identifiability limit (its hardest absent edge sits at 0.096 against
+a chain range 0.129–0.138).
+
+---
+
 ### 🅿️ 2026-09-08 — Amortized inference PARKED (SBC survives the forward fix)
 
 SBI/NPE, the amortized guides and the hybrid VAE-DCM are parked — unmaintained
@@ -83,7 +126,8 @@ on task/latent forwards — and neither is the VL-overconfidence-for-BMR todo,
 which was measured on the latent circuit and is a separate bug. Parameter recovery and model *ranking* should be far less
 affected (ranking held at 1.0 across every regime of this bug), but that is an
 expectation, not a measurement. Tracked in
-`.planning/todos/pending/2026-09-08-vl-f-blast-radius.md`.
+`.planning/todos/done/2026-09-08-vl-f-blast-radius.md` (closed: the re-run
+held the prediction exactly — only spectral cells moved).
 
 **Official gates now (job 55234501, seed 42):**
 
