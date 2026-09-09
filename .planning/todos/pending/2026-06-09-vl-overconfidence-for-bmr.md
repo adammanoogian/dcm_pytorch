@@ -45,3 +45,60 @@ Does **not** block v0.6.0: relative-ranking BMR is the standardized API and it r
 (SYNTH-03 3/3). The absolute-ΔF calibration fix (posterior tempering + a `rank_connections()`
 helper) is a **VL refinement** → maps to **v0.7.0 Phase C (VL + BMR model comparison)** in
 `.planning/v0.7.0-VL-RECONCILIATION-DRAFT.md`. Carry forward as-is.
+
+
+---
+
+## ⚠️ 2026-09-09 MEASURED: two of this todo's premises do not hold
+
+Job 55242781, the SYNTH-03 setup verbatim (latent circuit N=4, seeds 42-44), so
+the numbers are directly comparable with the run that opened this todo.
+
+### 1. Shrinkage is ~0.12, not ~0.001
+
+`posterior sd / prior sd` over the off-diagonal A parameters:
+
+| seed | min | median | max |
+|---|---|---|---|
+| 42 | 2.62e-02 | 1.22e-01 | 2.50e-01 |
+| 43 | 2.46e-02 | 1.24e-01 | 2.64e-01 |
+| 44 | 2.36e-02 | 1.15e-01 | 2.73e-01 |
+
+Two orders of magnitude above the ~0.001 recorded here. A posterior at 2-27% of
+prior width is ordinary for informative data, not pathological overconfidence.
+The recorded figure is either from a different configuration or was never a
+`sd` ratio; either way **"the VL posterior is over-confident" is not supported
+by this measurement** and should not be repeated without re-deriving it.
+
+### 2. Tempering the covariance does essentially nothing
+
+Inflating the posterior covariance by `k`:
+
+| k | chain dF (max), seed 42 | absent dF (min) | absent prunable |
+|---|---|---|---|
+| 1 | -1085008.24 | -77293.43 | 0/9 |
+| 1024 | -1085011.70 | -77296.90 | 0/9 |
+
+A **1024x** inflation moves dF by ~3.5 nats against magnitudes of 1e5-1e6, and
+in the WRONG direction. Solution option 1 in this todo ("temper the VL posterior
+covariance before BMR") is therefore not a viable fix, and the sketch should be
+struck rather than left as a candidate.
+
+### What the magnitudes point at instead
+
+dF is ~-1e6 for true-chain edges and ~-1e5 for genuinely absent ones -- both
+enormously negative, which is why the absolute rule never fires for anything.
+The likely driver is not the posterior at all but the **reduced-prior variance**:
+`reduced_cov[idx,idx] = 1e-8` does not encode "this edge is absent", it encodes
+"this edge is exactly zero with near-infinite precision". Any nonzero posterior
+mean is then penalised by roughly `mean^2 / 1e-8`, which swamps every other
+term -- including for absent edges, whose posterior means are small but not
+zero.
+
+Under test in job 55242955: sweep the reduced-prior variance (1e-8 .. 0.5) and
+check whether any value separates TRUE_ABSENT (prunable) from TRUE_CHAIN
+(essential). **Hypothesis, not a conclusion** -- the magnitudes are consistent
+with it but it has not yet been confirmed.
+
+Whatever the outcome, the two measurements above stand and this todo's stated
+diagnosis needs rewriting.
