@@ -102,3 +102,64 @@ with it but it has not yet been confirmed.
 
 Whatever the outcome, the two measurements above stand and this todo's stated
 diagnosis needs rewriting.
+
+
+---
+
+## ✅ 2026-09-09 DIAGNOSED: it is the reduced-prior variance, not the posterior
+
+Job 55242955 confirms the hypothesis. Sweeping the reduced-prior variance with
+the posterior untouched (prior variance = 0.0625):
+
+| red_var | seed 42 | seed 43 | seed 44 |
+|---|---|---|---|
+| 1e-8 (current) | 0/9 prunable | 0/9 | 0/9 |
+| 1e-6 | 3/9 | 2/9 | 3/9 |
+| 1e-4 | 4/9 | 5/9 | 3/9 |
+| **1e-3** | **9/9, separates** | **9/9, separates** | 6/9 |
+| 1e-2 | 9/9 but chain also prunable | same | same |
+| 1e-1, 5e-1 | 0/9 | 0/9 | 0/9 |
+
+At `red_var = 1e-3` (~1/60 of the prior variance) absolute BMR separates all
+nine genuinely-absent edges from the true chain on seeds 42 and 43: every absent
+edge has `dF > 0` and every chain edge `dF < 0`.
+
+**So absolute BMR is recoverable and this todo's diagnosis was wrong.** The
+suppression is not posterior overconfidence -- it is that
+`reduced_cov[idx,idx] = 1e-8` encodes "this edge is exactly zero with
+near-infinite precision" rather than "this edge is absent". Any nonzero
+posterior mean is then penalised by roughly `mean^2 / red_var`, which at 1e-8
+produces `dF ~ -1e6` for everything, true edges and absent edges alike.
+
+The non-monotonicity at the top end is the expected mirror: as `red_var`
+approaches the prior variance the reduced model approaches the full model and
+`dF -> 0`; at 0.5 the "reduced" prior is WIDER than the full prior, which is not
+a prune at all.
+
+### Seed 44 does not separate, and that looks real
+
+Its hardest absent edge has `|posterior mean| = 0.0959` against a true-chain
+range of 0.1287..0.1384 -- genuinely close, unlike seeds 42/43 where absent tops
+out at ~0.039. A finer sweep between 1e-3 and 1e-2 might separate it, but this
+may equally be a real identifiability limit on that seed. Do not assume a
+threshold exists for it.
+
+### Do NOT tune red_var to the answer
+
+Choosing `red_var` by maximising separation on seeds where the truth is known is
+circular and would manufacture the result. It is a modelling statement -- "an
+edge counts as absent when its effect is below this scale" -- and needs a
+principled justification, e.g. a fixed fraction of the prior variance tied to a
+smallest-effect-of-interest, fixed before looking at recovery. What this
+experiment establishes is that a workable regime EXISTS, not which value to ship.
+
+### Rewrite required
+
+- Strike solution option 1 (temper the posterior covariance): measured
+  ineffective, a 1024x inflation moves `dF` by ~3.5 nats against 1e5-1e6.
+- Strike the "posterior std/prior std ~0.001" premise: measured 0.024..0.273,
+  median ~0.12.
+- Option 2 (relative ranking + separation gap) remains sound and shipped
+  (`rank_connections`), but is no longer the ONLY defensible route.
+- New work: choose and justify a `red_var` convention, then re-validate absolute
+  pruning across more seeds.
