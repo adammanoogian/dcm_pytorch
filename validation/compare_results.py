@@ -132,6 +132,7 @@ def compare_posterior_means(
     tolerance: float = 0.10,
     near_zero_threshold: float = 0.01,
     near_zero_atol: float = 0.02,
+    true_A: np.ndarray | None = None,
 ) -> dict:
     """Element-wise comparison of posterior mean A matrices.
 
@@ -151,6 +152,12 @@ def compare_posterior_means(
         Threshold below which absolute error is used. Default 0.01.
     near_zero_atol : float, optional
         Absolute error tolerance for near-zero elements. Default 0.02.
+    true_A : np.ndarray or None, optional
+        Ground-truth A, shape ``(N, N)``. When given, the near-zero decision
+        is keyed on the TRUE value -- the correct criterion, since whether a
+        parameter is near zero is a property of the parameter, not of either
+        engine's estimate of it. When None, an element takes the absolute
+        branch if EITHER estimate is near zero.
 
     Returns
     -------
@@ -164,8 +171,23 @@ def compare_posterior_means(
     abs_diff = np.abs(pyro_A - ref_A)
     abs_ref = np.abs(ref_A)
 
-    # Build hybrid error: relative where |ref| > threshold, absolute otherwise
-    large_mask = abs_ref > near_zero_threshold
+    # Which elements are "large enough" for a relative error to mean anything.
+    #
+    # Keying this on |ref_A| ALONE is wrong: relative error blows up whenever
+    # the denominator can be near zero, and a parameter whose true value is ~0
+    # can still draw a sizeable estimate from one engine. On the N=2 parity
+    # problem the A_free diagonal is a log-deviation from a fixed -0.5
+    # self-connection (correct value ~0); SPM reported -0.0674, the guard
+    # stayed off, and a 0.068 absolute disagreement was reported as a relative
+    # error of 1.0085 (job 55234501).
+    #
+    # With ground truth available, whether a parameter is near zero is a
+    # property of the PARAMETER. Without it, fall back to requiring that
+    # neither estimate is near zero.
+    if true_A is not None:
+        large_mask = np.abs(true_A) > near_zero_threshold
+    else:
+        large_mask = np.minimum(abs_ref, np.abs(pyro_A)) > near_zero_threshold
     # Use safe division to avoid RuntimeWarning for zero-valued refs
     safe_ref = np.where(large_mask, abs_ref, 1.0)
     element_errors = np.where(
@@ -449,6 +471,7 @@ def compute_free_param_comparison(
     pyro_A_free: np.ndarray,
     spm_Ep_A: np.ndarray,
     tolerance: float = 0.10,
+    true_A: np.ndarray | None = None,
 ) -> dict:
     """Compare A matrices in free parameter space.
 
@@ -464,13 +487,19 @@ def compute_free_param_comparison(
         SPM12 posterior mean Ep.A (free parameters), shape ``(N, N)``.
     tolerance : float, optional
         Error tolerance. Default 0.10.
+    true_A : np.ndarray or None, optional
+        Ground-truth A. Forwarded to ``compare_posterior_means`` so the
+        near-zero decision is keyed on the parameter rather than on either
+        engine's estimate.
 
     Returns
     -------
     dict
         Same structure as ``compare_posterior_means``.
     """
-    return compare_posterior_means(pyro_A_free, spm_Ep_A, tolerance)
+    return compare_posterior_means(
+        pyro_A_free, spm_Ep_A, tolerance, true_A=true_A,
+    )
 
 
 def compare_free_energies(

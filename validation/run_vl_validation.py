@@ -477,8 +477,13 @@ def run_vl_spectral_dcm_validation(
     spm_f = float(spm["F"])
 
     # --- Step 5: compare Ep (free space, 10%) + matched F (5% HARD gate) ----
+    # Pass ground truth so the near-zero guard keys on the PARAMETER. The
+    # A_free diagonal is a log-deviation from the fixed -0.5 self-connection,
+    # so its true value is 0 and relative error there is meaningless.
+    true_a_free = a_true.detach().cpu().numpy().copy()
+    np.fill_diagonal(true_a_free, 0.0)
     ep_comparison = compute_free_param_comparison(
-        vl_a_free, spm_ep_a, tolerance=0.10,
+        vl_a_free, spm_ep_a, tolerance=0.10, true_A=true_a_free,
     )
     matched_f_comparison = compare_free_energies(
         vl_f, spm_f, rel_tolerance=0.05,
