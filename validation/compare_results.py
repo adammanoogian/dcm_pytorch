@@ -20,6 +20,20 @@ import numpy as np
 import scipy.io
 
 
+def _densify(value: object) -> np.ndarray:
+    """Return a dense float64 array, converting scipy sparse if needed.
+
+    ``spm_dcm_fmri_priors`` returns several posterior fields as MATLAB sparse
+    matrices, so ``scipy.io.loadmat`` hands them back as ``csc_array``.
+    ``.astype(np.float64)`` on a sparse array stays sparse, and the first
+    downstream ``np.asarray(..., dtype=float)`` then raises "setting an array
+    element with a sequence" (DCCN job 55242695 lost all five seeds this way).
+    """
+    if hasattr(value, "toarray"):
+        value = value.toarray()
+    return np.asarray(value, dtype=np.float64)
+
+
 def load_spm_results(mat_path: str) -> dict:
     """Load SPM12 estimation results from .mat file.
 
@@ -55,7 +69,7 @@ def load_spm_results(mat_path: str) -> dict:
     out: dict = {}
 
     # Required fields
-    out["Ep_A"] = results_raw["Ep_A"][0, 0].astype(np.float64)
+    out["Ep_A"] = _densify(results_raw["Ep_A"][0, 0])
     out["F"] = float(results_raw["F"][0, 0].item())
 
     # Optional fields
@@ -70,7 +84,7 @@ def load_spm_results(mat_path: str) -> dict:
         try:
             val = results_raw[field][0, 0]
             if val.size > 0:
-                out[field] = val.astype(np.float64)
+                out[field] = _densify(val)
         except (ValueError, IndexError, KeyError):
             pass
 

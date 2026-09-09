@@ -63,3 +63,37 @@ def test_missing_residuals_are_reported_not_guessed() -> None:
     assert row["inconsistent"] is None
     assert out["n_unknown"] == 1
     assert out["n_inconsistent"] == 0
+
+
+def test_loader_densifies_sparse_matlab_fields(tmp_path) -> None:
+    """MATLAB sparse fields must arrive dense, not as scipy sparse arrays.
+
+    ``spm_dcm_fmri_priors`` returns several posterior fields as MATLAB sparse
+    matrices, so ``scipy.io.loadmat`` hands them back as ``csc_array``.
+    ``.astype(np.float64)`` on a sparse array stays sparse, and the first
+    downstream ``np.asarray(..., dtype=float)`` raises "setting an array
+    element with a sequence" (DCCN job 55242695, all five seeds).
+    """
+    import numpy as np
+    import scipy.io
+    import scipy.sparse
+
+    from validation.compare_results import load_spm_results
+
+    path = tmp_path / "spm_results.mat"
+    scipy.io.savemat(str(path), {"results": {
+        "Ep_A": np.array([[0.1, 0.2], [0.3, 0.4]]),
+        "F": np.array([[123.4]]),
+        "Ep_a": scipy.sparse.csc_matrix(np.array([[0.5], [0.6]])),
+        "Ep_c": scipy.sparse.csc_matrix(np.array([[0.7, 0.8]])),
+    }})
+
+    out = load_spm_results(str(path))
+
+    for key in ("Ep_A", "Ep_a", "Ep_c"):
+        assert key in out, f"{key} missing from loader output"
+        assert isinstance(out[key], np.ndarray), (
+            f"{key} came back as {type(out[key]).__name__}, not a dense "
+            "np.ndarray; downstream float() conversion will fail"
+        )
+    assert np.allclose(np.asarray(out["Ep_a"], dtype=float).ravel(), [0.5, 0.6])

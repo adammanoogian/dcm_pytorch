@@ -158,6 +158,9 @@ def main() -> int:
                 # Reduced-model F divergence is invisible to the
                 # full-model matched-F gate (seed 44, job 55234938).
                 "scenario_f_comparison": res.get("scenario_f_comparison"),
+                # Which engine has the higher F vs which fits better --
+                # the signal that settles the reduced-model divergence.
+                "fit_consistency": res.get("fit_consistency"),
             })
             print(
                 f"  vl_F={res['vl_F']:.3f} spm_F={res['spm_F']:.3f} "
