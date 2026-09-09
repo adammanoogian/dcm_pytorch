@@ -243,3 +243,66 @@ reduced-model `Ep` is far from truth AND its residual is larger than VL's while
 its F is higher, SPM's reduced-model free energy is not tracking its own fit
 quality and the hypothesis is confirmed. This needs the bridge to export
 per-scenario `Ep`, which it currently does only for the full model.
+
+
+---
+
+## ✅ 2026-09-09 RESOLVED: SPM's reduced-model free energy does not track its fit
+
+Job 55242892. Both engines' posterior means scored through **our** forward, so
+the residuals are comparable (the two forwards agree to a uniform ~0.17%, job
+55235592 -- far too small to explain residual gaps of 10-40%).
+
+15 scenario-fits (5 seeds x 3 masks). **7 are inconsistent: the engine reporting
+the higher free energy achieves the WORSE fit.** Every single one of those 7 is
+SPM. VL is never on the wrong side of it.
+
+| seed | mask | SPM F | VL F | SPM resid | VL resid |
+|---|---|---|---|---|---|
+| 42 | single_direction | 125.05 | 106.69 | 0.4889 | **0.4578** |
+| 43 | full_reciprocal | 227.41 | 225.95 | 0.4957 | **0.4429** |
+| 43 | single_direction | 223.87 | 161.84 | 0.5523 | **0.4687** |
+| 43 | diagonal_only | 113.48 | 108.12 | 0.5091 | **0.5087** |
+| 44 | single_direction | 291.24 | 241.55 | 0.4414 | **0.3822** |
+| 46 | full_reciprocal | 276.40 | 268.53 | 0.3403 | **0.2788** |
+| 46 | single_direction | 260.01 | 187.68 | 0.5134 | **0.3645** |
+
+VL achieves the lower residual in **13 of 15** fits; the two exceptions are
+`diagonal_only` by 0.0019 and 0.0044.
+
+`single_direction` is inconsistent on **4/5 seeds** -- every seed except 45,
+which is also the one seed where the two engines' F agreed (0.0014 relative).
+The F divergence and the fit inconsistency appear and disappear together.
+
+### Why this settles it
+
+Free energy trades data fit against complexity, so higher-F-with-worse-fit is
+normally legitimate. That defence does not apply here: both engines fit the
+**same model under the same mask on the same data**, so the complexity term is
+identical. An engine reporting more evidence while fitting worse is reporting a
+free energy that does not track its own fit quality.
+
+Combined with the earlier eliminations -- not the forward (uniform 0.17% across
+masks), not the iteration budget (identical F at 64/256/1024), not a
+mis-specified mask (`DCM.a` verified) -- and with VL landing 2.82x closer to
+ground truth on the off-diagonals, **VL is the more trustworthy engine on
+reduced models.**
+
+### Limits of the claim
+
+- Residuals are computed through OUR forward for both engines. That is the only
+  way to make them comparable, but it is our forward. The 0.17% forward
+  agreement bounds the effect far below the observed gaps.
+- 5 seeds, one N=2 problem. This shows SPM's reduced-model F is *inconsistent
+  with its own fit*; it does not prove VL's F is correct in absolute terms --
+  only that VL is never caught in the same inconsistency.
+- No claim is made about SPM12 generally. This is the injected-CSD spectral path
+  on reduced models.
+
+### Consequence for BMR and structure selection
+
+BMR evaluates reduced models exclusively. On this evidence, spectral
+structure-selection results computed from **SPM** free energies on reduced
+models should not be trusted without re-checking; the VL path is the sounder
+basis. This does NOT retroactively invalidate the project's own BMR work, which
+runs on task/latent forwards through VL.
